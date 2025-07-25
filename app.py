@@ -4,15 +4,12 @@ import tempfile
 from datetime import datetime
 import os
 
-# ページ設定
 st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
 
-# フォント設定（日本語フォントファイルは同じフォルダに置くこと）
 FONT_PATH = "NotoSansJP-Regular.ttf"
 if not os.path.exists(FONT_PATH):
     st.error(f"フォントファイル {FONT_PATH} が見つかりません。アップロードしてください。")
 
-# タイトル・説明
 st.title("不動産エージェント NAOKI")
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
@@ -23,7 +20,6 @@ st.markdown("""
 """)
 st.divider()
 
-# 5W2H
 st.subheader("5W2Hで理想の住まい探しを整理しよう")
 st.markdown("""
 - **Why（なぜ）:** なぜ購入を検討していますか？（例：賃貸脱却、子育て環境、資産形成）
@@ -37,7 +33,6 @@ st.markdown("""
 st.info("これらの項目を一緒に整理して、理想の住まい探しをサポートします！")
 st.divider()
 
-# 便利ツールへのリンク
 st.subheader("便利ツールへジャンプ")
 tools = {
     "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://budget1.streamlit.app/",
@@ -49,10 +44,6 @@ for name, url in tools.items():
     st.markdown(f"- [{name}]({url})")
 st.divider()
 
-# --- ヒアリングフォーム ---
-st.subheader("ヒアリングフォーム")
-
-# セッションステート初期化（フォーム項目の保存用）
 if 'hearing_data' not in st.session_state:
     st.session_state['hearing_data'] = {
         "name": "",
@@ -133,15 +124,12 @@ if submitted:
 
     pdf = FPDF()
     pdf.add_page()
-
-    # 日本語フォント読み込み
     pdf.add_font('NotoSansJP', '', FONT_PATH, uni=True)
     pdf.add_font('NotoSansJP', 'B', FONT_PATH, uni=True)
 
     pdf.set_font("NotoSansJP", "B", 16)
     pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
 
-    # 作成日時
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pdf.set_font("NotoSansJP", "", 10)
     pdf.cell(0, 8, f"作成日時：{now}", 0, 1, "R")
@@ -154,37 +142,42 @@ if submitted:
         pdf.set_font("NotoSansJP", "", 12)
         pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
 
+    # 名前だけ特別に一番上
     pdf_write("名前", data.get("name", ""))
-    pdf_write("現在の居住エリア・駅", data.get("now_area", ""))
-    pdf_write("居住年数", data.get("now_years", ""))
-    pdf_write("持ち家・賃貸", data.get("is_owner", ""))
-    pdf_write("住居費（月）", data.get("now_rent", ""))
-    pdf_write("ご家族構成", data.get("family", ""))
-    pdf_write("通勤時間", data.get("commute_time", ""))
-    pdf_write("ご主人の勤務先", data.get("husband_company", ""))
-    pdf_write("ご主人の年収（万円）", data.get("husband_income", ""))
-    pdf_write("奥様の勤務先", data.get("wife_company", ""))
-    pdf_write("奥様の年収（万円）", data.get("wife_income", ""))
-    pdf_write("勤続年数", data.get("service_years", ""))
-    pdf_write("世帯年収（万円）", data.get("income", ""))
-    pdf_write("今の住まいで満足されている点・不満な点", data.get("sat_point", ""))
-    pdf_write("物件探しの進捗", data.get("search_status", ""))
-    pdf_write("なぜ不動産購入したいのか？", data.get("why_buy", ""))
-    pdf_write("不満な点がこうなったらいい？", data.get("task", ""))
-    pdf_write("将来に不安や心配はありますか？", data.get("anxiety", ""))
-    pdf_write("賃貸と購入、それぞれで迷われている点は？", data.get("rent_vs_buy", ""))
-    pdf_write("他にもお住まい探しで困っていることはありますか？", data.get("other_trouble", ""))
-    pdf_write("その課題や不安が今後も続いた場合、どのような影響があると思いますか？", data.get("effect", ""))
-    pdf_write("今のままだと数年後どうなりそうですか？", data.get("forecast", ""))
-    pdf_write("ライフイベントが控えている場合、それが現状の住まいにどんな影響を与えそうですか？", data.get("event_effect", ""))
-    pdf_write("住み替えのタイミングを逃すことで、家賃の支払いがどれだけ増えるとお考えですか？", data.get("missed_timing", ""))
-    pdf_write("理想の暮らし、理想のお住まいはどんなイメージですか？", data.get("ideal_life", ""))
-    pdf_write("もし今の課題が解決できるとしたら、どんな気持ちになりますか？", data.get("solve_feeling", ""))
-    pdf_write("お住まい購入によって「こうなりたい」という目標はありますか？", data.get("goal", ""))
-    pdf_write("住まい選びで一番大切にしたいことは何ですか？", data.get("important", ""))
-    pdf_write("MAST条件3つのみ", data.get("must", ""))
-    pdf_write("WANT条件", data.get("want", ""))
-    pdf_write("逆にNG条件", data.get("ng", ""))
+
+    for key, label in [
+        ("now_area", "現在の居住エリア・駅"),
+        ("now_years", "居住年数"),
+        ("is_owner", "持ち家・賃貸"),
+        ("now_rent", "住居費（月）"),
+        ("family", "ご家族構成"),
+        ("commute_time", "通勤時間"),
+        ("husband_company", "ご主人の勤務先"),
+        ("husband_income", "ご主人の年収（万円）"),
+        ("wife_company", "奥様の勤務先"),
+        ("wife_income", "奥様の年収（万円）"),
+        ("service_years", "勤続年数"),
+        ("income", "世帯年収（万円）"),
+        ("sat_point", "今の住まいで満足されている点・不満な点"),
+        ("search_status", "物件探しの進捗"),
+        ("why_buy", "なぜ不動産購入したいか"),
+        ("task", "不満な点がこうなったらいい？"),
+        ("anxiety", "将来に不安や心配"),
+        ("rent_vs_buy", "賃貸と購入で迷っている点"),
+        ("other_trouble", "他にもお住まい探しで困っていること"),
+        ("effect", "課題や不安の影響"),
+        ("forecast", "数年後の予想"),
+        ("event_effect", "ライフイベントの影響"),
+        ("missed_timing", "住み替えタイミングを逃す影響"),
+        ("ideal_life", "理想の暮らし・住まい"),
+        ("solve_feeling", "課題解決時の気持ち"),
+        ("goal", "購入による目標"),
+        ("important", "住まい選びで大切なこと"),
+        ("must", "MAST条件3つ"),
+        ("want", "WANT条件"),
+        ("ng", "逆にNG条件"),
+    ]:
+        pdf_write(label, data.get(key, ""))
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         pdf.output(tmp_file.name)
