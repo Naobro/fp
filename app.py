@@ -44,96 +44,101 @@ for name, url in tools.items():
     st.markdown(f"- [{name}]({url})")
 st.divider()
 
-# --- ヒアリングフォーム ---
-st.subheader("ヒアリングフォーム")
-
 # フォントファイル名（同じフォルダに置いてください）
 FONT_PATH = "NotoSansJP-Regular.ttf"
 if not os.path.exists(FONT_PATH):
-    st.error(f"フォントファイル {FONT_PATH} が見つかりません。リポジトリにアップロードしてください。")
+    st.error(f"フォントファイル {FONT_PATH} が見つかりません。")
 
 # セッションステート初期化（フォーム項目の保存用）
 if 'hearing_data' not in st.session_state:
-    st.session_state['hearing_data'] = {
-        "name": "",
-        "now_area": "",
-        "now_years": 5,
-        "is_owner": "持ち家",
-        "now_rent": 10,
-        "family": "",
-        "commute_time": "",
-        "husband_company": "",
-        "husband_service_years": 0,
-        "husband_income": 0,
-        "wife_company": "",
-        "wife_service_years": 0,
-        "wife_income": 0,
-        "sat_point": "",
-        "search_status": "",
-        "why_buy": "",
-        "task": "",
-        "anxiety": "",
-        "rent_vs_buy": "",
-        "other_trouble": "",
-        "effect": "",
-        "forecast": "",
-        "event_effect": "",
-        "missed_timing": "",
-        "ideal_life": "",
-        "solve_feeling": "",
-        "goal": "",
-        "important": "",
-        "must": "",
-        "want": "",
-        "ng": ""
-    }
+    st.session_state['hearing_data'] = {}
 
-data = st.session_state['hearing_data']
+def pdf_write(pdf, label, value):
+    pdf.set_font("NotoSansJP", "B", 12)
+    pdf.cell(50, 8, f"{label}:", 0, 0)
+    pdf.set_font("NotoSansJP", "", 12)
+    pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
 
-with st.form("hearing_form", clear_on_submit=False):
-    data["name"] = st.text_input("名前", value=data["name"])
-    data["now_area"] = st.text_input("現在の居住エリア・駅", value=data["now_area"])
-    data["now_years"] = st.number_input("居住年数", min_value=0, max_value=100, value=data["now_years"])
-    data["is_owner"] = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=0 if data["is_owner"]=="持ち家" else 1)
-    data["now_rent"] = st.number_input("住居費（万円/月）", min_value=0, max_value=100, value=data["now_rent"])
-    data["family"] = st.text_input("ご家族構成", value=data["family"])
-    data["commute_time"] = st.text_input("通勤時間", value=data["commute_time"])
+submitted = False
+with st.form("hearing_form"):
+    name = st.text_input("名前", value=st.session_state['hearing_data'].get("name", ""))
+    now_area = st.text_input("現在の居住エリア・駅", value=st.session_state['hearing_data'].get("now_area", ""))
+    now_years = st.number_input("居住年数", min_value=0, max_value=100, value=st.session_state['hearing_data'].get("now_years", 5))
+    is_owner = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=0 if st.session_state['hearing_data'].get("is_owner", "持ち家")=="持ち家" else 1)
+    now_rent = st.number_input("住居費（万円/月）", min_value=0, max_value=100, value=st.session_state['hearing_data'].get("now_rent", 10))
+    family = st.text_input("ご家族構成", value=st.session_state['hearing_data'].get("family", ""))
+    commute_time = st.text_input("通勤時間", value=st.session_state['hearing_data'].get("commute_time", ""))
 
     st.markdown("### ご主人の勤務先・勤続年数・年収")
-    data["husband_company"] = st.text_input("勤務先", value=data["husband_company"], key="husband_company")
-    data["husband_service_years"] = st.number_input("勤続年数", min_value=0, max_value=50, value=data["husband_service_years"], key="husband_service_years")
-    data["husband_income"] = st.number_input("年収（万円）", min_value=0, max_value=10000, value=data["husband_income"], key="husband_income")
+    husband_company = st.text_input("勤務先", value=st.session_state['hearing_data'].get("husband_company", ""), key="husband_company")
+    husband_service_years = st.number_input("勤続年数", min_value=0, max_value=50, value=st.session_state['hearing_data'].get("husband_service_years", 0), key="husband_service_years")
+    husband_income = st.number_input("年収（万円）", min_value=0, max_value=10000, value=st.session_state['hearing_data'].get("husband_income", 0), key="husband_income")
 
     st.markdown("### 奥様の勤務先・勤続年数・年収")
-    data["wife_company"] = st.text_input("勤務先", value=data["wife_company"], key="wife_company")
-    data["wife_service_years"] = st.number_input("勤続年数", min_value=0, max_value=50, value=data["wife_service_years"], key="wife_service_years")
-    data["wife_income"] = st.number_input("年収（万円）", min_value=0, max_value=10000, value=data["wife_income"], key="wife_income")
+    wife_company = st.text_input("勤務先", value=st.session_state['hearing_data'].get("wife_company", ""), key="wife_company")
+    wife_service_years = st.number_input("勤続年数", min_value=0, max_value=50, value=st.session_state['hearing_data'].get("wife_service_years", 0), key="wife_service_years")
+    wife_income = st.number_input("年収（万円）", min_value=0, max_value=10000, value=st.session_state['hearing_data'].get("wife_income", 0), key="wife_income")
 
-    data["sat_point"] = st.text_area("今の住まいで満足されている点・不満な点", value=data["sat_point"])
-    data["search_status"] = st.text_area("物件探しの進捗", value=data["search_status"])
-    data["why_buy"] = st.text_area("なぜ不動産購入したいのか？", value=data["why_buy"])
+    sat_point = st.text_area("今の住まいで満足されている点・不満な点", value=st.session_state['hearing_data'].get("sat_point", ""))
+    search_status = st.text_area("物件探しの進捗", value=st.session_state['hearing_data'].get("search_status", ""))
+    why_buy = st.text_area("なぜ不動産購入したいのか？", value=st.session_state['hearing_data'].get("why_buy", ""))
 
-    data["task"] = st.text_area("不満な点がこうなったらいい？", value=data["task"])
-    data["anxiety"] = st.text_area("将来に不安や心配はありますか？", value=data["anxiety"])
-    data["rent_vs_buy"] = st.text_area("賃貸と購入、それぞれで迷われている点は？", value=data["rent_vs_buy"])
-    data["other_trouble"] = st.text_area("他にもお住まい探しで困っていることはありますか？", value=data["other_trouble"])
+    task = st.text_area("不満な点がこうなったらいい？", value=st.session_state['hearing_data'].get("task", ""))
+    anxiety = st.text_area("将来に不安や心配はありますか？", value=st.session_state['hearing_data'].get("anxiety", ""))
+    rent_vs_buy = st.text_area("賃貸と購入、それぞれで迷われている点は？", value=st.session_state['hearing_data'].get("rent_vs_buy", ""))
+    other_trouble = st.text_area("他にもお住まい探しで困っていることはありますか？", value=st.session_state['hearing_data'].get("other_trouble", ""))
 
-    data["effect"] = st.text_area("その課題や不安が今後も続いた場合、どのような影響があると思いますか？", value=data["effect"])
-    data["forecast"] = st.text_area("今のままだと数年後どうなりそうですか？", value=data["forecast"])
-    data["event_effect"] = st.text_area("ライフイベントが控えている場合、それが現状の住まいにどんな影響を与えそうですか？", value=data["event_effect"])
-    data["missed_timing"] = st.text_area("住み替えのタイミングを逃すことで、家賃の支払いがどれだけ増えるとお考えですか？", value=data["missed_timing"])
+    effect = st.text_area("その課題や不安が今後も続いた場合、どのような影響があると思いますか？", value=st.session_state['hearing_data'].get("effect", ""))
+    forecast = st.text_area("今のままだと数年後どうなりそうですか？", value=st.session_state['hearing_data'].get("forecast", ""))
+    event_effect = st.text_area("ライフイベントが控えている場合、それが現状の住まいにどんな影響を与えそうですか？", value=st.session_state['hearing_data'].get("event_effect", ""))
+    missed_timing = st.text_area("住み替えのタイミングを逃すことで、家賃の支払いがどれだけ増えるとお考えですか？", value=st.session_state['hearing_data'].get("missed_timing", ""))
 
-    data["ideal_life"] = st.text_area("理想の暮らし、理想のお住まいはどんなイメージですか？", value=data["ideal_life"])
-    data["solve_feeling"] = st.text_area("もし今の課題が解決できるとしたら、どんな気持ちになりますか？", value=data["solve_feeling"])
-    data["goal"] = st.text_area("お住まい購入によって「こうなりたい」という目標はありますか？", value=data["goal"])
-    data["important"] = st.text_area("住まい選びで一番大切にしたいことは何ですか？", value=data["important"])
-    data["must"] = st.text_area("MAST条件3つのみ", value=data["must"])
-    data["want"] = st.text_area("WANT条件", value=data["want"])
-    data["ng"] = st.text_area("逆にNG条件", value=data["ng"])
+    ideal_life = st.text_area("理想の暮らし、理想のお住まいはどんなイメージですか？", value=st.session_state['hearing_data'].get("ideal_life", ""))
+    solve_feeling = st.text_area("もし今の課題が解決できるとしたら、どんな気持ちになりますか？", value=st.session_state['hearing_data'].get("solve_feeling", ""))
+    goal = st.text_area("お住まい購入によって「こうなりたい」という目標はありますか？", value=st.session_state['hearing_data'].get("goal", ""))
+    important = st.text_area("住まい選びで一番大切にしたいことは何ですか？", value=st.session_state['hearing_data'].get("important", ""))
+    must = st.text_area("MAST条件3つのみ", value=st.session_state['hearing_data'].get("must", ""))
+    want = st.text_area("WANT条件", value=st.session_state['hearing_data'].get("want", ""))
+    ng = st.text_area("逆にNG条件", value=st.session_state['hearing_data'].get("ng", ""))
 
     submitted = st.form_submit_button("送信")
 
 if submitted:
+    # フォーム入力をセッションステートに保存
+    st.session_state['hearing_data'] = {
+        "name": name,
+        "now_area": now_area,
+        "now_years": now_years,
+        "is_owner": is_owner,
+        "now_rent": now_rent,
+        "family": family,
+        "commute_time": commute_time,
+        "husband_company": husband_company,
+        "husband_service_years": husband_service_years,
+        "husband_income": husband_income,
+        "wife_company": wife_company,
+        "wife_service_years": wife_service_years,
+        "wife_income": wife_income,
+        "sat_point": sat_point,
+        "search_status": search_status,
+        "why_buy": why_buy,
+        "task": task,
+        "anxiety": anxiety,
+        "rent_vs_buy": rent_vs_buy,
+        "other_trouble": other_trouble,
+        "effect": effect,
+        "forecast": forecast,
+        "event_effect": event_effect,
+        "missed_timing": missed_timing,
+        "ideal_life": ideal_life,
+        "solve_feeling": solve_feeling,
+        "goal": goal,
+        "important": important,
+        "must": must,
+        "want": want,
+        "ng": ng
+    }
+
     st.success("ご入力ありがとうございました！下記ボタンからPDFでダウンロードできます。")
 
     pdf = FPDF()
@@ -148,16 +153,7 @@ if submitted:
 
     pdf.ln(5)
 
-    def pdf_write(label, value):
-        pdf.set_font("NotoSansJP", "B", 12)
-        pdf.cell(50, 8, f"{label}:", 0, 0)
-        pdf.set_font("NotoSansJP", "", 12)
-        pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
-
-    # 名前
-    pdf_write("名前", data.get("name", ""))
-
-    # それ以外
+    pdf_write(pdf, "名前", name)
     for key, label in [
         ("now_area", "現在の居住エリア・駅"),
         ("now_years", "居住年数"),
@@ -190,7 +186,7 @@ if submitted:
         ("want", "WANT条件"),
         ("ng", "逆にNG条件"),
     ]:
-        pdf_write(label, data.get(key, ""))
+        pdf_write(pdf, label, st.session_state['hearing_data'].get(key, ""))
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         pdf.output(tmp_file.name)
