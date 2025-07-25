@@ -35,6 +35,8 @@ st.divider()
 
 st.subheader("便利ツールへジャンプ")
 tools = {
+    "物件検索": "https://picks-agent.terass.com/search/mansion",
+    "住宅ローン　チェッカー": "https://loan-checker.jp/loan",
     "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://budget1.streamlit.app/",
     "諸費用計算シート": "https://howmuch1.streamlit.app/",
     "簡易ライフプランニング表": "https://lifeplan.streamlit.app/",
