@@ -43,8 +43,9 @@ tools = {
     "購入時期診断ツール": "https://when79.streamlit.app/",
 }
 for name, url in tools.items():
-    st.markdown(f"- [{name}]({url})")
+    st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
 st.divider()
+
 
 if 'hearing_data' not in st.session_state:
     st.session_state['hearing_data'] = {
