@@ -1,6 +1,8 @@
 import streamlit as st
 
-# タイトル
+st.set_page_config(page_title="不動産エージェント NAOKI - ツール＆ヒアリング", layout="wide")
+
+# --- タイトル・説明 ---
 st.title("不動産エージェント NAOKI")
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
@@ -9,44 +11,27 @@ st.markdown("""
 
 この3つが、理想の住まいを叶えるための鍵です。
 """)
-st.divider()
-
-# 5W2H
-st.subheader("5W2Hで理想の住まい探しを整理しよう")
-st.markdown("""
-- **Why（なぜ）:** なぜ購入を検討していますか？（例：賃貸脱却、子育て環境、資産形成）
-- **When（いつ）:** いつまでに購入したいですか？
-- **Where（どこで）:** どのエリアでお探しですか？
-- **Who（誰が）:** ご家族構成や購入する方は？
-- **What（何を）:** どんな物件を希望していますか？
-- **How（どのように）:** どんな購入方法をお考えですか？（ローンの利用/頭金の有無/リノベ希望など）
-- **How much（いくらで）:** ご予算や資金計画は？
-""")
-st.info("これらの項目を一緒に整理して、理想の住まい探しをサポートします！")
 
 st.divider()
 
-# --- 便利ツールへのリンク ---
+# --- 便利ツール 動的リンク ---
 st.subheader("便利ツールへジャンプ")
-st.markdown(
-"""
-- [賃貸 vs 購入 住居費・資産価値シミュレータ](https://naobro-fp-streamlitapp-budget-py.streamlit.app/)  
-- [諸費用計算シート](https://naobro-fp-streamlitapp-howmuch-py.streamlit.app/)  
-- [簡易ライフプランニング表](https://naobro-fp-streamlitapp-lifeplan-py.streamlit.app/)
-- [購入時期診断ツール](https://naobro-fp-streamlitapp-when-py.streamlit.app/)
+tools = {
+    "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://naobro-fp-streamlitapp-budget-py.streamlit.app/",
+    "諸費用計算シート": "https://naobro-fp-streamlitapp-howmuch-py.streamlit.app/",
+    "簡易ライフプランニング表": "https://naobro-fp-streamlitapp-lifeplan-py.streamlit.app/",
+    "購入時期診断ツール": "https://naobro-fp-streamlitapp-when-py.streamlit.app/",
+}
+for name, url in tools.items():
+    st.markdown(f"- [{name}]({url})")
 
----
-**（GitHubでコードを見る場合）**
-- [budget.py](https://github.com/Naobro/fp/blob/main/budget.py)
-- [howmuch.py](https://github.com/Naobro/fp/blob/main/howmuch.py)
-- [lifeplan.py](https://github.com/Naobro/fp/blob/main/lifeplan.py)
-- [when.py](https://github.com/Naobro/fp/blob/main/when.py)
-"""
-)
+
+for name, url in github_tools.items():
+    st.markdown(f"- [{name}]({url})")
 
 st.divider()
 
-# --- ヒアリング項目入力フォーム ---
+# --- ヒアリングフォーム ---
 st.subheader("ヒアリングフォーム")
 
 with st.form("hearing_form"):
@@ -95,4 +80,7 @@ with st.form("hearing_form"):
             "must": must, "want": want, "ng": ng,
         }
 
-# 必要に応じて「st.write(st.session_state['hearing'])」で内容を確認可能
+# 入力確認用（開発時のみ）
+if 'hearing' in st.session_state:
+    st.write("=== ヒアリング内容（セッション一時保存） ===")
+    st.json(st.session_state['hearing'])
