@@ -2,6 +2,7 @@ import streamlit as st
 from fpdf import FPDF
 import tempfile
 from datetime import datetime
+import os
 
 # ページ設定
 st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
@@ -46,6 +47,11 @@ st.divider()
 # --- ヒアリングフォーム ---
 st.subheader("ヒアリングフォーム")
 
+# フォントファイル名（同じフォルダに置いてください）
+FONT_PATH = "NotoSansJP-Regular.ttf"
+if not os.path.exists(FONT_PATH):
+    st.error(f"フォントファイル {FONT_PATH} が見つかりません。リポジトリにアップロードしてください。")
+
 # セッションステート初期化（フォーム項目の保存用）
 if 'hearing_data' not in st.session_state:
     st.session_state['hearing_data'] = {
@@ -56,9 +62,12 @@ if 'hearing_data' not in st.session_state:
         "now_rent": 10,
         "family": "",
         "commute_time": "",
-        "company": "",
-        "service_years": 3,
-        "income": 700,
+        "husband_company": "",
+        "husband_service_years": 0,
+        "husband_income": 0,
+        "wife_company": "",
+        "wife_service_years": 0,
+        "wife_income": 0,
         "sat_point": "",
         "search_status": "",
         "why_buy": "",
@@ -89,9 +98,17 @@ with st.form("hearing_form", clear_on_submit=False):
     data["now_rent"] = st.number_input("住居費（万円/月）", min_value=0, max_value=100, value=data["now_rent"])
     data["family"] = st.text_input("ご家族構成", value=data["family"])
     data["commute_time"] = st.text_input("通勤時間", value=data["commute_time"])
-    data["company"] = st.text_input("勤務先", value=data["company"])
-    data["service_years"] = st.number_input("勤続年数", min_value=0, max_value=50, value=data["service_years"])
-    data["income"] = st.number_input("年収（万円）", min_value=0, max_value=10000, value=data["income"])
+
+    st.markdown("### ご主人の勤務先・勤続年数・年収")
+    data["husband_company"] = st.text_input("勤務先", value=data["husband_company"], key="husband_company")
+    data["husband_service_years"] = st.number_input("勤続年数", min_value=0, max_value=50, value=data["husband_service_years"], key="husband_service_years")
+    data["husband_income"] = st.number_input("年収（万円）", min_value=0, max_value=10000, value=data["husband_income"], key="husband_income")
+
+    st.markdown("### 奥様の勤務先・勤続年数・年収")
+    data["wife_company"] = st.text_input("勤務先", value=data["wife_company"], key="wife_company")
+    data["wife_service_years"] = st.number_input("勤続年数", min_value=0, max_value=50, value=data["wife_service_years"], key="wife_service_years")
+    data["wife_income"] = st.number_input("年収（万円）", min_value=0, max_value=10000, value=data["wife_income"], key="wife_income")
+
     data["sat_point"] = st.text_area("今の住まいで満足されている点・不満な点", value=data["sat_point"])
     data["search_status"] = st.text_area("物件探しの進捗", value=data["search_status"])
     data["why_buy"] = st.text_area("なぜ不動産購入したいのか？", value=data["why_buy"])
@@ -121,7 +138,7 @@ if submitted:
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("NotoSansJP", "", "NotoSansJP-Regular.ttf", uni=True)
+    pdf.add_font("NotoSansJP", "", FONT_PATH, uni=True)
     pdf.set_font("NotoSansJP", size=14)
     pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
 
@@ -137,8 +154,10 @@ if submitted:
         pdf.set_font("NotoSansJP", "", 12)
         pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
 
+    # 名前
     pdf_write("名前", data.get("name", ""))
 
+    # それ以外
     for key, label in [
         ("now_area", "現在の居住エリア・駅"),
         ("now_years", "居住年数"),
@@ -146,9 +165,12 @@ if submitted:
         ("now_rent", "住居費（月）"),
         ("family", "ご家族構成"),
         ("commute_time", "通勤時間"),
-        ("company", "勤務先"),
-        ("service_years", "勤続年数"),
-        ("income", "年収"),
+        ("husband_company", "ご主人 勤務先"),
+        ("husband_service_years", "ご主人 勤続年数"),
+        ("husband_income", "ご主人 年収"),
+        ("wife_company", "奥様 勤務先"),
+        ("wife_service_years", "奥様 勤続年数"),
+        ("wife_income", "奥様 年収"),
         ("sat_point", "今の住まいの満足点・不満点"),
         ("search_status", "物件探しの進捗"),
         ("why_buy", "なぜ不動産購入したいか"),
