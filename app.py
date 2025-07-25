@@ -2,88 +2,46 @@ import streamlit as st
 from fpdf import FPDF
 import tempfile
 from datetime import datetime
+import os
 
 # ページ設定
-st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
+st.set_page_config(page_title="不動産エージェント NAOKI ヒアリングフォーム", layout="wide")
 
-# タイトル・キャッチコピー
-st.title("不動産エージェント NAOKI")
-st.header("理想の住まい探し 成功ロードマップ")
-st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
-st.markdown("""
-**ライフプラン × 予算 × 条件整理**
+# タイトル
+st.title("不動産エージェント NAOKI ヒアリングフォーム")
 
-この3つが、理想の住まいを叶えるための鍵です。
-""")
-st.divider()
-
-# 5W2H
-st.subheader("5W2Hで理想の住まい探しを整理しよう")
-st.markdown("""
-- **Why（なぜ）:** なぜ購入を検討していますか？（例：賃貸脱却、子育て環境、資産形成）
-- **When（いつ）:** いつまでに購入したいですか？
-- **Where（どこで）:** どのエリアでお探しですか？
-- **Who（誰が）:** ご家族構成や購入する方は？
-- **What（何を）:** どんな物件を希望していますか？
-- **How（どのように）:** どんな購入方法をお考えですか？（ローンの利用/頭金の有無/リノベ希望など）
-- **How much（いくらで）:** ご予算や資金計画は？
-""")
-st.info("これらの項目を一緒に整理して、理想の住まい探しをサポートします！")
-st.divider()
-
-# 便利ツールへのリンク
-st.subheader("便利ツールへジャンプ")
-tools = {
-    "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://budget1.streamlit.app/",
-    "諸費用計算シート": "https://howmuch1.streamlit.app/",
-    "簡易ライフプランニング表": "https://lifeplan.streamlit.app/",
-    "購入時期診断ツール": "https://when79.streamlit.app/",
-}
-for name, url in tools.items():
-    st.markdown(f"- [{name}]({url})")
-st.divider()
-
-# --- ヒアリングフォーム ---
-st.subheader("ヒアリングフォーム")
-
-# 初期化（必須キーを必ず揃える）
+# セッションステート初期化（フォーム項目の保存用）
 if 'hearing_data' not in st.session_state:
-    st.session_state['hearing_data'] = {}
-
-required_keys = {
-    "name": "",
-    "now_area": "",
-    "now_years": 5,
-    "is_owner": "持ち家",
-    "now_rent": 10,
-    "family": "",
-    "commute_time": "",
-    "company": "",
-    "service_years": 3,
-    "income": 700,
-    "sat_point": "",
-    "search_status": "",
-    "why_buy": "",
-    "task": "",
-    "anxiety": "",
-    "rent_vs_buy": "",
-    "other_trouble": "",
-    "effect": "",
-    "forecast": "",
-    "event_effect": "",
-    "missed_timing": "",
-    "ideal_life": "",
-    "solve_feeling": "",
-    "goal": "",
-    "important": "",
-    "must": "",
-    "want": "",
-    "ng": ""
-}
-
-for key, default in required_keys.items():
-    if key not in st.session_state['hearing_data']:
-        st.session_state['hearing_data'][key] = default
+    st.session_state['hearing_data'] = {
+        "name": "",
+        "now_area": "",
+        "now_years": 5,
+        "is_owner": "持ち家",
+        "now_rent": 10,
+        "family": "",
+        "commute_time": "",
+        "company": "",
+        "service_years": 3,
+        "income": 700,
+        "sat_point": "",
+        "search_status": "",
+        "why_buy": "",
+        "task": "",
+        "anxiety": "",
+        "rent_vs_buy": "",
+        "other_trouble": "",
+        "effect": "",
+        "forecast": "",
+        "event_effect": "",
+        "missed_timing": "",
+        "ideal_life": "",
+        "solve_feeling": "",
+        "goal": "",
+        "important": "",
+        "must": "",
+        "want": "",
+        "ng": ""
+    }
 
 data = st.session_state['hearing_data']
 
@@ -127,65 +85,72 @@ if submitted:
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=14)
-    pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
 
-    # 作成日時表示
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    pdf.set_font("Arial", size=10)
-    pdf.cell(0, 8, f"作成日時：{now}", 0, 1, "R")
+    # フォントファイルの存在チェック・読み込み
+    font_path = "NotoSansJP-Regular.ttf"
+    if not os.path.isfile(font_path):
+        st.error(f"フォントファイル '{font_path}' が見つかりません。GitHubにアップ済みか確認してください。")
+    else:
+        pdf.add_font('NotoSansJP', '', font_path, uni=True)
+        pdf.set_font("NotoSansJP", size=14)
+        pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
 
-    pdf.ln(5)
+        # 作成日時表示
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        pdf.set_font("NotoSansJP", size=10)
+        pdf.cell(0, 8, f"作成日時：{now}", 0, 1, "R")
 
-    def pdf_write(label, value):
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(50, 8, f"{label}:", 0, 0)
-        pdf.set_font("Arial", "", 12)
-        pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
+        pdf.ln(5)
 
-    # 名前は特別に一番上で表示
-    pdf_write("名前", data.get("name", ""))
+        def pdf_write(label, value):
+            pdf.set_font("NotoSansJP", style='', size=12)
+            pdf.cell(50, 8, f"{label}:", 0, 0)
+            pdf.set_font("NotoSansJP", style='', size=12)
+            pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
 
-    for key, label in [
-        ("now_area", "現在の居住エリア・駅"),
-        ("now_years", "居住年数"),
-        ("is_owner", "持ち家・賃貸"),
-        ("now_rent", "住居費（月）"),
-        ("family", "ご家族構成"),
-        ("commute_time", "通勤時間"),
-        ("company", "勤務先"),
-        ("service_years", "勤続年数"),
-        ("income", "年収"),
-        ("sat_point", "今の住まいの満足点・不満点"),
-        ("search_status", "物件探しの進捗"),
-        ("why_buy", "なぜ不動産購入したいか"),
-        ("task", "不満な点がこうなったらいい？"),
-        ("anxiety", "将来に不安や心配"),
-        ("rent_vs_buy", "賃貸と購入で迷っている点"),
-        ("other_trouble", "その他困っていること"),
-        ("effect", "課題や不安の影響"),
-        ("forecast", "数年後の予想"),
-        ("event_effect", "ライフイベントの影響"),
-        ("missed_timing", "住み替えタイミングを逃す影響"),
-        ("ideal_life", "理想の暮らし・住まい"),
-        ("solve_feeling", "課題解決時の気持ち"),
-        ("goal", "購入による目標"),
-        ("important", "住まい選びで大切なこと"),
-        ("must", "MAST条件3つ"),
-        ("want", "WANT条件"),
-        ("ng", "逆にNG条件"),
-    ]:
-        pdf_write(label, data.get(key, ""))
+        # 名前は特別に一番上で表示
+        pdf_write("名前", data.get("name", ""))
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        pdf.output(tmp_file.name)
-        pdf_path = tmp_file.name
+        for key, label in [
+            ("now_area", "現在の居住エリア・駅"),
+            ("now_years", "居住年数"),
+            ("is_owner", "持ち家・賃貸"),
+            ("now_rent", "住居費（月）"),
+            ("family", "ご家族構成"),
+            ("commute_time", "通勤時間"),
+            ("company", "勤務先"),
+            ("service_years", "勤続年数"),
+            ("income", "年収"),
+            ("sat_point", "今の住まいの満足点・不満点"),
+            ("search_status", "物件探しの進捗"),
+            ("why_buy", "なぜ不動産購入したいか"),
+            ("task", "不満な点がこうなったらいい？"),
+            ("anxiety", "将来に不安や心配"),
+            ("rent_vs_buy", "賃貸と購入で迷っている点"),
+            ("other_trouble", "その他困っていること"),
+            ("effect", "課題や不安の影響"),
+            ("forecast", "数年後の予想"),
+            ("event_effect", "ライフイベントの影響"),
+            ("missed_timing", "住み替えタイミングを逃す影響"),
+            ("ideal_life", "理想の暮らし・住まい"),
+            ("solve_feeling", "課題解決時の気持ち"),
+            ("goal", "購入による目標"),
+            ("important", "住まい選びで大切なこと"),
+            ("must", "MAST条件3つ"),
+            ("want", "WANT条件"),
+            ("ng", "逆にNG条件"),
+        ]:
+            pdf_write(label, data.get(key, ""))
 
-    with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-        st.download_button(
-            label="ヒアリング内容をPDFでダウンロード",
-            data=pdf_bytes,
-            file_name="hearing_sheet.pdf",
-            mime="application/pdf"
-        )
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            pdf.output(tmp_file.name)
+            pdf_path = tmp_file.name
+
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+            st.download_button(
+                label="ヒアリング内容をPDFでダウンロード",
+                data=pdf_bytes,
+                file_name="hearing_sheet.pdf",
+                mime="application/pdf"
+            )
