@@ -7,7 +7,12 @@ import os
 # ページ設定
 st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
 
-# タイトル・キャッチコピー
+# フォント設定（日本語フォントファイルは同じフォルダに置くこと）
+FONT_PATH = "NotoSansJP-Regular.ttf"
+if not os.path.exists(FONT_PATH):
+    st.error(f"フォントファイル {FONT_PATH} が見つかりません。アップロードしてください。")
+
+# タイトル・説明
 st.title("不動産エージェント NAOKI")
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
@@ -44,149 +49,142 @@ for name, url in tools.items():
     st.markdown(f"- [{name}]({url})")
 st.divider()
 
-# フォントファイル名（同じフォルダに置いてください）
-FONT_PATH = "NotoSansJP-Regular.ttf"
-if not os.path.exists(FONT_PATH):
-    st.error(f"フォントファイル {FONT_PATH} が見つかりません。")
+# --- ヒアリングフォーム ---
+st.subheader("ヒアリングフォーム")
 
 # セッションステート初期化（フォーム項目の保存用）
 if 'hearing_data' not in st.session_state:
-    st.session_state['hearing_data'] = {}
+    st.session_state['hearing_data'] = {
+        "name": "",
+        "now_area": "",
+        "now_years": 5,
+        "is_owner": "持ち家",
+        "now_rent": 10,
+        "family": "",
+        "commute_time": "",
+        "husband_company": "",
+        "husband_income": 0,
+        "wife_company": "",
+        "wife_income": 0,
+        "service_years": 3,
+        "income": 700,
+        "sat_point": "",
+        "search_status": "",
+        "why_buy": "",
+        "task": "",
+        "anxiety": "",
+        "rent_vs_buy": "",
+        "other_trouble": "",
+        "effect": "",
+        "forecast": "",
+        "event_effect": "",
+        "missed_timing": "",
+        "ideal_life": "",
+        "solve_feeling": "",
+        "goal": "",
+        "important": "",
+        "must": "",
+        "want": "",
+        "ng": ""
+    }
 
-def pdf_write(pdf, label, value):
-    pdf.set_font("NotoSansJP", "B", 12)
-    pdf.cell(50, 8, f"{label}:", 0, 0)
-    pdf.set_font("NotoSansJP", "", 12)
-    pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
+data = st.session_state['hearing_data']
 
-submitted = False
-with st.form("hearing_form"):
-    name = st.text_input("名前", value=st.session_state['hearing_data'].get("name", ""))
-    now_area = st.text_input("現在の居住エリア・駅", value=st.session_state['hearing_data'].get("now_area", ""))
-    now_years = st.number_input("居住年数", min_value=0, max_value=100, value=st.session_state['hearing_data'].get("now_years", 5))
-    is_owner = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=0 if st.session_state['hearing_data'].get("is_owner", "持ち家")=="持ち家" else 1)
-    now_rent = st.number_input("住居費（万円/月）", min_value=0, max_value=100, value=st.session_state['hearing_data'].get("now_rent", 10))
-    family = st.text_input("ご家族構成", value=st.session_state['hearing_data'].get("family", ""))
-    commute_time = st.text_input("通勤時間", value=st.session_state['hearing_data'].get("commute_time", ""))
+with st.form("hearing_form", clear_on_submit=False):
+    data["name"] = st.text_input("名前", value=data["name"])
+    data["now_area"] = st.text_input("現在の居住エリア・駅", value=data["now_area"])
+    data["now_years"] = st.number_input("居住年数", min_value=0, max_value=100, value=data["now_years"])
+    data["is_owner"] = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=0 if data["is_owner"]=="持ち家" else 1)
+    data["now_rent"] = st.number_input("住居費（万円/月）", min_value=0, max_value=100, value=data["now_rent"])
+    data["family"] = st.text_input("ご家族構成", value=data["family"])
+    data["commute_time"] = st.text_input("通勤時間", value=data["commute_time"])
+    data["husband_company"] = st.text_input("ご主人の勤務先", value=data["husband_company"])
+    data["husband_income"] = st.number_input("ご主人の年収（万円）", min_value=0, max_value=10000, value=data["husband_income"])
+    data["wife_company"] = st.text_input("奥様の勤務先", value=data["wife_company"])
+    data["wife_income"] = st.number_input("奥様の年収（万円）", min_value=0, max_value=10000, value=data["wife_income"])
+    data["service_years"] = st.number_input("勤続年数", min_value=0, max_value=50, value=data["service_years"])
+    data["income"] = st.number_input("世帯年収（万円）", min_value=0, max_value=10000, value=data["income"])
+    data["sat_point"] = st.text_area("今の住まいで満足されている点・不満な点", value=data["sat_point"])
+    data["search_status"] = st.text_area("物件探しの進捗", value=data["search_status"])
+    data["why_buy"] = st.text_area("なぜ不動産購入したいのか？", value=data["why_buy"])
 
-    st.markdown("### ご主人の勤務先・勤続年数・年収")
-    husband_company = st.text_input("勤務先", value=st.session_state['hearing_data'].get("husband_company", ""), key="husband_company")
-    husband_service_years = st.number_input("勤続年数", min_value=0, max_value=50, value=st.session_state['hearing_data'].get("husband_service_years", 0), key="husband_service_years")
-    husband_income = st.number_input("年収（万円）", min_value=0, max_value=10000, value=st.session_state['hearing_data'].get("husband_income", 0), key="husband_income")
+    data["task"] = st.text_area("不満な点がこうなったらいい？", value=data["task"])
+    data["anxiety"] = st.text_area("将来に不安や心配はありますか？", value=data["anxiety"])
+    data["rent_vs_buy"] = st.text_area("賃貸と購入、それぞれで迷われている点は？", value=data["rent_vs_buy"])
+    data["other_trouble"] = st.text_area("他にもお住まい探しで困っていることはありますか？", value=data["other_trouble"])
 
-    st.markdown("### 奥様の勤務先・勤続年数・年収")
-    wife_company = st.text_input("勤務先", value=st.session_state['hearing_data'].get("wife_company", ""), key="wife_company")
-    wife_service_years = st.number_input("勤続年数", min_value=0, max_value=50, value=st.session_state['hearing_data'].get("wife_service_years", 0), key="wife_service_years")
-    wife_income = st.number_input("年収（万円）", min_value=0, max_value=10000, value=st.session_state['hearing_data'].get("wife_income", 0), key="wife_income")
+    data["effect"] = st.text_area("その課題や不安が今後も続いた場合、どのような影響があると思いますか？", value=data["effect"])
+    data["forecast"] = st.text_area("今のままだと数年後どうなりそうですか？", value=data["forecast"])
+    data["event_effect"] = st.text_area("ライフイベントが控えている場合、それが現状の住まいにどんな影響を与えそうですか？", value=data["event_effect"])
+    data["missed_timing"] = st.text_area("住み替えのタイミングを逃すことで、家賃の支払いがどれだけ増えるとお考えですか？", value=data["missed_timing"])
 
-    sat_point = st.text_area("今の住まいで満足されている点・不満な点", value=st.session_state['hearing_data'].get("sat_point", ""))
-    search_status = st.text_area("物件探しの進捗", value=st.session_state['hearing_data'].get("search_status", ""))
-    why_buy = st.text_area("なぜ不動産購入したいのか？", value=st.session_state['hearing_data'].get("why_buy", ""))
-
-    task = st.text_area("不満な点がこうなったらいい？", value=st.session_state['hearing_data'].get("task", ""))
-    anxiety = st.text_area("将来に不安や心配はありますか？", value=st.session_state['hearing_data'].get("anxiety", ""))
-    rent_vs_buy = st.text_area("賃貸と購入、それぞれで迷われている点は？", value=st.session_state['hearing_data'].get("rent_vs_buy", ""))
-    other_trouble = st.text_area("他にもお住まい探しで困っていることはありますか？", value=st.session_state['hearing_data'].get("other_trouble", ""))
-
-    effect = st.text_area("その課題や不安が今後も続いた場合、どのような影響があると思いますか？", value=st.session_state['hearing_data'].get("effect", ""))
-    forecast = st.text_area("今のままだと数年後どうなりそうですか？", value=st.session_state['hearing_data'].get("forecast", ""))
-    event_effect = st.text_area("ライフイベントが控えている場合、それが現状の住まいにどんな影響を与えそうですか？", value=st.session_state['hearing_data'].get("event_effect", ""))
-    missed_timing = st.text_area("住み替えのタイミングを逃すことで、家賃の支払いがどれだけ増えるとお考えですか？", value=st.session_state['hearing_data'].get("missed_timing", ""))
-
-    ideal_life = st.text_area("理想の暮らし、理想のお住まいはどんなイメージですか？", value=st.session_state['hearing_data'].get("ideal_life", ""))
-    solve_feeling = st.text_area("もし今の課題が解決できるとしたら、どんな気持ちになりますか？", value=st.session_state['hearing_data'].get("solve_feeling", ""))
-    goal = st.text_area("お住まい購入によって「こうなりたい」という目標はありますか？", value=st.session_state['hearing_data'].get("goal", ""))
-    important = st.text_area("住まい選びで一番大切にしたいことは何ですか？", value=st.session_state['hearing_data'].get("important", ""))
-    must = st.text_area("MAST条件3つのみ", value=st.session_state['hearing_data'].get("must", ""))
-    want = st.text_area("WANT条件", value=st.session_state['hearing_data'].get("want", ""))
-    ng = st.text_area("逆にNG条件", value=st.session_state['hearing_data'].get("ng", ""))
+    data["ideal_life"] = st.text_area("理想の暮らし、理想のお住まいはどんなイメージですか？", value=data["ideal_life"])
+    data["solve_feeling"] = st.text_area("もし今の課題が解決できるとしたら、どんな気持ちになりますか？", value=data["solve_feeling"])
+    data["goal"] = st.text_area("お住まい購入によって「こうなりたい」という目標はありますか？", value=data["goal"])
+    data["important"] = st.text_area("住まい選びで一番大切にしたいことは何ですか？", value=data["important"])
+    data["must"] = st.text_area("MAST条件3つのみ", value=data["must"])
+    data["want"] = st.text_area("WANT条件", value=data["want"])
+    data["ng"] = st.text_area("逆にNG条件", value=data["ng"])
 
     submitted = st.form_submit_button("送信")
 
 if submitted:
-    # フォーム入力をセッションステートに保存
-    st.session_state['hearing_data'] = {
-        "name": name,
-        "now_area": now_area,
-        "now_years": now_years,
-        "is_owner": is_owner,
-        "now_rent": now_rent,
-        "family": family,
-        "commute_time": commute_time,
-        "husband_company": husband_company,
-        "husband_service_years": husband_service_years,
-        "husband_income": husband_income,
-        "wife_company": wife_company,
-        "wife_service_years": wife_service_years,
-        "wife_income": wife_income,
-        "sat_point": sat_point,
-        "search_status": search_status,
-        "why_buy": why_buy,
-        "task": task,
-        "anxiety": anxiety,
-        "rent_vs_buy": rent_vs_buy,
-        "other_trouble": other_trouble,
-        "effect": effect,
-        "forecast": forecast,
-        "event_effect": event_effect,
-        "missed_timing": missed_timing,
-        "ideal_life": ideal_life,
-        "solve_feeling": solve_feeling,
-        "goal": goal,
-        "important": important,
-        "must": must,
-        "want": want,
-        "ng": ng
-    }
-
     st.success("ご入力ありがとうございました！下記ボタンからPDFでダウンロードできます。")
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("NotoSansJP", "", FONT_PATH, uni=True)
-    pdf.set_font("NotoSansJP", size=14)
+
+    # 日本語フォント読み込み
+    pdf.add_font('NotoSansJP', '', FONT_PATH, uni=True)
+    pdf.add_font('NotoSansJP', 'B', FONT_PATH, uni=True)
+
+    pdf.set_font("NotoSansJP", "B", 16)
     pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
 
+    # 作成日時
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    pdf.set_font("NotoSansJP", size=10)
+    pdf.set_font("NotoSansJP", "", 10)
     pdf.cell(0, 8, f"作成日時：{now}", 0, 1, "R")
 
     pdf.ln(5)
 
-    pdf_write(pdf, "名前", name)
-    for key, label in [
-        ("now_area", "現在の居住エリア・駅"),
-        ("now_years", "居住年数"),
-        ("is_owner", "持ち家・賃貸"),
-        ("now_rent", "住居費（月）"),
-        ("family", "ご家族構成"),
-        ("commute_time", "通勤時間"),
-        ("husband_company", "ご主人 勤務先"),
-        ("husband_service_years", "ご主人 勤続年数"),
-        ("husband_income", "ご主人 年収"),
-        ("wife_company", "奥様 勤務先"),
-        ("wife_service_years", "奥様 勤続年数"),
-        ("wife_income", "奥様 年収"),
-        ("sat_point", "今の住まいの満足点・不満点"),
-        ("search_status", "物件探しの進捗"),
-        ("why_buy", "なぜ不動産購入したいか"),
-        ("task", "不満な点がこうなったらいい？"),
-        ("anxiety", "将来に不安や心配"),
-        ("rent_vs_buy", "賃貸と購入で迷っている点"),
-        ("other_trouble", "その他困っていること"),
-        ("effect", "課題や不安の影響"),
-        ("forecast", "数年後の予想"),
-        ("event_effect", "ライフイベントの影響"),
-        ("missed_timing", "住み替えタイミングを逃す影響"),
-        ("ideal_life", "理想の暮らし・住まい"),
-        ("solve_feeling", "課題解決時の気持ち"),
-        ("goal", "購入による目標"),
-        ("important", "住まい選びで大切なこと"),
-        ("must", "MAST条件3つ"),
-        ("want", "WANT条件"),
-        ("ng", "逆にNG条件"),
-    ]:
-        pdf_write(pdf, label, st.session_state['hearing_data'].get(key, ""))
+    def pdf_write(label, value):
+        pdf.set_font("NotoSansJP", "B", 12)
+        pdf.cell(50, 8, f"{label}:", 0, 0)
+        pdf.set_font("NotoSansJP", "", 12)
+        pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
+
+    pdf_write("名前", data.get("name", ""))
+    pdf_write("現在の居住エリア・駅", data.get("now_area", ""))
+    pdf_write("居住年数", data.get("now_years", ""))
+    pdf_write("持ち家・賃貸", data.get("is_owner", ""))
+    pdf_write("住居費（月）", data.get("now_rent", ""))
+    pdf_write("ご家族構成", data.get("family", ""))
+    pdf_write("通勤時間", data.get("commute_time", ""))
+    pdf_write("ご主人の勤務先", data.get("husband_company", ""))
+    pdf_write("ご主人の年収（万円）", data.get("husband_income", ""))
+    pdf_write("奥様の勤務先", data.get("wife_company", ""))
+    pdf_write("奥様の年収（万円）", data.get("wife_income", ""))
+    pdf_write("勤続年数", data.get("service_years", ""))
+    pdf_write("世帯年収（万円）", data.get("income", ""))
+    pdf_write("今の住まいで満足されている点・不満な点", data.get("sat_point", ""))
+    pdf_write("物件探しの進捗", data.get("search_status", ""))
+    pdf_write("なぜ不動産購入したいのか？", data.get("why_buy", ""))
+    pdf_write("不満な点がこうなったらいい？", data.get("task", ""))
+    pdf_write("将来に不安や心配はありますか？", data.get("anxiety", ""))
+    pdf_write("賃貸と購入、それぞれで迷われている点は？", data.get("rent_vs_buy", ""))
+    pdf_write("他にもお住まい探しで困っていることはありますか？", data.get("other_trouble", ""))
+    pdf_write("その課題や不安が今後も続いた場合、どのような影響があると思いますか？", data.get("effect", ""))
+    pdf_write("今のままだと数年後どうなりそうですか？", data.get("forecast", ""))
+    pdf_write("ライフイベントが控えている場合、それが現状の住まいにどんな影響を与えそうですか？", data.get("event_effect", ""))
+    pdf_write("住み替えのタイミングを逃すことで、家賃の支払いがどれだけ増えるとお考えですか？", data.get("missed_timing", ""))
+    pdf_write("理想の暮らし、理想のお住まいはどんなイメージですか？", data.get("ideal_life", ""))
+    pdf_write("もし今の課題が解決できるとしたら、どんな気持ちになりますか？", data.get("solve_feeling", ""))
+    pdf_write("お住まい購入によって「こうなりたい」という目標はありますか？", data.get("goal", ""))
+    pdf_write("住まい選びで一番大切にしたいことは何ですか？", data.get("important", ""))
+    pdf_write("MAST条件3つのみ", data.get("must", ""))
+    pdf_write("WANT条件", data.get("want", ""))
+    pdf_write("逆にNG条件", data.get("ng", ""))
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         pdf.output(tmp_file.name)
