@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy_financial as npf
 
-st.title("【損失回避バイアス可視化】家賃vs購入 “今が得”か一目瞭然ツール")
+st.title("家賃vs購入 “いつが得”か一目瞭然ツール")
 
 # 1. 必要な入力フォーム
 st.header("【入力】")
