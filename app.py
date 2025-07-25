@@ -1,8 +1,6 @@
 import streamlit as st
 
-st.set_page_config(page_title="不動産エージェント NAOKI - ツール＆ヒアリング", layout="wide")
-
-# --- タイトル・説明 ---
+# タイトル
 st.title("不動産エージェント NAOKI")
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
@@ -11,10 +9,24 @@ st.markdown("""
 
 この3つが、理想の住まいを叶えるための鍵です。
 """)
+st.divider()
+
+# 5W2H
+st.subheader("5W2Hで理想の住まい探しを整理しよう")
+st.markdown("""
+- **Why（なぜ）:** なぜ購入を検討していますか？（例：賃貸脱却、子育て環境、資産形成）
+- **When（いつ）:** いつまでに購入したいですか？
+- **Where（どこで）:** どのエリアでお探しですか？
+- **Who（誰が）:** ご家族構成や購入する方は？
+- **What（何を）:** どんな物件を希望していますか？
+- **How（どのように）:** どんな購入方法をお考えですか？（ローンの利用/頭金の有無/リノベ希望など）
+- **How much（いくらで）:** ご予算や資金計画は？
+""")
+st.info("これらの項目を一緒に整理して、理想の住まい探しをサポートします！")
 
 st.divider()
 
-# --- 便利ツール 動的リンク ---
+# --- 便利ツールへのリンク ---
 st.subheader("便利ツールへジャンプ")
 tools = {
     "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://naobro-fp-streamlitapp-budget-py.streamlit.app/",
@@ -25,13 +37,9 @@ tools = {
 for name, url in tools.items():
     st.markdown(f"- [{name}]({url})")
 
-
-for name, url in github_tools.items():
-    st.markdown(f"- [{name}]({url})")
-
 st.divider()
 
-# --- ヒアリングフォーム ---
+# --- ヒアリング項目入力フォーム ---
 st.subheader("ヒアリングフォーム")
 
 with st.form("hearing_form"):
@@ -79,8 +87,3 @@ with st.form("hearing_form"):
             "solve_feeling": solve_feeling, "goal": goal, "important": important,
             "must": must, "want": want, "ng": ng,
         }
-
-# 入力確認用（開発時のみ）
-if 'hearing' in st.session_state:
-    st.write("=== ヒアリング内容（セッション一時保存） ===")
-    st.json(st.session_state['hearing'])
