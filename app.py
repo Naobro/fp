@@ -1,6 +1,7 @@
 import streamlit as st
 from fpdf import FPDF
 import tempfile
+from datetime import datetime
 
 # ページ設定
 st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
@@ -48,6 +49,7 @@ st.subheader("ヒアリングフォーム")
 # セッションステート初期化（フォーム項目の保存用）
 if 'hearing_data' not in st.session_state:
     st.session_state['hearing_data'] = {
+        "name": "",
         "now_area": "",
         "now_years": 5,
         "is_owner": "持ち家",
@@ -80,6 +82,7 @@ if 'hearing_data' not in st.session_state:
 data = st.session_state['hearing_data']
 
 with st.form("hearing_form", clear_on_submit=False):
+    data["name"] = st.text_input("名前", value=data["name"])
     data["now_area"] = st.text_input("現在の居住エリア・駅", value=data["now_area"])
     data["now_years"] = st.number_input("居住年数", min_value=0, max_value=100, value=data["now_years"])
     data["is_owner"] = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=0 if data["is_owner"]=="持ち家" else 1)
@@ -120,6 +123,12 @@ if submitted:
     pdf.add_page()
     pdf.set_font("Arial", size=14)
     pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
+
+    # 作成日時表示
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pdf.set_font("Arial", size=10)
+    pdf.cell(0, 8, f"作成日時：{now}", 0, 1, "R")
+
     pdf.ln(5)
 
     def pdf_write(label, value):
@@ -127,6 +136,9 @@ if submitted:
         pdf.cell(50, 8, f"{label}:", 0, 0)
         pdf.set_font("Arial", "", 12)
         pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
+
+    # 名前は特別に一番上で表示
+    pdf_write("名前", data.get("name", ""))
 
     for key, label in [
         ("now_area", "現在の居住エリア・駅"),
