@@ -35,11 +35,11 @@ st.subheader("便利ツールへジャンプ")
 tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
     "住宅ローン　チェッカー": "https://loan-checker.jp/loan",
-    "住宅ローン　提案書": "https://mortgagenao.streamlit.app/",
-    "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://budget1.streamlit.app/",
-    "諸費用計算シート": "https://howmuch1.streamlit.app/",
-    "簡易ライフプランニング表": "https://lifeplan.streamlit.app/",
-    "購入時期診断ツール": "https://when79.streamlit.app/",
+    "住宅ローン　提案書": "https://naokifp.streamlit.app/mortgage",
+    "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://naokifp.streamlit.app/budget",
+    "諸費用計算シート": "https://naokifp.streamlit.app/howmuch",
+    "簡易ライフプランニング表": "https://naokifp.streamlit.app/lifeplan",
+    "購入時期診断ツール": "https://naokifp.streamlit.app/when",
 }
 for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
