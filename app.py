@@ -6,9 +6,11 @@ import os
 
 st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
 
-FONT_PATH = "NotoSansJP-Regular.ttf"
+# ✅ fontsフォルダの中のフォントを使うように修正
+FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf")
 if not os.path.exists(FONT_PATH):
-    st.error(f"フォントファイル {FONT_PATH} が見つかりません。アップロードしてください。")
+    st.error(f"フォントファイル {FONT_PATH} が見つかりません。fonts フォルダを確認してください。")
+    st.stop()
 
 st.title("不動産エージェント NAOKI")
 st.header("理想の住まい探し 成功ロードマップ")
@@ -33,6 +35,7 @@ st.subheader("便利ツールへジャンプ")
 tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
     "住宅ローン　チェッカー": "https://loan-checker.jp/loan",
+    "住宅ローン　提案書": "https://mortgagenao.streamlit.app/",
     "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://budget1.streamlit.app/",
     "諸費用計算シート": "https://howmuch1.streamlit.app/",
     "簡易ライフプランニング表": "https://lifeplan.streamlit.app/",
@@ -45,8 +48,8 @@ st.divider()
 ### ヒアリングフォーム
 st.subheader("ヒアリング内容")
 
-if 'hearing_data' not in st.session_state:
-    st.session_state['hearing_data'] = {
+if "hearing_data" not in st.session_state:
+    st.session_state["hearing_data"] = {
         "name": "",
         "now_area": "",
         "now_years": 5,
@@ -79,10 +82,10 @@ if 'hearing_data' not in st.session_state:
         "want": "",
         "ng": "",
         "other_agent": "",
-        "why_terass": ""
+        "why_terass": "",
     }
 
-data = st.session_state['hearing_data']
+data = st.session_state["hearing_data"]
 
 with st.form("hearing_form", clear_on_submit=False):
     data["name"] = st.text_input("お名前", value=data["name"])
@@ -99,7 +102,7 @@ with st.form("hearing_form", clear_on_submit=False):
     data["wife_income"] = st.number_input("奥様の年収（万円）", min_value=0, max_value=10000, value=data["wife_income"])
     data["wife_service_years"] = st.number_input("奥様の勤続年数", min_value=0, max_value=50, value=data["wife_service_years"])
 
-    # 以下は記述式の質問
+    # 記述式の質問
     for field, label in [
         ("sat_point", "今の住まいで満足されている点・不満な点"),
         ("search_status", "物件探しの進捗"),
@@ -131,8 +134,8 @@ if submitted:
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font('NotoSansJP', '', FONT_PATH, uni=True)
-    pdf.add_font('NotoSansJP', 'B', FONT_PATH, uni=True)
+    pdf.add_font("NotoSansJP", "", FONT_PATH, uni=True)
+    pdf.add_font("NotoSansJP", "B", FONT_PATH, uni=True)
 
     pdf.set_font("NotoSansJP", "B", 16)
     pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
@@ -149,11 +152,9 @@ if submitted:
         pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
         pdf.ln(2)
 
-    # 基本情報
     pdf_write("お名前", data.get("name", ""))
     pdf_write("世帯年収（万円）", data.get("husband_income", 0) + data.get("wife_income", 0))
 
-    # 残りの項目
     for key, label in [
         ("now_area", "現在の居住エリア・駅"),
         ("now_years", "居住年数"),
@@ -200,5 +201,5 @@ if submitted:
             label="ヒアリング内容をPDFでダウンロード",
             data=pdf_bytes,
             file_name="hearing_sheet.pdf",
-            mime="application/pdf"
+            mime="application/pdf",
         )
