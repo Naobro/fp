@@ -1,35 +1,16 @@
 import streamlit as st
 import pandas as pd
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.units import mm
-from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-import io
+import os
+from fpdf import FPDF
+import tempfile
 
-# ========= フォント ==========
-FONT_PATH = "NotoSansJP-Regular.ttf"
-try:
-    pdfmetrics.registerFont(TTFont('NotoSansJP', FONT_PATH))
-except Exception as e:
-    st.error(f"フォント読み込み失敗: {e}\n{FONT_PATH}をプロジェクト直下に置いてください。")
+# ========== フォント ==========
+FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf")
+if not os.path.exists(FONT_PATH):
+    st.error(f"フォントファイル {FONT_PATH} が見つかりません。\nfonts フォルダに NotoSansJP-Regular.ttf を配置してください。")
     st.stop()
 
-def get_japanese_style(size=11, font_name='NotoSansJP', alignment='CENTER', leading=15, bold=False, color=colors.black):
-    align_map = {'LEFT': 0, 'CENTER': 1, 'RIGHT': 2}
-    return ParagraphStyle(
-        name=f'japanese_style_{size}_{alignment}',
-        fontName=font_name,
-        fontSize=size,
-        leading=leading,
-        alignment=align_map.get(alignment, 1),  # デフォルトCENTER
-        fontWeight="bold" if bold else "normal",
-        textColor=color,
-        spaceAfter=2, spaceBefore=2
-    )
-
+# ========== ローン計算 ==========
 def calc_monthly_payment(principal, annual_rate, years):
     r = annual_rate / 12
     n = years * 12
@@ -77,7 +58,6 @@ rate_diff = {
     "じぶん銀行": {"がん100": 0.054, "7大疾病": 0.1},
     "住信SBI銀行": {"三大疾病": 0.2 if age < 40 else 0.4},
 }
-
 special_notes = {
     "SBI新生銀行": ["125%ルールなし", "ZEH -0.1%"],
     "三菱UFJ銀行": ["三大疾病50%", "ワイド団信+0.3%"],
@@ -95,7 +75,7 @@ with st.expander("🔧 金利を修正する（営業担当用）", expanded=Fal
     for i, bank in enumerate(rates.keys()):
         rates[bank] = cols[i].number_input(f"{bank} (%)", value=rates[bank], key=f"rate_input_{bank}", format="%.3f")
 
-# ========== 借入上限額（10万円単位切り捨て・右揃え）==========
+# ========== 借入上限額（10万円単位切り捨て）==========
 def calc_borrowing_limit(income, exam_rate, limit_ratio, age):
     exam_years = min(35, 79 - age)
     annual_payment = income * limit_ratio
@@ -140,7 +120,7 @@ for i, row in limit_df.iterrows():
 table_html += "</tbody></table>"
 st.markdown(table_html, unsafe_allow_html=True)
 
-# ========== テーブル生成＆ハイライトインデックス抽出 ==========
+# ========== テーブル生成 ==========
 def make_table_data_and_highlight():
     rows = []
     highlights = []
@@ -198,7 +178,7 @@ def make_table_data_and_highlight():
 
 table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight()
 
-# ========== 金利比較HTMLテーブル（Web UI用）==========
+# ========== 金利比較HTMLテーブル ==========
 def make_html_cell(rate_data, is_min_monthly, width_css):
     rate = rate_data["rate"]
     monthly = rate_data["monthly"]
@@ -212,7 +192,6 @@ def make_html_cell(rate_data, is_min_monthly, width_css):
             f"<div style='font-size:22px;font-weight:bold;color:#226BB3'>¥{monthly:,.0f}</div>"
             f"<div style='font-size:14px;color:#666;'>({years}年返済)</div></td>")
 
-# -------- 幅拡大（プラン=220px, 銀行=180px）---------
 plan_width = "min-width:220px;max-width:220px;width:220px;"
 bank_width = "min-width:180px;max-width:180px;width:180px;"
 html_table_output = f"""
@@ -244,7 +223,6 @@ for i, plan in enumerate(plans_order):
             html_table_output += make_html_cell(rate_data, is_min, bank_width)
         html_table_output += "</tr>"
 
-# 特記事項
 html_table_output += f"<tr><td style='{plan_width}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
 for bank in bank_order:
     html_table_output += f"<td style='{bank_width}font-size:12px;text-align:left;background-color:#FCF9F0;'>{'<br>'.join(special_notes[bank])}</td>"
@@ -252,83 +230,72 @@ html_table_output += "</tr></tbody></table>"
 
 st.markdown(html_table_output, unsafe_allow_html=True)
 
-# ========== PDF出力：UIテーブルの完全コピー ==========
-def create_pdf_reportlab():
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                            leftMargin=10*mm, rightMargin=10*mm,
-                            topMargin=13*mm, bottomMargin=13*mm)
-    style_title = get_japanese_style(size=21, font_name='NotoSansJP', alignment='CENTER', leading=31, bold=True)
-    style_header = get_japanese_style(size=13, font_name='NotoSansJP', alignment='CENTER', leading=24, bold=True, color=colors.HexColor('#226BB3'))
-    style_cell = get_japanese_style(size=12, font_name='NotoSansJP', alignment='CENTER', leading=24)
-    style_cellcontent = get_japanese_style(size=15, font_name='NotoSansJP', alignment='CENTER', leading=19, bold=True, color=colors.HexColor('#1B232A'))
+# ========== PDF出力 ==========
+class PDF(FPDF):
+    def __init__(self, orientation="L", unit="mm", format="A4"):
+        super().__init__(orientation, unit, format)
+        self.add_font("Noto", "", FONT_PATH, uni=True)
+        self.add_font("Noto", "B", FONT_PATH, uni=True)
+        self.set_auto_page_break(auto=True, margin=12)
 
-    elements = []
-    elements.append(Paragraph("住宅ローン提案書", style_title))
-    elements.append(Spacer(1, 5*mm))
-    elements.append(Paragraph(f"<b>■ 借入金額：¥{principal:,.0f}</b>", style_header))
-    elements.append(Spacer(1, 8*mm))
+    def header(self):
+        self.set_font("Noto", "B", 22)
+        self.cell(0, 15, "住宅ローン提案書", ln=True, align="C")
+        self.set_font("Noto", "", 13)
+        self.cell(0, 7, f"借入金額：¥{principal:,.0f}", ln=True, align="C")
+        self.ln(3)
 
-    table_data_pdf = []
-    header_row = [Paragraph("プラン", style_header)] + [Paragraph(b, style_header) for b in bank_order]
-    table_data_pdf.append(header_row)
+    def colored_cell(self, w, h, txt, fill, align="C", bold=False):
+        self.set_fill_color(*fill)
+        self.set_font("Noto", "B" if bold else "", 13)
+        self.cell(w, h, txt, align=align, border=1, fill=True)
+
+def pdf_make():
+    pdf = PDF()
+    pdf.add_page()
+    table_cols = [43] * (len(bank_order)+1)
+    table_cols[0] = 62
+    th = 14
+
+    # ヘッダー
+    pdf.set_font("Noto", "B", 13)
+    pdf.set_fill_color(242,246,250)
+    pdf.cell(table_cols[0], th, "プラン", border=1, align="C", fill=True)
+    for b in bank_order:
+        pdf.cell(table_cols[1], th, b, border=1, align="C", fill=True)
+    pdf.ln()
+
+    # 金利・返済テーブル
     for i, plan in enumerate(plans_order):
-        row = [Paragraph(plan, style_cell)]
+        pdf.set_font("Noto", "B", 12)
+        pdf.set_fill_color(255,255,255)
+        pdf.cell(table_cols[0], th, plan, border=1, align="C", fill=True)
         for col_idx, bank in enumerate(bank_order):
-            rate_data = table_rows[i][col_idx]
-            if rate_data["rate"] is None:
-                row.append(Paragraph("", style_cell))
+            d = table_rows[i][col_idx]
+            minflag = col_idx in highlight_rows[i] and d["monthly"] is not None
+            if d["rate"] is None:
+                pdf.cell(table_cols[1], th, "", border=1)
             else:
-                cell_content = f"<b>{rate_data['rate']*100:.3f}%</b><br/><b>¥{rate_data['monthly']:,.0f}</b><br/><font size=10>({rate_data['years']}年返済)</font>"
-                row.append(Paragraph(cell_content, style_cellcontent))
-        table_data_pdf.append(row)
-        if plan == "一般団信":
-            row_50_pdf = [Paragraph("最長50年", style_cell)]
-            for col_idx, bank in enumerate(bank_order):
-                rate_data = row_50[col_idx]
-                if rate_data["rate"] is None:
-                    row_50_pdf.append(Paragraph("", style_cell))
+                if minflag:
+                    pdf.set_fill_color(255,248,200)
                 else:
-                    cell_content = f"<b>{rate_data['rate']*100:.3f}%</b><br/><b>¥{rate_data['monthly']:,.0f}</b><br/><font size=10>({rate_data['years']}年返済)</font>"
-                    row_50_pdf.append(Paragraph(cell_content, style_cellcontent))
-            table_data_pdf.append(row_50_pdf)
+                    pdf.set_fill_color(255,255,255)
+                txt = f"{d['rate']*100:.3f}%\n¥{d['monthly']:,.0f}\n({d['years']}年)"
+                pdf.multi_cell(table_cols[1], th/3, txt, border=1, align="C", fill=True, max_line_height=pdf.font_size)
+        pdf.ln(th - th/3*2)
 
-    nrows = len(table_data_pdf)
-    row_heights = [36*mm]*nrows
-    col_widths = [58*mm] + [43*mm]*len(bank_order)  # 全体で約273mm
-
-    table_style = TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.9, colors.HexColor("#bbb")),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#F2F6FA")),
-        ('LEFTPADDING', (0,0), (-1,-1), 14),
-        ('RIGHTPADDING', (0,0), (-1,-1), 14),
-        ('TOPPADDING', (0,0), (-1,-1), 13),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 13),
-    ])
-    row_cursor = 1
-    for i, min_idxs in enumerate(highlight_rows):
-        for col_idx in min_idxs:
-            table_style.add('BACKGROUND', (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor('#FFF8C8'))
-        row_cursor += 1
-        if plans_order[i] == "一般団信":
-            for col_idx in highlight_50:
-                table_style.add('BACKGROUND', (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor('#FFF8C8'))
-            row_cursor += 1
-
-    table = Table(table_data_pdf, colWidths=col_widths, rowHeights=row_heights)
-    table.setStyle(table_style)
-    elements.append(table)
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-if st.button("📄 PDFを作成"):
-    pdf_buffer = create_pdf_reportlab()
-    st.download_button(
-        label="📥 PDFをダウンロード",
-        data=pdf_buffer,
-        file_name="住宅ローン提案書.pdf",
-        mime="application/pdf"
-    )
+        # 一般団信の下に最長50年
+        if plan == "一般団信":
+            pdf.set_fill_color(249,246,239)
+            pdf.cell(table_cols[0], th, "最長50年", border=1, align="C", fill=True)
+            for col_idx, bank in enumerate(bank_order):
+                d = row_50[col_idx]
+                minflag = col_idx in highlight_50 and d["monthly"] is not None
+                if d["rate"] is None:
+                    pdf.cell(table_cols[1], th, "", border=1)
+                else:
+                    if minflag:
+                        pdf.set_fill_color(255,248,200)
+                    else:
+                        pdf.set_fill_color(255,255,255)
+                    txt = f"{d['rate']*
