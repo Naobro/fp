@@ -50,7 +50,7 @@ st.set_page_config(page_title="資金計画書", layout="centered")
 st.title("資金計画書")
 
 customer_name = st.text_input("お客様名（例：山田太郎）", "")
-property_name = st.text_input("物件名", "シティタワー蕨 402")
+property_name = st.text_input("物件名", "")
 property_price = number_input_commas("物件価格（円）", 58000000, step=100000)
 default_deposit = round_deposit(property_price)
 deposit = number_input_commas("手付金（円・物件価格5%/50万円単位で四捨五入）", default_deposit, step=500000)
