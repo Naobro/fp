@@ -29,17 +29,33 @@ st.markdown("""
 - **How much（いくらで）:** ご予算や資金計画は？
 """)
 st.info("これらの項目を一緒に整理して、理想の住まい探しをサポートします！")
+
+# ▼▼▼ ここにお問い合わせフォームリンクを追加 ▼▼▼
+st.markdown(
+    """
+    <div style='margin-top:20px;'>
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdbG6xqziJWaKf9fBK8uvsrHBMKibCaRadE7qShR3Nl6Cv8Kg/viewform?usp=pp_url"
+           target="_blank"
+           style="display:inline-block; background:#226BB3; color:white; padding:12px 24px; font-size:18px; font-weight:bold; border-radius:8px; text-decoration:none; margin-bottom:10px;">
+           📩 お問い合わせはこちら
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+# ▲▲▲ お問い合わせフォームここまで ▲▲▲
+
 st.divider()
 
 st.subheader("便利ツールへジャンプ")
 tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
     "住宅ローン　チェッカー": "https://loan-checker.jp/loan",
-    "住宅ローン　提案書": "https://naokifp.streamlit.app/mortgage",
-    "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://naokifp.streamlit.app/budget",
-    "諸費用計算シート": "https://naokifp.streamlit.app/howmuch",
-    "簡易ライフプランニング表": "https://naokifp.streamlit.app/lifeplan",
-    "購入時期診断ツール": "https://naokifp.streamlit.app/when",
+    "住宅ローン　提案書": "https://mortgagenao.streamlit.app/",
+    "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://budget1.streamlit.app/",
+    "諸費用計算シート": "https://howmuch1.streamlit.app/",
+    "簡易ライフプランニング表": "https://lifeplan.streamlit.app/",
+    "購入時期診断ツール": "https://when79.streamlit.app/",
 }
 for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
