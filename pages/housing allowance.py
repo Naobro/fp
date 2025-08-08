@@ -106,8 +106,8 @@ def estimated_combined_tax_rate(income_yen: float) -> float:
     return 0.55
 
 # ========= 画面 =========
-st.set_page_config(page_title="社宅 vs 購入（名目累計｜定額法＋リフォームプレミアム）", layout="wide")
-st.title("🏠 社宅 vs 不動産購入 シミュレーター（名目累計｜定額法＋リフォーム・プレミアム）")
+st.set_page_config(page_title="社宅 vs 購入", layout="wide")
+st.title("🏠 社宅 vs 不動産購入 シミュレーター")
 
 with st.expander("使い方 / 前提", expanded=False):
     st.markdown(
@@ -115,7 +115,6 @@ with st.expander("使い方 / 前提", expanded=False):
 - 建物は**定額法**（木造22年 / S造34年 / RC造47年）。**中古は購入時築年数で残存年数償却**。  
 - リフォームは**資本的支出**として原価へ追加し定額法で償却。  
 - **プレミアム率（%）**を各リフォームに設定すると、売却時の**市場価値**に上乗せ（取得費には含めません）。  
-- CSV/PDF出力はありません。サマリーと表のみ表示します。  
         """
     )
 
