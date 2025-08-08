@@ -1,20 +1,25 @@
 import math
-from dataclasses import dataclass
-from typing import Literal, Dict, Tuple
-
-import numpy as np
+from typing import Literal, Dict
 import pandas as pd
 import streamlit as st
 
-# ========== ユーティリティ ==========
-def yen(n: float) -> str:
-    return f"¥{n:,.0f}"
+# ================= ユーティリティ =================
+def man_to_yen(v_man: float) -> float:
+    return float(v_man) * 10_000.0
 
-def pv(value: float, rate: float, years: int) -> float:
-    return value / ((1 + rate) ** years) if years > 0 else value
+def yen_to_man(v_yen: float) -> float:
+    return float(v_yen) / 10_000.0
+
+def man(n_yen: float, digits: int = 1) -> str:
+    return f"{yen_to_man(n_yen):,.{digits}f}万円"
+
+def man_int(n_yen: float) -> str:
+    return f"{yen_to_man(n_yen):,.0f}万円"
 
 def annuity_payment(principal: float, annual_rate: float, years: int) -> float:
-    """元利均等（年払い）"""
+    """元利均等（年払い, 円）"""
+    if years <= 0:
+        return 0.0
     if annual_rate == 0:
         return principal / years
     r = annual_rate
@@ -27,25 +32,27 @@ def amortization_schedule(
     years: int,
     method: Literal["元利均等", "元金均等"] = "元利均等",
 ) -> pd.DataFrame:
-    """年次の返済表（年払い）。"""
+    """年次返済表（円, 年払い）"""
     rows = []
     balance = principal
+    years = max(1, years)
     if method == "元利均等":
         pmt = annuity_payment(principal, annual_rate, years)
         for y in range(1, years + 1):
             interest = balance * annual_rate
-            principal_pay = pmt - interest
+            principal_pay = min(pmt - interest, balance)
+            payment = interest + principal_pay
             balance = max(0.0, balance - principal_pay)
-            rows.append([y, pmt, interest, principal_pay, balance])
+            rows.append([y, payment, interest, principal_pay, balance])
     else:  # 元金均等
         principal_pay_const = principal / years
         for y in range(1, years + 1):
             interest = balance * annual_rate
-            pmt = principal_pay_const + interest
-            balance = max(0.0, balance - principal_pay_const)
-            rows.append([y, pmt, interest, principal_pay_const, balance])
-    df = pd.DataFrame(rows, columns=["年", "返済額", "利息", "元金", "期末残債"])
-    return df
+            payment = principal_pay_const + interest
+            principal_pay = min(principal_pay_const, balance)
+            balance = max(0.0, balance - principal_pay)
+            rows.append([y, payment, interest, principal_pay, balance])
+    return pd.DataFrame(rows, columns=["年", "返済額", "利息", "元金", "期末残債"])
 
 # 建物構造→定率法償却率（概算）
 DEPR_RATE_MAP: Dict[str, float] = {
@@ -54,104 +61,99 @@ DEPR_RATE_MAP: Dict[str, float] = {
     "RC造（耐用47年）": 0.046,
 }
 
-# ========== Streamlit UI ==========
-st.set_page_config(page_title="社宅 vs 購入 シミュレーター（手残り&現在価値）", layout="wide")
-st.title("🏠 社宅 vs 不動産購入 シミュレーター（ローン・売却・税・インフレ込）")
+def estimated_combined_tax_rate(income_yen: float) -> float:
+    """
+    年収→概算の合計税率（国税の限界税率 + 住民税10%）の近似。
+    ※控除等は考慮しない簡易モデル。実務調整は別途対応。
+    """
+    i = income_yen
+    # ざっくり年収ベース：195/330/695/900/1800/4000 万円の区分に対応
+    if i <= 1_950_000:   return 0.15   # 5%+10%
+    if i <= 3_300_000:   return 0.20   # 10%+10%
+    if i <= 6_950_000:   return 0.30   # 20%+10%
+    if i <= 9_000_000:   return 0.33   # 23%+10%
+    if i <= 18_000_000:  return 0.43   # 33%+10%
+    if i <= 40_000_000:  return 0.50   # 40%+10%
+    return 0.55                          # 45%+10%（上限想定）
+
+# ================= 画面設定 =================
+st.set_page_config(page_title="社宅 vs 購入 シミュレーター（名目累計）", layout="wide")
+st.title("🏠 社宅 vs 不動産購入 シミュレーター（ローン・売却・税・仲介｜名目累計）")
 
 with st.expander("使い方 / 前提（クリックで展開）", expanded=False):
     st.markdown(
         """
 - **上段＝社宅（賃貸扱い）**、**下段＝購入**で条件を入力。  
-- 売却は「指定年後」または「お子さんが25歳になった年」に連動できます。  
+- 売却は「指定年後」。※“お子さん25歳”連動は削除済み。  
 - 売却時は **仲介手数料（3%+6万+消費税）**、**3,000万円特別控除**（居住用）を考慮。  
-- 建物は**定率法**で減価（構造に応じた償却率）。市場価値は0仮定（※必要なら変更可）。  
-- **結果**は「名目」と「現在価値（インフレ割引）」で比較。  
-- 右下にCSV/PDF出力もあります。
+- 建物は**定率法**で減価（構造に応じた償却率）。売却価格はデフォで**土地のみ**。  
+- 本ツールは**現在価値を使わず**「名目の累計額」で比較します。  
         """
     )
 
-# ===== 共通（シナリオ軸） =====
-st.subheader("⏱ 売却タイミング・インフレ")
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    timing_mode = st.selectbox("売却タイミングの決め方", ["年数指定", "お子さんの年齢連動（25歳時）"])
-with c2:
-    if timing_mode == "年数指定":
-        years_until_sale = st.number_input("売却までの年数", min_value=1, max_value=60, value=20, step=1)
-    else:
-        child_age_now = st.number_input("お子さんの現在年齢", min_value=0, max_value=60, value=5, step=1)
-        years_until_sale = max(1, 25 - child_age_now)
-        st.info(f"→ 自動計算：売却まで **{years_until_sale} 年**")
-with c3:
-    inflation_rate = st.number_input("インフレ率（年）", min_value=0.0, max_value=5.0, value=1.0, step=0.1) / 100.0
-with c4:
-    disp_unit_man = st.checkbox("表示を万円単位にする", value=True)
-
-unit = 10_000 if disp_unit_man else 1
+# ===== 売却タイミング =====
+st.subheader("⏱ 売却タイミング")
+years_until_sale = st.number_input("売却までの年数", min_value=1, max_value=60, value=20, step=1)
 
 st.markdown("---")
 
-# ===== 上段：社宅 =====
+# ===== 上段：社宅（賃貸扱い） =====
 st.header("🔼 上段：社宅（賃貸扱い）")
 cc1, cc2, cc3, cc4 = st.columns(4)
 with cc1:
-    income = st.number_input("年収（概算・税率算定の参考）", min_value=0, value=20_000_000, step=100_000)
+    income_man = st.number_input("年収（万円）", min_value=0, value=2000, step=10)
 with cc2:
-    company_rent_month = st.number_input("会社負担の家賃（月）", min_value=0, value=350_000, step=10_000)
+    company_rent_month_man = st.number_input("会社負担の家賃（月・万円）", min_value=0.0, value=35.0, step=0.1, format="%.1f")
 with cc3:
-    self_rent_month = st.number_input("自己負担の家賃（月）", min_value=0, value=35_000, step=5_000)
+    self_rent_month_man = st.number_input("自己負担の家賃（月・万円）", min_value=0.0, value=3.5, step=0.1, format="%.1f")
 with cc4:
-    tax_rate_manual = st.number_input("節税率（所得税+住民税 合計%）", min_value=0.0, max_value=60.0, value=55.0, step=1.0) / 100.0
+    auto_tax_rate = estimated_combined_tax_rate(man_to_yen(income_man))
+    st.metric("自動計算された節税率（所得税+住民税）", f"{auto_tax_rate*100:.1f}%")
 
-company_rent_year = company_rent_month * 12
-self_rent_year = self_rent_month * 12
-annual_tax_saving = max(company_rent_year - self_rent_year, 0) * tax_rate_manual
+# 社宅の年間メリット（節税） = (会社負担-自己負担) × 税率
+company_rent_year_yen = man_to_yen(company_rent_month_man) * 12
+self_rent_year_yen    = man_to_yen(self_rent_month_man) * 12
+annual_tax_saving_yen = max(company_rent_year_yen - self_rent_year_yen, 0.0) * auto_tax_rate
 
-# 年ごとのCF & 現在価値
-rows_rent = []
-pv_sum_rent = 0.0
-for y in range(1, years_until_sale + 1):
-    cf = annual_tax_saving
-    cf_pv = pv(cf, inflation_rate, y)
-    pv_sum_rent += cf_pv
-    rows_rent.append([y, cf, cf_pv])
+# 累計（名目）= 年間メリット × 年数
+sum_rent_nominal_yen = annual_tax_saving_yen * years_until_sale
 
-df_rent = pd.DataFrame(rows_rent, columns=["年", "社宅CF（年）", "社宅CF（年・現在価値）"])
-sum_rent_nominal = df_rent["社宅CF（年）"].sum()
-sum_rent_pv = df_rent["社宅CF（年・現在価値）"].sum()
+colA, colB = st.columns(2)
+with colA:
+    st.write("**社宅の年間メリット（節税）**：", man(annual_tax_saving_yen))
+with colB:
+    st.success(f"■ 社宅の累計メリット（名目）：**{man(sum_rent_nominal_yen, digits=0)}**（{years_until_sale}年）")
 
-st.write("**社宅の年間メリット（節税）＝**", yen(annual_tax_saving))
-st.dataframe(df_rent.assign(**{
-    "社宅CF（年）": (df_rent["社宅CF（年）"]/unit).round(1),
-    "社宅CF（年・現在価値）": (df_rent["社宅CF（年・現在価値）"]/unit).round(1),
-}))
-
-st.success(
-    f"■ 社宅の累計メリット：名目 **{yen(sum_rent_nominal)}** / 現在価値 **{yen(sum_rent_pv)}**"
-)
+# 年次表（参考）
+rows_rent = [[y, annual_tax_saving_yen, annual_tax_saving_yen * y] for y in range(1, years_until_sale + 1)]
+df_rent = pd.DataFrame(rows_rent, columns=["年", "年メリット（円）", "累計メリット（円）"])
+df_rent_disp = df_rent.copy()
+df_rent_disp["年メリット（万円）"] = (df_rent["年メリット（円）"] / 10_000).round(1)
+df_rent_disp["累計メリット（万円）"] = (df_rent["累計メリット（円）"] / 10_000).round(0)
+st.dataframe(df_rent_disp[["年", "年メリット（万円）", "累計メリット（万円）"]], use_container_width=True)
 
 st.markdown("---")
 
-# ===== 下段：購入 =====
+# ===== 下段：購入（売却・税・仲介・ローン込み） =====
 st.header("🔽 下段：購入（売却・税・仲介・ローン込み）")
 
 # 物件
 pc1, pc2, pc3, pc4 = st.columns(4)
 with pc1:
-    land_price = st.number_input("土地価格（取得時）", min_value=0, value=100_000_000, step=1_000_000)
+    land_price_man = st.number_input("土地価格（取得時・万円）", min_value=0, value=10_000, step=100)
 with pc2:
-    land_growth = st.number_input("土地の値上がり率（年）%", min_value=0.0, max_value=10.0, value=1.0, step=0.1) / 100.0
+    land_growth = st.number_input("土地の値上がり率（年・%）", min_value=0.0, max_value=10.0, value=1.0, step=0.1) / 100.0
 with pc3:
-    building_price = st.number_input("建物価格（取得時）", min_value=0, value=50_000_000, step=1_000_000)
+    building_price_man = st.number_input("建物価格（取得時・万円）", min_value=0, value=5_000, step=100)
 with pc4:
     structure = st.selectbox("建物構造（減価償却：定率法）", list(DEPR_RATE_MAP.keys()), index=0)
 
 # ローン
 lc1, lc2, lc3, lc4 = st.columns(4)
 with lc1:
-    loan_principal = st.number_input("借入金額（ローン元本）", min_value=0, value=150_000_000, step=1_000_000)
+    loan_principal_man = st.number_input("借入金額（ローン元本・万円）", min_value=0, value=15_000, step=100)
 with lc2:
-    loan_rate = st.number_input("金利（年）%", min_value=0.0, max_value=10.0, value=1.0, step=0.05) / 100.0
+    loan_rate = st.number_input("金利（年・%）", min_value=0.0, max_value=10.0, value=1.0, step=0.05) / 100.0
 with lc3:
     loan_years = st.number_input("返済期間（年）", min_value=1, max_value=60, value=35, step=1)
 with lc4:
@@ -164,18 +166,23 @@ with sc1:
 with sc2:
     apply_30m_deduction = st.checkbox("3,000万円特別控除（居住用）を適用", value=True)
 with sc3:
-    long_term_tax = 0.20315  # 20.315%
-    tax_rate_cg = st.number_input("譲渡所得税率（長期）%", min_value=0.0, max_value=55.0, value=20.315, step=0.1) / 100.0
+    tax_rate_cg = st.number_input("譲渡所得税率（長期・%）", min_value=0.0, max_value=55.0, value=20.315, step=0.1) / 100.0
 with sc4:
-    commission_tax_rate = st.number_input("消費税率（仲介手数料に適用）%", min_value=0.0, max_value=20.0, value=10.0, step=0.5) / 100.0
+    commission_tax_rate = st.number_input("消費税率（仲介手数料に適用・%）", min_value=0.0, max_value=20.0, value=10.0, step=0.5) / 100.0
+
+# 円に変換
+land_price = man_to_yen(land_price_man)
+building_price = man_to_yen(building_price_man)
+loan_principal = man_to_yen(loan_principal_man)
 
 # 計算
 depr_rate = DEPR_RATE_MAP[structure]
 
-# 20年後など：土地価格
+# 将来の土地価格（名目）
 land_future = land_price * ((1 + land_growth) ** years_until_sale)
+land_appreciation = land_future - land_price  # 値上がり額の見える化
 
-# 建物簿価（定率法）
+# 建物簿価（参考・税務用）
 building_book = building_price * ((1 - depr_rate) ** years_until_sale)
 
 # 返済表（年払い）
@@ -183,107 +190,132 @@ am_df = amortization_schedule(loan_principal, loan_rate, loan_years, method=repa
 elapsed = min(years_until_sale, loan_years)
 loan_balance = float(am_df.loc[am_df["年"] == elapsed, "期末残債"].values[0])
 
-# 売却価格
+# 売却価格（デフォは土地のみ）
 sale_price = land_future if treat_building_as_zero else (land_future + building_book)
 
 # 仲介手数料（3% + 6万円 + 消費税）
 commission = (sale_price * 0.03 + 60_000) * (1 + commission_tax_rate)
 
-# 譲渡所得（※売却経費は取得費控除前にマイナス可能）
-# 取得費は「売却対象に対応する原価」を採用：デフォは土地のみ売却→土地原価のみ
+# 取得費（売却対象に対応する原価：土地のみ or 土地+建物）
 acquisition_cost = land_price if treat_building_as_zero else (land_price + building_price)
-capital_gain_base = sale_price - commission - acquisition_cost
 
-# 3,000万円特別控除
-deduction = 30_000_000 if apply_30m_deduction else 0
+# 譲渡所得（控除前）
+capital_gain_base = sale_price - commission - acquisition_cost
+deduction = 30_000_000 if apply_30m_deduction else 0  # 3,000万円控除
 taxable_gain = max(0.0, capital_gain_base - deduction)
 capital_gains_tax = taxable_gain * tax_rate_cg
 
-# 最終手残り（名目）：売却金 - 仲介 - 譲渡税 - 残債
+# 最終手残り（名目）
 net_proceeds = sale_price - commission - capital_gains_tax - loan_balance
-net_proceeds_pv = pv(net_proceeds, inflation_rate, years_until_sale)
 
-# 表示
+# ---- 表示 ----
 st.subheader("計算サマリー（購入）")
-sum_cols = st.columns(2)
-with sum_cols[0]:
-    st.write("**土地（将来価格）**", yen(land_future))
-    st.write("**建物（簿価・参考）**", yen(building_book))
-    st.write("**売却価格**", yen(sale_price))
-    st.write("**仲介手数料**", yen(commission))
-with sum_cols[1]:
-    st.write("**譲渡所得（控除前）**", yen(max(0.0, capital_gain_base)))
-    st.write("**課税譲渡所得**", yen(taxable_gain))
-    st.write("**譲渡所得税**", yen(capital_gains_tax))
-    st.write("**売却時ローン残債**", yen(loan_balance))
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.write("**土地（将来価格）**", man(land_future, 0))
+    st.write("**土地の値上がり額**", man(land_appreciation, 0))
+    st.write("**建物（簿価・参考）**", man(building_book, 0))
+with col2:
+    st.write("**売却価格**", man(sale_price, 0))
+    st.write("**仲介手数料**", man(commission, 0))
+    st.write("**売却時ローン残債**", man(loan_balance, 0))
+with col3:
+    st.write("**譲渡所得（控除前）**", man(max(0.0, capital_gain_base), 0))
+    st.write("**課税譲渡所得**", man(taxable_gain, 0))
+    st.write("**譲渡所得税**", man(capital_gains_tax, 0))
 
-st.success(
-    f"■ 売却手残り（名目）：**{yen(net_proceeds)}** / 現在価値：**{yen(net_proceeds_pv)}**  "
-    f"(割引率＝インフレ {inflation_rate*100:.1f}%・期間 {years_until_sale}年)"
-)
+st.success(f"■ 売却手残り（名目）：**{man(net_proceeds, 0)}**")
 
-# 比較
+# 比較（名目のみ）
 st.markdown("---")
-st.subheader("📊 最終比較（社宅 vs 購入）")
-
+st.subheader("📊 最終比較（社宅 累計 vs 購入 手残り）")
 compare_df = pd.DataFrame({
-    "区分": ["社宅（累計）", "社宅（累計・現在価値）", "購入（売却手残り）", "購入（売却手残り・現在価値）"],
-    "金額": [sum_rent_nominal, sum_rent_pv, net_proceeds, net_proceeds_pv]
+    "区分": ["社宅（累計メリット）", "購入（売却手残り）", "差額（購入−社宅）"],
+    "金額（円）": [sum_rent_nominal_yen, net_proceeds, net_proceeds - sum_rent_nominal_yen]
 })
 disp_df = compare_df.copy()
-disp_df["金額"] = (disp_df["金額"] / unit).round(1)
-st.dataframe(disp_df)
+disp_df["金額（万円）"] = (disp_df["金額（円）"] / 10_000).round(0)
+st.dataframe(disp_df[["区分", "金額（万円）"]], use_container_width=True)
 
-diff_nominal = net_proceeds - sum_rent_nominal
-diff_pv = net_proceeds_pv - sum_rent_pv
-
-if diff_pv >= 0:
-    st.success(f"■ 現在価値ベースの優位：**購入が {yen(abs(diff_pv))} 有利**")
+diff = net_proceeds - sum_rent_nominal_yen
+if diff >= 0:
+    st.success(f"■ 名目ベースの優位：**購入が {man(diff, 0)} 有利**")
 else:
-    st.warning(f"■ 現在価値ベースの優位：**社宅が {yen(abs(diff_pv))} 有利**")
+    st.warning(f"■ 名目ベースの優位：**社宅が {man(abs(diff), 0)} 有利**")
 
-# 返済表の抜粋
+# 住宅ローン返済表（年次・万円表示）
 st.markdown("---")
-st.subheader("📄 住宅ローン返済表（年次）")
+st.subheader("📄 住宅ローン返済表（年次・万円）")
 disp_am = am_df.copy()
 for col in ["返済額", "利息", "元金", "期末残債"]:
-    disp_am[col] = (disp_am[col] / unit).round(1)
-st.dataframe(disp_am)
+    disp_am[col] = (disp_am[col] / 10_000).round(1)
+st.dataframe(disp_am, use_container_width=True)
 
-# ===== ダウンロード（CSV / PDF） =====
+# ================= CSV / PDF 出力 =================
 st.markdown("---")
-st.subheader("⬇️ 出力")
+st.subheader("⬇️ 出力（CSV / PDF）")
 
 # CSV
 csv = compare_df.to_csv(index=False).encode("utf-8-sig")
 st.download_button("比較結果CSVをダウンロード", data=csv, file_name="compare_result.csv", mime="text/csv")
 
-# PDF（簡易要約）
+# PDF（日本語フォント埋め込みで文字化け解消）
 try:
+    from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
-    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    # ★ 日本語フォント（同梱してください）
+    FONT_PATH = "fonts/NotoSansJP-Regular.ttf"
+    FONT_NAME = "NotoSansJP"
+    pdfmetrics.registerFont(TTFont(FONT_NAME, FONT_PATH))
+
+    def wrap_lines(c, text, x_mm, y_mm, max_width_mm, font_name, font_size, leading_mm=6):
+        """簡易折返し。max_width_mmを超える前に改行。"""
+        max_w = max_width_mm * mm
+        c.setFont(font_name, font_size)
+        lines = []
+        buf = ""
+        for ch in text:
+            if ch == "\n":
+                lines.append(buf); buf = ""; continue
+            trial = buf + ch
+            if c.stringWidth(trial, font_name, font_size) <= max_w:
+                buf = trial
+            else:
+                lines.append(buf); buf = ch
+        if buf:
+            lines.append(buf)
+        for line in lines:
+            c.drawString(x_mm*mm, y_mm*mm, line)
+            y_mm -= leading_mm
+        return y_mm
 
     def export_pdf(path: str):
         c = canvas.Canvas(path, pagesize=A4)
-        w, h = A4
-        y = h - 20*mm
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(20*mm, y, "社宅 vs 購入 シミュレーター 要約")
-        y -= 10*mm
+        W, H = A4
+        x = 20  # mm
+        y = (H/mm) - 20
 
-        c.setFont("Helvetica", 10)
-        lines = [
-            f"売却までの年数: {years_until_sale} 年 / インフレ: {inflation_rate*100:.1f}%",
-            f"[社宅] 年間メリット: {yen(annual_tax_saving)} / 累計: {yen(sum_rent_nominal)} / 現在価値: {yen(sum_rent_pv)}",
-            f"[購入] 土地将来価格: {yen(land_future)} / 建物簿価(参考): {yen(building_book)}",
-            f"      売却価格: {yen(sale_price)} / 仲介: {yen(commission)} / 譲渡税: {yen(capital_gains_tax)}",
-            f"      残債: {yen(loan_balance)} / 手残り（名目）: {yen(net_proceeds)} / （現在価値）: {yen(net_proceeds_pv)}",
-            f"比較（現在価値）: {'購入が' if diff_pv>=0 else '社宅が'} {yen(abs(diff_pv))} 有利",
+        c.setFont(FONT_NAME, 14)
+        c.drawString(x*mm, y*mm, "社宅 vs 不動産購入 シミュレーター 要約（名目累計）")
+        y -= 10
+
+        c.setFont(FONT_NAME, 10)
+        body = [
+            f"売却までの年数: {years_until_sale} 年",
+            f"[社宅] 年間メリット: {man(annual_tax_saving_yen)} / 累計: {man(sum_rent_nominal_yen)}",
+            f"[購入] 土地将来価格: {man(land_future, 0)} / 土地の値上がり額: {man(land_appreciation, 0)}",
+            f"      建物簿価(参考): {man(building_book, 0)} / 売却価格: {man(sale_price, 0)}",
+            f"      仲介手数料: {man(commission, 0)} / 売却時ローン残債: {man(loan_balance, 0)}",
+            f"      譲渡所得(控除前): {man(max(0.0, capital_gain_base), 0)} / 課税譲渡所得: {man(taxable_gain, 0)} / 譲渡税: {man(capital_gains_tax, 0)}",
+            f"最終手残り（名目）: {man(net_proceeds, 0)}",
+            f"比較（名目）: {'購入が' if (diff) >= 0 else '社宅が'} {man(abs(diff), 0)} 有利",
         ]
-        for line in lines:
-            c.drawString(20*mm, y, line)
-            y -= 7*mm
+        for line in body:
+            y = wrap_lines(c, line, x, y, max_width_mm=170, font_name=FONT_NAME, font_size=10, leading_mm=6)
 
         c.showPage()
         c.save()
@@ -294,4 +326,4 @@ try:
         with open(path, "rb") as f:
             st.download_button("summary.pdf をダウンロード", data=f, file_name="summary.pdf", mime="application/pdf")
 except Exception as e:
-    st.info("PDF出力には reportlab が必要です（requirements.txt に含めています）。")
+    st.error("PDF生成でエラー。fonts/NotoSansJP-Regular.ttf が配置されているか確認してください。")
