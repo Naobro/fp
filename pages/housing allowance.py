@@ -84,9 +84,10 @@ with st.expander("使い方 / 前提（クリックで展開）", expanded=False
     st.markdown(
         """
 - **上段＝社宅（賃貸扱い）**、**下段＝購入**で条件を入力。  
-- 売却は「指定年後」。※“お子さん25歳”連動は削除済み。  
+- 売却は「指定年後」。  
 - 売却時は **仲介手数料（3%+6万+消費税）**、**3,000万円特別控除**（居住用）を考慮。  
-- 建物は**定率法**で減価（構造に応じた償却率）。売却価格はデフォで**土地のみ**。  
+- 建物は**定率法**で減価（構造に応じた償却率）。  
+- **売却価格 = 土地の将来価格 + 建物の減価償却後の価格（簿価）**   
 - 本ツールは**現在価値を使わず**「名目の累計額」で比較します。  
         """
     )
@@ -162,13 +163,13 @@ with lc4:
 # 売却・税
 sc1, sc2, sc3, sc4 = st.columns(4)
 with sc1:
-    treat_building_as_zero = st.checkbox("売却価格は土地のみ（建物市場価値0と仮定）", value=True)
-with sc2:
     apply_30m_deduction = st.checkbox("3,000万円特別控除（居住用）を適用", value=True)
-with sc3:
+with sc2:
     tax_rate_cg = st.number_input("譲渡所得税率（長期・%）", min_value=0.0, max_value=55.0, value=20.315, step=0.1) / 100.0
-with sc4:
+with sc3:
     commission_tax_rate = st.number_input("消費税率（仲介手数料に適用・%）", min_value=0.0, max_value=20.0, value=10.0, step=0.5) / 100.0
+with sc4:
+    st.write("")  # 余白
 
 # 円に変換
 land_price = man_to_yen(land_price_man)
@@ -182,7 +183,7 @@ depr_rate = DEPR_RATE_MAP[structure]
 land_future = land_price * ((1 + land_growth) ** years_until_sale)
 land_appreciation = land_future - land_price  # 値上がり額の見える化
 
-# 建物簿価（参考・税務用）
+# 建物簿価（減価償却後の価格＝売却に反映 & 取得費にも反映）
 building_book = building_price * ((1 - depr_rate) ** years_until_sale)
 
 # 返済表（年払い）
@@ -190,18 +191,20 @@ am_df = amortization_schedule(loan_principal, loan_rate, loan_years, method=repa
 elapsed = min(years_until_sale, loan_years)
 loan_balance = float(am_df.loc[am_df["年"] == elapsed, "期末残債"].values[0])
 
-# 売却価格（デフォは土地のみ）
-sale_price = land_future if treat_building_as_zero else (land_future + building_book)
+# 売却価格（＝土地の将来価格 + 建物簿価）
+sale_price = land_future + building_book
 
 # 仲介手数料（3% + 6万円 + 消費税）
 commission = (sale_price * 0.03 + 60_000) * (1 + commission_tax_rate)
 
-# 取得費（売却対象に対応する原価：土地のみ or 土地+建物）
-acquisition_cost = land_price if treat_building_as_zero else (land_price + building_price)
+# 取得費（＝土地取得価額 + 建物簿価）※減価償却累計を控除した税務上の取得費
+acquisition_cost = land_price + building_book
 
 # 譲渡所得（控除前）
 capital_gain_base = sale_price - commission - acquisition_cost
-deduction = 30_000_000 if apply_30m_deduction else 0  # 3,000万円控除
+
+# 3,000万円控除
+deduction = 30_000_000 if apply_30m_deduction else 0
 taxable_gain = max(0.0, capital_gain_base - deduction)
 capital_gains_tax = taxable_gain * tax_rate_cg
 
@@ -214,19 +217,20 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.write("**土地（将来価格）**", man(land_future, 0))
     st.write("**土地の値上がり額**", man(land_appreciation, 0))
-    st.write("**建物（簿価・参考）**", man(building_book, 0))
+    st.write("**建物（簿価＝減価償却後の価格）**", man(building_book, 0))
 with col2:
-    st.write("**売却価格**", man(sale_price, 0))
+    st.write("**売却価格（＝土地+建物簿価）**", man(sale_price, 0))
     st.write("**仲介手数料**", man(commission, 0))
     st.write("**売却時ローン残債**", man(loan_balance, 0))
 with col3:
+    st.write("**取得費（＝土地+建物簿価）**", man(acquisition_cost, 0))
     st.write("**譲渡所得（控除前）**", man(max(0.0, capital_gain_base), 0))
     st.write("**課税譲渡所得**", man(taxable_gain, 0))
     st.write("**譲渡所得税**", man(capital_gains_tax, 0))
 
 st.success(f"■ 売却手残り（名目）：**{man(net_proceeds, 0)}**")
 
-# 比較（名目のみ）
+# ===== 上段との比較（名目のみ） =====
 st.markdown("---")
 st.subheader("📊 最終比較（社宅 累計 vs 購入 手残り）")
 compare_df = pd.DataFrame({
@@ -251,7 +255,7 @@ for col in ["返済額", "利息", "元金", "期末残債"]:
     disp_am[col] = (disp_am[col] / 10_000).round(1)
 st.dataframe(disp_am, use_container_width=True)
 
-# ================= CSV / PDF 出力 =================
+# ================= CSV / PDF 出力（日本語フォント埋め込み） =================
 st.markdown("---")
 st.subheader("⬇️ 出力（CSV / PDF）")
 
@@ -259,7 +263,7 @@ st.subheader("⬇️ 出力（CSV / PDF）")
 csv = compare_df.to_csv(index=False).encode("utf-8-sig")
 st.download_button("比較結果CSVをダウンロード", data=csv, file_name="compare_result.csv", mime="text/csv")
 
-# PDF（日本語フォント埋め込みで文字化け解消）
+# PDF（日本語フォントで文字化け解消）
 try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
@@ -276,8 +280,7 @@ try:
         """簡易折返し。max_width_mmを超える前に改行。"""
         max_w = max_width_mm * mm
         c.setFont(font_name, font_size)
-        lines = []
-        buf = ""
+        lines, buf = [], ""
         for ch in text:
             if ch == "\n":
                 lines.append(buf); buf = ""; continue
@@ -286,8 +289,7 @@ try:
                 buf = trial
             else:
                 lines.append(buf); buf = ch
-        if buf:
-            lines.append(buf)
+        if buf: lines.append(buf)
         for line in lines:
             c.drawString(x_mm*mm, y_mm*mm, line)
             y_mm -= leading_mm
@@ -308,9 +310,10 @@ try:
             f"売却までの年数: {years_until_sale} 年",
             f"[社宅] 年間メリット: {man(annual_tax_saving_yen)} / 累計: {man(sum_rent_nominal_yen)}",
             f"[購入] 土地将来価格: {man(land_future, 0)} / 土地の値上がり額: {man(land_appreciation, 0)}",
-            f"      建物簿価(参考): {man(building_book, 0)} / 売却価格: {man(sale_price, 0)}",
-            f"      仲介手数料: {man(commission, 0)} / 売却時ローン残債: {man(loan_balance, 0)}",
-            f"      譲渡所得(控除前): {man(max(0.0, capital_gain_base), 0)} / 課税譲渡所得: {man(taxable_gain, 0)} / 譲渡税: {man(capital_gains_tax, 0)}",
+            f"      建物簿価（減価償却後の価格）: {man(building_book, 0)}",
+            f"      売却価格（＝土地+建物簿価）: {man(sale_price, 0)} / 仲介: {man(commission, 0)} / 残債: {man(loan_balance, 0)}",
+            f"      取得費（＝土地+建物簿価）: {man(acquisition_cost, 0)} / 譲渡所得(控除前): {man(max(0.0, capital_gain_base), 0)}",
+            f"      課税譲渡所得: {man(taxable_gain, 0)} / 譲渡税: {man(capital_gains_tax, 0)}",
             f"最終手残り（名目）: {man(net_proceeds, 0)}",
             f"比較（名目）: {'購入が' if (diff) >= 0 else '社宅が'} {man(abs(diff), 0)} 有利",
         ]
