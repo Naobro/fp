@@ -45,12 +45,12 @@ st.markdown(
         border: 2px solid #000080;
         text-align:center;
         ">
-        ①不安の解消 ➡️ ②ライフプランニング ➡️ ③予算確定 ➡️ ④条件整理
+        ①不安の解消 ➡️ ②ライフプランニング ➡️ ③予算確定 ➡️ ④条件整理➡️ ⑤内見
     </div>
     """,
     unsafe_allow_html=True
 )
-
+st.header("一番重要な事は良い物件と出会った時に即決できる様に、条件整理・資金準備をしておく事")
 st.divider()
 st.subheader("不動産購入の流れ")
 pdf_url = "https://naobro.github.io/fp/pages/flow_compressed.pdf"
