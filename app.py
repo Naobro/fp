@@ -61,9 +61,6 @@ st.subheader("phase①　不安の解消")
 huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
 st.image(gh_raw(huan_img), use_container_width=True)
 
-# ランキング説明（軽く整形）
-st.markdown("🏠 **不動産購入時の不安ランキング（調査対象：500人）**")
-import streamlit as st
 
 st.markdown("## 🏠 不動産購入時の不安ランキング（調査対象：500人）")
 
@@ -153,7 +150,134 @@ st.image(gh_raw(fp_img), use_container_width=True, )
 
 
 st.divider()
+# =========================
+# フェーズ② ライフプラン／予算（あなたの意図120%版）
+# =========================
+st.header("フェーズ② ライフプラン／予算")
 
+# 画像（必要に応じて差し替え）
+huan_img   = "https://naobro.github.io/fp/assets/huan.png"     # 不動産購入の不安：圧倒的1位はお金
+danshin_img= "https://naobro.github.io/fp/assets/danshin.png"   # 団信イラスト
+neage_img  = "https://naobro.github.io/fp/assets/neage.jpeg"    # 家賃値上げの現実（SNS引用イメージ等）
+asia_img   = "https://naobro.github.io/fp/assets/sekai.jpg"     # アジア都市比較（任意）
+
+# 0) まず“お金が1位の不安”を提示
+st.image(huan_img, use_container_width=True, caption="マイホーム購入の不安：圧倒的1位は『お金』")
+
+# 1) もし、から入る（共感の起点）
+st.markdown(
+    """
+    <div style="background:#fff3cd;border:1px solid #ffe49a;border-radius:10px;padding:14px 16px;">
+      <b>もし、宝くじで10億円が当たったら——</b><br>
+      きっと今の「お金の不安」は一気に小さくなりますよね。<br>
+      つまり不安の正体は“<b>見えないお金</b>”。だったら、<u>見える化</u>すればいい。
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# 2) 本質の問い：それって家賃なら払える？
+st.markdown(
+    """
+    ### それって、家賃なら払えるんですか？
+    - 住宅ローンが不安 → でも<strong>同額の家賃</strong>なら「払える」と思っていませんか？  
+    - しかも将来は<strong>インフレ＝家賃アップ</strong>の可能性。<br>
+      <span style="color:#6b7280; font-size:12px;">※ 実際に家賃の値上げ告知は各所で増えています。</span>
+    """,
+    unsafe_allow_html=True
+)
+try:
+    st.image(neage_img, use_container_width=True, caption="家賃は上がる。あなたの収入が下がっても家賃は下がらない。")
+except Exception:
+    pass
+
+# 3) 決定的な違い：団信（20万円ケースの具体比較）
+st.markdown(
+    """
+    ### 団信がある“購入”と、団信がない“賃貸”の決定的な差
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <div style="flex:1 1 320px; border:1px solid #e5e7eb; border-radius:12px; padding:14px;">
+        <div style="font-weight:800; color:#0B4FA0; margin-bottom:6px;">住宅ローン 20万円／月（購入）</div>
+        <ul style="margin:0 0 0 18px;">
+          <li><b>団体信用生命保険（団信）</b>：万一のときは<strong>残債=0</strong>。</li>
+          <li><b>がん団信</b>：診断・手術等で<strong>完済扱い</strong>となる商品も。</li>
+          <li><b>就業不能・失業特約</b>：一定期間の返済免除で立て直し可。</li>
+          <li>どうしても厳しい時は<strong>売却</strong>という選択肢（出口）も持てる。</li>
+        </ul>
+      </div>
+      <div style="flex:1 1 320px; border:1px solid #e5e7eb; border-radius:12px; padding:14px;">
+        <div style="font-weight:800; color:#7a1f1f; margin-bottom:6px;">家賃 20万円／月（賃貸）</div>
+        <ul style="margin:0 0 0 18px;">
+          <li>ご主人が亡くなっても、<b>家賃は0円にならない</b>。</li>
+          <li>収入が落ちても、<b>家賃は待ってくれない</b>。</li>
+          <li>結局、<b>安い・狭い部屋へ住み替え</b>を迫られやすい。</li>
+          <li><b>資産は何も残らない</b>（ずっと掛け捨て）。</li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:6px; color:#6b7280; font-size:12px;">
+      ※ 団信・特約の適用条件や保障範囲は商品・銀行により異なります。個別に最新の約款をご確認ください。
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+st.image(danshin_img, use_container_width=True, caption="団信＝“家族の暮らし”を守る仕組み。購入だから持てる安心。")
+
+# 4) 100%確実な事実（強調帯）
+st.markdown(
+    """
+    <div style="background:#E6F4EA;border:1px solid #34A853;border-radius:10px;padding:14px 16px; font-weight:700; text-align:center;">
+      <span style="font-size:18px;">100% 確実な事実：</span><br>
+      家賃を10年・20年払っても、<b>あなたの資産は増えません</b>。<br>
+      増えるのは、<b>大家さんの資産だけ</b>です。社宅等の税務メリットがあっても、家賃そのものは<b>資産化しません</b>。
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# 5) 数字で現実を見る（過去→現在の結果）
+st.markdown(
+    """
+    ### 過去→現在の“結果”で確認（都内の例）
+    - **中古マンション（70㎡目安）**  
+      ・東京都：2014年 約3,813万 → 2023年 約6,423万（<b>+約68.5%</b>）  
+      ・23区　：2014年 約4,203万 → 2023年 約7,055万（<b>+約67.9%</b>）  
+    - **新築→築10年（60㎡）指数**：23区平均で <b>約1.5倍（146.8%）</b>  
+      ・例：目黒区は <b>約2.21倍</b> と突出（渋谷・品川なども高伸長）  
+    - **上昇額**：東京都 <b>+約2,331万</b>／23区 <b>+約2,545万</b>（10年前比）  
+    - **土地（坪単価）**：東京都 <b>+約33.4%</b>（例：103万→137万/坪）  
+    - 波及：都心5区だけでなく、<b>武蔵野・三鷹・調布</b>など周辺＆<b>埼玉・千葉・神奈川</b>人気エリアにも広がる
+    """
+)
+try:
+    st.image(asia_img, use_container_width=True, caption="アジア主要都市の都心マンション価格と比較しても、東京はまだ割安感があるという見方。")
+except Exception:
+    pass
+
+# 6) 「待つ」シナリオの検証（オリ後／生産緑地）
+st.markdown(
+    """
+    ### 「下がるまで待つ」は本当に正解？
+    - 「オリンピック後は下がる」「生産緑地で暴落」——<b>結果、外れたケースが多い</b>。  
+      制度設計・需給調整により、<b>暴落は回避</b>され、価格は<b>堅調〜上昇</b>が継続。  
+      例：練馬区・大泉学園／世田谷区・千歳烏山など 2019〜2025年で<b>年数%上昇</b>の報告も。  
+    - 海外目線では東京は<b>まだ安い</b>と映り、海外資金の需要も底堅い。
+    """
+)
+
+# 7) 結論＆行動（FP→予算確定→事前審査）
+st.markdown(
+    """
+    <div style="background:#EEF6FF;border:1px solid #BBD7FF;border-radius:10px;padding:12px 14px;">
+      <b>結論：</b><br>
+      未来は不確実。でも、<b>見える化</b>と<b>備え</b>で不安は小さくできる。<br><br>
+      <b>次の一歩</b>：<br>
+      1) お金のプロ（FP）とライフプランニング → <b>“無理なく返せる額”</b>を確定<br>
+      2) <b>事前審査</b>で即動ける体制に（良い物件を<b>逃さない</b>）
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 st.divider()
 
 st.subheader("5W2Hで理想の住まい探しを整理しよう")
