@@ -161,9 +161,8 @@ danshin_img= "https://naobro.github.io/fp/assets/danshin.png"   # 団信イラ�
 neage_img  = "https://naobro.github.io/fp/assets/neage.jpeg"    # 家賃値上げの現実（SNS引用イメージ等）
 asia_img   = "https://naobro.github.io/fp/assets/sekai.jpg"     # アジア都市比較（任意）
 
-# 0) まず“お金が1位の不安”を提示
-st.image(huan_img, use_container_width=True, caption="マイホーム購入の不安：圧倒的1位は『お金』")
 
+st.markdown("## 💰 不動産購入時の不安ランキング　圧倒的　第1位🥇　【お金】")
 # 1) もし、から入る（共感の起点）
 st.markdown(
     """
@@ -179,7 +178,7 @@ st.markdown(
 # 2) 本質の問い：それって家賃なら払える？
 st.markdown(
     """
-    ### それって、家賃なら払えるんですか？
+    ### 住宅ローンが払えるか不安な人　それって、家賃なら払えるんですか？
     - 住宅ローンが不安 → でも<strong>同額の家賃</strong>なら「払える」と思っていませんか？  
     - しかも将来は<strong>インフレ＝家賃アップ</strong>の可能性。<br>
       <span style="color:#6b7280; font-size:12px;">※ 実際に家賃の値上げ告知は各所で増えています。</span>
