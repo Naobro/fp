@@ -180,16 +180,39 @@ st.markdown(
     """
     ### 住宅ローンが払えるか不安な人　それって、家賃なら払えるんですか？
     - 住宅ローンが不安 → でも<strong>同額の家賃</strong>なら「払える」と思っていませんか？  
-    - しかも将来は<strong>インフレ＝家賃アップ</strong>の可能性。<br>
-      <span style="color:#6b7280; font-size:12px;">※ 実際に家賃の値上げ告知は各所で増えています。</span>
+    - しかも将来は<strong>インフレにより、お金の価値が下がるので、実質的な返済負担は軽くなる</strong>が、賃貸は<strong>逆に家賃アップの可能性大</strong>。
     """,
     unsafe_allow_html=True
 )
-try:
-    st.image(neage_img, use_container_width=True, caption="家賃は上がる。あなたの収入が下がっても家賃は下がらない。")
-except Exception:
-    pass
 
+# 強調見出し（単独表示）
+st.markdown(
+    """
+    <div style="font-weight:900; color:#000000; font-size:22px; margin:12px 0 8px;">
+      家賃は上がる。あなたの収入が下がっても家賃は下がらない。
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# 値上げスクショ（2枚）を横並びで表示
+neage_imgs = [
+    "https://github.com/Naobro/fp/blob/main/assets/neage.jpg?raw=1",
+    "https://github.com/Naobro/fp/blob/main/assets/neage1.jpg?raw=1",
+]
+cols = st.columns(len(neage_imgs))
+for col, url in zip(cols, neage_imgs):
+    col.image(url, use_container_width=True)
+
+# 補足注釈（小さく・グレーで）
+st.markdown(
+    """
+    <div style="color:#6b7280; font-size:12px; margin-top:4px;">
+      ※ 実際に家賃の値上げ告知は各所で増えています。
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 # 3) 決定的な違い：団信（20万円ケースの具体比較）
 st.markdown(
     """
@@ -207,9 +230,9 @@ st.markdown(
       <div style="flex:1 1 320px; border:1px solid #e5e7eb; border-radius:12px; padding:14px;">
         <div style="font-weight:800; color:#7a1f1f; margin-bottom:6px;">家賃 20万円／月（賃貸）</div>
         <ul style="margin:0 0 0 18px;">
-          <li>ご主人が亡くなっても、<b>家賃は0円にならない</b>。</li>
+          <li>ご主人にもしもの事があっても、<b>家賃は0円にならない</b>。</li>
           <li>収入が落ちても、<b>家賃は待ってくれない</b>。</li>
-          <li>結局、<b>安い・狭い部屋へ住み替え</b>を迫られやすい。</li>
+          <li>結局、<b>払えないなら安い・狭い部屋へ住み替え</b></li>
           <li><b>資産は何も残らない</b>（ずっと掛け捨て）。</li>
         </ul>
       </div>
@@ -220,15 +243,31 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-st.image(danshin_img, use_container_width=True, caption="団信＝“家族の暮らし”を守る仕組み。購入だから持てる安心。")
+# 団信の強調テキスト
+st.markdown(
+    """
+    <div style="font-weight:800; color:#111827; font-size:18px; margin:6px 0 2px;">
+      団信＝“家族の暮らし”を守る仕組み。購入だから持てる安心。
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# 団信の画像表示
+danshin_img_url = "https://github.com/Naobro/fp/blob/main/assets/danshin.PNG?raw=1"
+st.image(
+    danshin_img_url,
+    use_container_width=True
+)
 
 # 4) 100%確実な事実（強調帯）
 st.markdown(
     """
     <div style="background:#E6F4EA;border:1px solid #34A853;border-radius:10px;padding:14px 16px; font-weight:700; text-align:center;">
-      <span style="font-size:18px;">100% 確実な事実：</span><br>
+      <span style="font-size:18px;">100% 確実な事実：</span>
       家賃を10年・20年払っても、<b>あなたの資産は増えません</b>。<br>
       増えるのは、<b>大家さんの資産だけ</b>です。社宅等の税務メリットがあっても、家賃そのものは<b>資産化しません</b>。
+      購入は、自分が借主の不動産投資と同じ
     </div>
     """,
     unsafe_allow_html=True
