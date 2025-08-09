@@ -19,11 +19,12 @@ def gh_raw(url: str) -> str:
     return url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
 
 # ============== ヒーロー ==============
-st.title("不動産エージェント NAOKI")
-
 # ▼ 指定：タイトルとサブタイトルの“間”にトップ画像
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
 st.image(gh_raw(top_img), use_container_width=True)
+
+
+st.title("不動産エージェント NAOKI")
 
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
@@ -57,20 +58,16 @@ st.markdown("""
 7. **ローンの審査に通るか（16人）**
 """)
 
-# FPイメージ（任意）：お金の不安→FPで可視化 への橋渡し
-fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
-st.image(gh_raw(fp_img), use_container_width=True, caption="お金の不安は、FPのライフプランで“見える化”して解消")
-
 # 不安→安心の心構え
 st.markdown("""
 ### 不動産購入の不安を解消するための心構え
-- **なぜ不安なのか？** → 多くは「見えない・わからない」から。
-1. **必要な知識だけ押さえる**  
-   流れ・ローンの仕組み・インスペクション・災害リスクなど“要点だけ”理解すると、不安は一気に軽くなります。
+- **なぜ不安なのか？** → それは「わからない・見えない」から。
+1. **知識を身につけることで、不安の正体を可視化**  
+   不動産購入の流れ・ローンの仕組み・インスペクション・災害リスクなど“要点だけ”理解すると、不安は一気に軽くなります。
 2. **「待つ」より“価値が落ちにくい家”を選ぶ**  
-   出物待ちより、売りやすい/貸しやすい資産性の高い物件選定で自由度UP。
+   いつか安くなる　理想の白馬の王子様を待つだけでは、機会を逃して不安が増すばかり条件整理して　売りやすい/貸しやすい資産性の高い物件選定で自由度UP。
 3. **専門家を頼る**  
-   不動産×FP×建築（インスペクション）×近隣調査（トナリスク）で、盲点を先回りして潰す。
+   不動産×FP×建築士（インスペクション）×近隣調査（トナリスク）複数の専門家を頼ることが安心への近道です。
 4. **不安を言語化**  
    例：「ローン返済に耐えられるか？」→ ライフプラン＆キャッシュフローで可視化。
 5. **“迷う時間”は機会損失**  
@@ -78,7 +75,7 @@ st.markdown("""
 """)
 
 # 近隣不安へのソリューション：トナリスク
-tonarisk_pdf = "https://github.com/Naobro/fp/blob/main/assets/%E3%83%88%E3%83%8A%E3%83%AA%E3%82%B9%E3%82%AF%EF%BC%88%E8%BF%91%E9%9A%9B%E8%AA%BF%E6%9F%BB%EF%BC%89%E3%82%B5%E3%83%BC%E3%83%92%E3%82%99%E3%82%B9%E8%AA%AC%E6%98%8E%E8%B3%87%E6%96%99%EF%BC%88TERASS%E6%A7%98%EF%BC%89_20230220.pdf"
+tonarisk_pdf = "https://github.com/Naobro/fp/blob/main/assets/%20tonari.pdf"
 st.markdown(
     f"""
 **近隣の不安への対策**  
@@ -89,8 +86,11 @@ st.markdown(
 
 st.info("“お金の不安”は **FPの長期ライフプランとキャッシュフロー** で可視化→納得に変える。Next：**事前審査** で即動ける体制へ。")
 
-st.divider()
+# FPイメージ（任意）：お金の不安→FPで可視化 への橋渡し
+fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
+st.image(gh_raw(fp_img), use_container_width=True, )
 
+st.divider()
 st.divider()
 
 st.subheader("5W2Hで理想の住まい探しを整理しよう")
