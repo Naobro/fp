@@ -23,7 +23,7 @@ st.title("不動産エージェント NAOKI")
 
 # ▼ 指定：タイトルとサブタイトルの“間”にトップ画像
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
-st.image(gh_raw(top_img), use_column_width=True)
+st.image(gh_raw(top_img), use_container_width=True)
 
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
@@ -39,7 +39,7 @@ st.subheader("phase①　不安の解消")
 # 不安ランキング画像
 huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
 st.markdown("🏠 **不動産購入時の不安ランキング（調査対象：500人）**")
-st.image(gh_raw(huan_img), use_column_width=True)
+st.image(gh_raw(huan_img), use_container_width=True)
 
 # ランキング説明（軽く整形）
 st.markdown("""
@@ -59,7 +59,7 @@ st.markdown("""
 
 # FPイメージ（任意）：お金の不安→FPで可視化 への橋渡し
 fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
-st.image(gh_raw(fp_img), use_column_width=True, caption="お金の不安は、FPのライフプランで“見える化”して解消")
+st.image(gh_raw(fp_img), use_container_width=True, caption="お金の不安は、FPのライフプランで“見える化”して解消")
 
 # 不安→安心の心構え
 st.markdown("""
