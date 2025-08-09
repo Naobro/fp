@@ -56,26 +56,72 @@ st.divider()
 # ============== phase① 不安の解消 ==============
 st.subheader("phase①　不安の解消")
 
-# ランキング説明（軽く整形）
-st.markdown("🏠 **不動産購入時の不安ランキング（調査対象：500人）**")
-st.markdown("""
-**主要な不安（上位）**
-1. **ローン返済・維持費の捻出ができるか（367人）**  
-　長期返済や将来のメンテ費への不安が最多。
-2. **近所付き合いがうまくいくか（74人）**  
-　新しいコミュニティへの適応不安。
-3. **生活環境が良いか（38人）**  
-　治安・利便性・騒音など住環境の懸念。
-4. **生活環境の変化に対応できるか（32人）**  
-　転勤や家族構成など将来変化への備え。
-5. **満足いく家が購入できるか（27人）**
-6. **災害が起こらないか（25人）**
-7. **ローンの審査に通るか（16人）**
-""")
 
 # 不安ランキング画像
 huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
 st.image(gh_raw(huan_img), use_container_width=True)
+
+# ランキング説明（軽く整形）
+st.markdown("🏠 **不動産購入時の不安ランキング（調査対象：500人）**")
+import streamlit as st
+
+st.markdown("## 🏠 不動産購入時の不安ランキング（調査対象：500人）")
+
+# HTMLで横スクロール対応テーブル作成
+table_html = """
+<div style="overflow-x:auto;">
+<table style="border-collapse: collapse; width: 100%; min-width: 600px; font-size:14px;">
+<thead>
+<tr style="background-color: #f2f2f2;">
+    <th style="border: 1px solid #ddd; padding: 8px;">不安内容</th>
+    <th style="border: 1px solid #ddd; padding: 8px;">なぜ不安になるか</th>
+    <th style="border: 1px solid #ddd; padding: 8px;">解決策</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+    <td style="border: 1px solid #ddd; padding: 8px;">ローン返済・維持費の捻出ができるか（367人）</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">将来の収入・支出・金利・修繕費が不透明</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">✅ FPによるライフプラン・キャッシュフロー可視化<br>💡 金利上昇・修繕費増加のシナリオ分析</td>
+</tr>
+<tr>
+    <td style="border: 1px solid #ddd; padding: 8px;">近所付き合いがうまくいくか（74人）</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">人間関係やトラブルの予測が困難</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">✅ トナリスク等の近隣調査で対応可<br>💡 購入前の現地見学・時間帯別の雰囲気確認</td>
+</tr>
+<tr>
+    <td style="border: 1px solid #ddd; padding: 8px;">生活環境が良いか（38人）</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">治安・利便性・騒音などの情報不足</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">✅ 物件選定時に条件整理＆現地確認<br>💡 勤務先・ターミナル駅へのアクセス確認<br>💡 現地で線路や幹線道路の有無を確認</td>
+</tr>
+<tr>
+    <td style="border: 1px solid #ddd; padding: 8px;">生活環境の変化に対応できるか（32人）</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">転勤・子育て・介護などの変化</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">✅ FP相談で将来の可変性を確認</td>
+</tr>
+<tr>
+    <td style="border: 1px solid #ddd; padding: 8px;">満足いく家が購入できるか（27人）</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">完璧を求めて条件が絞れない</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">✅ 「70点」ルール（現状50点→70点以上でGO）<br>💡 予算を上げる・50年ローン検討<br>💡 内覧後の判断基準シート活用</td>
+</tr>
+<tr>
+    <td style="border: 1px solid #ddd; padding: 8px;">災害が起こらないか（25人）</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">ハザードリスクへの不安</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">✅ ハザードマップで事前確認</td>
+</tr>
+<tr>
+    <td style="border: 1px solid #ddd; padding: 8px;">ローンの審査に通るか（16人）</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">借入金額・個人情報などの不安</td>
+    <td style="border: 1px solid #ddd; padding: 8px;">✅ 事前審査で解消<br>💡 個人情報が心配な方は信用情報機関で事前確認推奨</td>
+</tr>
+</tbody>
+</table>
+</div>
+"""
+
+st.markdown(table_html, unsafe_allow_html=True)
+
+
 
 
 # 不安→安心の心構え
@@ -95,7 +141,7 @@ st.markdown("""
 """)
 
 pdf_url = "https://naobro.github.io/fp/pages/tonari.pdf"
-st.markdown(f"[📄 PDFはこちら]({pdf_url})")
+st.markdown(f"[📄 近隣調査　トナリスク]({pdf_url})")
 
 st.info("“不安の解消”は ** で可視化→言語化。Next：**ライフプラン　予算** 不安の可視化。")
 # ============== phase② ライフプラン　予算 ==============
