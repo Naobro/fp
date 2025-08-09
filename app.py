@@ -6,16 +6,91 @@ import os
 
 st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
 
-# ✅ fontsフォルダの中のフォントを使うように修正
+# ✅ fontsフォルダの中のフォントを使う
 FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf")
 if not os.path.exists(FONT_PATH):
     st.error(f"フォントファイル {FONT_PATH} が見つかりません。fonts フォルダを確認してください。")
     st.stop()
 
+# --- GitHubの blob URL → raw URL 変換ヘルパー ---
+def gh_raw(url: str) -> str:
+    # 例: https://github.com/Naobro/fp/blob/main/assets/top.png
+    # →  https://raw.githubusercontent.com/Naobro/fp/main/assets/top.png
+    return url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
+
+# ============== ヒーロー ==============
 st.title("不動産エージェント NAOKI")
+
+# ▼ 指定：タイトルとサブタイトルの“間”にトップ画像
+top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
+st.image(gh_raw(top_img), use_column_width=True)
+
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
-st.markdown('<span style="color:blue; font-weight:bold; font-size:20px;">ライフプラン × 予算 × 条件整理</span>', unsafe_allow_html=True)
+st.markdown(
+    '<span style="color:blue; font-weight:bold; font-size:20px;">不安の解消 × ライフプラン予算 × 条件整理</span>',
+    unsafe_allow_html=True,
+)
+st.divider()
+
+# ============== phase① 不安の解消 ==============
+st.subheader("phase①　不安の解消")
+
+# 不安ランキング画像
+huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
+st.markdown("🏠 **不動産購入時の不安ランキング（調査対象：500人）**")
+st.image(gh_raw(huan_img), use_column_width=True)
+
+# ランキング説明（軽く整形）
+st.markdown("""
+**主要な不安（上位）**
+1. **ローン返済・維持費の捻出ができるか（367人）**  
+　長期返済や将来のメンテ費への不安が最多。
+2. **近所付き合いがうまくいくか（74人）**  
+　新しいコミュニティへの適応不安。
+3. **生活環境が良いか（38人）**  
+　治安・利便性・騒音など住環境の懸念。
+4. **生活環境の変化に対応できるか（32人）**  
+　転勤や家族構成など将来変化への備え。
+5. **満足いく家が購入できるか（27人）**
+6. **災害が起こらないか（25人）**
+7. **ローンの審査に通るか（16人）**
+""")
+
+# FPイメージ（任意）：お金の不安→FPで可視化 への橋渡し
+fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
+st.image(gh_raw(fp_img), use_column_width=True, caption="お金の不安は、FPのライフプランで“見える化”して解消")
+
+# 不安→安心の心構え
+st.markdown("""
+### 不動産購入の不安を解消するための心構え
+- **なぜ不安なのか？** → 多くは「見えない・わからない」から。
+1. **必要な知識だけ押さえる**  
+   流れ・ローンの仕組み・インスペクション・災害リスクなど“要点だけ”理解すると、不安は一気に軽くなります。
+2. **「待つ」より“価値が落ちにくい家”を選ぶ**  
+   出物待ちより、売りやすい/貸しやすい資産性の高い物件選定で自由度UP。
+3. **専門家を頼る**  
+   不動産×FP×建築（インスペクション）×近隣調査（トナリスク）で、盲点を先回りして潰す。
+4. **不安を言語化**  
+   例：「ローン返済に耐えられるか？」→ ライフプラン＆キャッシュフローで可視化。
+5. **“迷う時間”は機会損失**  
+   70点超なら検討過多で逃す前に、次の一歩へ。
+""")
+
+# 近隣不安へのソリューション：トナリスク
+tonarisk_pdf = "https://github.com/Naobro/fp/blob/main/assets/%E3%83%88%E3%83%8A%E3%83%AA%E3%82%B9%E3%82%AF%EF%BC%88%E8%BF%91%E9%9A%9B%E8%AA%BF%E6%9F%BB%EF%BC%89%E3%82%B5%E3%83%BC%E3%83%92%E3%82%99%E3%82%B9%E8%AA%AC%E6%98%8E%E8%B3%87%E6%96%99%EF%BC%88TERASS%E6%A7%98%EF%BC%89_20230220.pdf"
+st.markdown(
+    f"""
+**近隣の不安への対策**  
+第三者の近隣調査サービス **トナリスク** を紹介可能です。  
+[PDFで概要を見る]({gh_raw(tonarisk_pdf)})（スマホ/PC対応）
+"""
+)
+
+st.info("“お金の不安”は **FPの長期ライフプランとキャッシュフロー** で可視化→納得に変える。Next：**事前審査** で即動ける体制へ。")
+
+st.divider()
+
 st.divider()
 
 st.subheader("5W2Hで理想の住まい探しを整理しよう")
