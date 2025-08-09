@@ -26,12 +26,15 @@ st.image(gh_raw(top_img), use_container_width=True)
 
 st.title("不動産エージェント NAOKI")
 
-st.header("理想の住まい探し 成功ロードマップ")
+
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
 st.markdown(
     '<span style="color:blue; font-weight:bold; font-size:20px;">不安の解消 × ライフプラン予算 × 条件整理</span>',
     unsafe_allow_html=True,
 )
+st.header("理想の住まい探し 成功ロードマップ")
+st.markdown("不安の解消➡️ライフプランニング➡️予算確定➡️条件整理")
+
 st.divider()
 
 # ============== phase① 不安の解消 ==============
@@ -70,25 +73,35 @@ st.markdown("""
 3. **専門家を頼る**  
    不動産×FP×建築士（インスペクション）×近隣調査（トナリスク）複数の専門家を頼ることが安心への近道です。
 4. **不安を言語化**  
-   例：「ローン返済に耐えられるか？」→ ライフプラン＆キャッシュフローで可視化。
+   不明瞭な不安ほど行動を妨げます。不安を具体的に言葉にする　例：「ローン返済に耐えられるか？」→ ライフプラン＆キャッシュフローで可視化。
 5. **“迷う時間”は機会損失**  
-   70点超なら検討過多で逃す前に、次の一歩へ。
+   迷っている間に良い物件が他の人に買われてしまうこともしばしばです。70点を超える（つまり十分に満足できそうな）物件に出会ったら、「考えすぎず、行動する」
 """)
 
-# 近隣不安へのソリューション：トナリスク（PDF埋め込み表示）
+# 近隣不安へのソリューション：トナリスク（PDF埋め込み表示・フォールバック付き）
 tonarisk_pdf = "https://github.com/Naobro/fp/blob/main/assets/tonari.pdf"
 
 st.markdown("**近隣の不安への対策**")
 st.markdown("第三者の近隣調査サービス **トナリスク** を紹介可能です。")
 
-# PDFをiframeで埋め込み表示
-pdf_url = gh_raw(tonarisk_pdf)
-st.components.v1.html(
-    f"""
-    <iframe src="{pdf_url}" width="100%" height="600px" style="border:none;"></iframe>
-    """,
-    height=600,
-)
+pdf_url = gh_raw(tonarisk_pdf)  # raw.githubusercontent.com に変換
+
+# 1) 通常の埋め込み（objectタグ）→ 2) Google Viewer → 3) 直リンク
+html = f"""
+<div style="width:100%; height:0; padding-bottom:130%; position:relative;">
+  <object data="{pdf_url}#view=FitH" type="application/pdf" 
+          style="position:absolute; left:0; top:0; width:100%; height:100%; border:none;">
+    <iframe src="https://drive.google.com/viewerng/viewer?embedded=true&url={pdf_url}" 
+            style="position:absolute; left:0; top:0; width:100%; height:100%; border:none;">
+    </iframe>
+  </object>
+</div>
+<div style="margin-top:8px;">
+  📄 表示できない場合は <a href="{pdf_url}" target="_blank" rel="noopener">こちらからPDFを開く</a>
+</div>
+"""
+
+st.components.v1.html(html, height=750)
 st.info("“不安の解消”は ** で可視化→言語化。Next：**ライフプラン　予算** 不安の可視化。")
 # ============== phase② ライフプラン　予算 ==============
 st.subheader("phase②　ライフプラン　予算")
