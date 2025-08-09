@@ -33,7 +33,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.header("理想の住まい探し 成功ロードマップ")
-st.markdown("不安の解消➡️ライフプランニング➡️予算確定➡️条件整理")
+st.markdown(
+    """
+    <div style="
+        background-color:#f0f8ff;
+        color:#000080;
+        font-size:20px;
+        font-weight:bold;
+        padding:12px;
+        border-radius:8px;
+        border: 2px solid #000080;
+        text-align:center;
+        ">
+        ①不安の解消 ➡️ ②ライフプランニング ➡️ ③予算確定 ➡️ ④条件整理
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 st.divider()
 
@@ -78,30 +94,12 @@ st.markdown("""
    迷っている間に良い物件が他の人に買われてしまうこともしばしばです。70点を超える（つまり十分に満足できそうな）物件に出会ったら、「考えすぎず、行動する」
 """)
 
-# 近隣不安へのソリューション：トナリスク（PDF埋め込み表示・フォールバック付き）
-tonarisk_pdf = "https://github.com/Naobro/fp/blob/main/assets/tonari.pdf"
-
+# トナリスク
+tonarisk_pdf = "https://github.com/Naobro/fp/blob/main/assets/tonari.pdf?raw=1"
 st.markdown("**近隣の不安への対策**")
-st.markdown("第三者の近隣調査サービス **トナリスク** を紹介可能です。")
+st.markdown(f"[📄 PDFで概要を見る]({tonarisk_pdf})")
 
-pdf_url = gh_raw(tonarisk_pdf)  # raw.githubusercontent.com に変換
 
-# 1) 通常の埋め込み（objectタグ）→ 2) Google Viewer → 3) 直リンク
-html = f"""
-<div style="width:100%; height:0; padding-bottom:130%; position:relative;">
-  <object data="{pdf_url}#view=FitH" type="application/pdf" 
-          style="position:absolute; left:0; top:0; width:100%; height:100%; border:none;">
-    <iframe src="https://drive.google.com/viewerng/viewer?embedded=true&url={pdf_url}" 
-            style="position:absolute; left:0; top:0; width:100%; height:100%; border:none;">
-    </iframe>
-  </object>
-</div>
-<div style="margin-top:8px;">
-  📄 表示できない場合は <a href="{pdf_url}" target="_blank" rel="noopener">こちらからPDFを開く</a>
-</div>
-"""
-
-st.components.v1.html(html, height=750)
 st.info("“不安の解消”は ** で可視化→言語化。Next：**ライフプラン　予算** 不安の可視化。")
 # ============== phase② ライフプラン　予算 ==============
 st.subheader("phase②　ライフプラン　予算")
