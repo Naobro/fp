@@ -94,18 +94,8 @@ st.markdown("""
    迷っている間に良い物件が他の人に買われてしまうこともしばしばです。70点を超える（つまり十分に満足できそうな）物件に出会ったら、「考えすぎず、行動する」
 """)
 
-# --- GitHub PDF埋め込み表示 ---
-# GitHubのraw形式URLにする
-tonarisk_pdf_url = "https://raw.githubusercontent.com/Naobro/fp/main/assets/tonari.pdf"
-
-st.markdown("**近隣の不安への対策（トナリスク）**")
-st.components.v1.html(
-    f"""
-    <iframe src="{tonarisk_pdf_url}" width="100%" height="600px" style="border:none;"></iframe>
-    """,
-    height=600
-)
-
+pdf_url = "https://naobro.github.io/fp/pages/tonari.pdf"
+st.markdown(f"[📄 PDFはこちら]({pdf_url})")
 
 st.info("“不安の解消”は ** で可視化→言語化。Next：**ライフプラン　予算** 不安の可視化。")
 # ============== phase② ライフプラン　予算 ==============
