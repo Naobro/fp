@@ -264,7 +264,16 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+import streamlit as st
 
+st.set_page_config(page_title="GitHub MP4 再生", layout="centered")
+st.title("🎬 MP4 再生")
+
+# GitHub blob URLをrawに変換
+video_url = "https://raw.githubusercontent.com/Naobro/fp/main/assets/huyu.MP4"
+
+# Streamlit標準プレーヤーで再生
+st.video(video_url)
 # 5) 数字で現実を見る（過去→現在の結果）
 st.markdown(
     """
