@@ -627,12 +627,27 @@ if submitted:
     pdf = FPDF()
     pdf.add_page()
 
-    # ★ここが今回の肝：先に fontpath を指定
-    pdf.fontpath = font_dir + ("" if font_dir.endswith(os.sep) else os.sep)
+    # --- PDF 作成 ---
+pdf = FPDF()
+pdf.add_page()
 
-    # ★add_font は “ファイル名だけ” で渡す（サブセット化時も fontpath が使われる）
-    pdf.add_font("NotoSansJP", "", fname_reg, uni=True)
-    pdf.add_font("NotoSansJP", "B", fname_bld, uni=True)
+# ← ここから置き換え（fontpath ではなく chdir 方式）
+import os
+save_cwd = os.getcwd()
+try:
+    os.chdir(font_dir)  # /mount/src/fp/fonts に一時移動
+    pdf.add_font("NotoSansJP", "", fname_reg, uni=True)  # 例: "NotoSansJP-Regular.ttf"
+    pdf.add_font("NotoSansJP", "B", fname_bld, uni=True) # 例: "NotoSansJP-Bold.ttf"（無ければRegular）
+finally:
+    os.chdir(save_cwd)
+# → ここまで置き換え
+
+def title(t):
+    pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
+def pair(label, val):
+    pdf.set_font("NotoSansJP","B",11); pdf.multi_cell(0, 7, label)
+    pdf.set_font("NotoSansJP","",11); pdf.multi_cell(0, 7, str(val) if val not in [None, ""] else "（未入力）")
+    pdf.ln(1)
 
     def title(t):
         pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
