@@ -384,7 +384,7 @@ st.subheader("ヒアリング内容")
 
 TO_EMAIL_DEFAULT = "naoki.nishiyama@terass.com"
 
-# 既存データは保持しつつ不足キーを補完
+# 既存キーは維持しつつ不足分を補完
 base_defaults = {
     # 既存
     "name": "", "now_area": "", "now_years": 5, "is_owner": "賃貸",
@@ -396,12 +396,10 @@ base_defaults = {
     "forecast": "", "event_effect": "", "missed_timing": "", "ideal_life": "",
     "solve_feeling": "", "goal": "", "important": "",
     "must": "", "want": "", "ng": "", "other_agent": "", "why_terass": "",
-    # 追加：持ち家用
-    "mortgage_balance": 0,
-    "mortgage_rate_type": "未選択",  # 固定/変動/ミックス/未選択
+    # 追加：共通の住居費
+    "housing_cost": 10,  # 住居費（万円/月）※賃貸でも持ち家でも共通で入力
     # 追加：夫婦の通勤状況
-    "husband_commute": "",
-    "wife_commute": "",
+    "husband_commute": "", "wife_commute": "",
     # 追加：満足度（1=不満, 5=満足）
     "sat_price": 3, "sat_location": 3, "sat_size": 3, "sat_age": 3, "sat_spec": 3,
     "dissat_free": "",
@@ -424,6 +422,9 @@ if "hearing_data" not in st.session_state:
 else:
     for k, v in base_defaults.items():
         st.session_state["hearing_data"].setdefault(k, v)
+    # 互換：旧データ(now_rent)があれば housing_cost に引き継ぎ
+    if "housing_cost" in st.session_state["hearing_data"] and st.session_state["hearing_data"].get("housing_cost") in [None, ""]:
+        st.session_state["hearing_data"]["housing_cost"] = st.session_state["hearing_data"].get("now_rent", 0)
 
 data = st.session_state["hearing_data"]
 
@@ -433,30 +434,24 @@ import tempfile, os
 
 with st.form("hearing_form", clear_on_submit=False):
     # ---- 1) 現状把握（基礎） ----
-    st.markdown("#### 1) 現状把握")
+    st.markdown("#### 1) 現状把握（基礎）")
     c1, c2, c3 = st.columns(3)
     with c1:
         data["name"]      = st.text_input("お名前", value=data["name"])
         data["now_area"]  = st.text_input("現在の居住エリア・駅", value=data["now_area"])
     with c2:
         data["now_years"] = st.number_input("居住年数（年）", min_value=0, max_value=100, value=int(data["now_years"]))
-        data["is_owner"]  = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=0 if data["is_owner"]=="持ち家" else 1)
+        data["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if data["is_owner"]=="賃貸" else 1)
     with c3:
-        if data["is_owner"] == "賃貸":
-            # ラベルを「住居費」に変更
-            data["now_rent"] = st.number_input("住居費（万円/月）", min_value=0, max_value=100, value=int(data["now_rent"]), key="rent_input")
-        else:
-            data["mortgage_balance"]   = st.number_input("住宅ローン残債（万円）", min_value=0, max_value=200000, value=int(data["mortgage_balance"]), key="mort_input")
-            data["mortgage_rate_type"] = st.selectbox("金利タイプ", ["固定","変動","ミックス","未選択"],
-                                                      index=["固定","変動","ミックス","未選択"].index(data["mortgage_rate_type"]), key="rate_input")
+        # 種別に関わらず「住居費（万円/月）」のみ入力
+        data["housing_cost"] = st.number_input("住居費（万円/月）", min_value=0, max_value=200, value=int(data["housing_cost"]))
     data["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=data["family"])
 
     st.divider()
 
     # ---- 2) 現在の住まい（満足・不満） ----
-    st.markdown("#### 2) 現在の住まい")
+    st.markdown("#### 2) 現在の住まい（満足・不満）")
     data["sat_point"] = st.text_area("現在の住宅の満足点（自由入力）", value=data["sat_point"])
-
     sc1, sc2, sc3, sc4, sc5 = st.columns(5)
     with sc1:
         data["sat_price"] = st.slider("満足度：価格（1=不満／5=満足）", 1, 5, int(data["sat_price"]))
@@ -468,7 +463,7 @@ with st.form("hearing_form", clear_on_submit=False):
         data["sat_age"] = st.slider("満足度：築年数（1=不満／5=満足）", 1, 5, int(data["sat_age"]))
     with sc5:
         data["sat_spec"] = st.slider("満足度：スペック（1=不満／5=満足）", 1, 5, int(data["sat_spec"]))
-    sat_total = int(data["sat_price"])+int(data["sat_location"])+int(data["sat_size"])+int(data["sat_age"])+int(data["sat_spec"])
+    sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
     st.caption(f"満足度スコア合計：**{sat_total} / 25**（低いほど不満が大きい）")
     data["dissat_free"] = st.text_area("不満な点（自由入力）", value=data["dissat_free"])
 
@@ -590,16 +585,20 @@ with st.form("hearing_form", clear_on_submit=False):
 if submitted:
     st.success("ご入力ありがとうございました！PDFとメール下書きを生成します。")
 
-    # --- FPDFのフォントを絶対パスで登録（FileNotFound対策） ---
+    # --- フォント解決（必須） ---
+    # 既にアプリ冒頭で FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf") を定義している前提
     FONT_PATH_ABS = os.path.abspath(FONT_PATH)
+    font_dir = os.path.dirname(FONT_PATH_ABS)
     if not os.path.exists(FONT_PATH_ABS):
-        st.error(f"フォントが見つかりません：{FONT_PATH_ABS}（fonts/NotoSansJP-Regular.ttf を配置してください）")
+        st.error(f"日本語フォントが見つかりません：{FONT_PATH_ABS}\n→ /fonts/NotoSansJP-Regular.ttf を配置してください。")
         st.stop()
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("NotoSansJP", "", FONT_PATH_ABS, uni=True)
-    pdf.add_font("NotoSansJP", "B", FONT_PATH_ABS, uni=True)
+    # 重要：フォントディレクトリを指定し、ファイル名はベース名で渡す
+    pdf.fontpath = font_dir + ("" if font_dir.endswith(os.sep) else os.sep)
+    pdf.add_font("NotoSansJP", "", os.path.basename(FONT_PATH_ABS), uni=True)
+    pdf.add_font("NotoSansJP", "B", os.path.basename(FONT_PATH_ABS), uni=True)
 
     def title(t):
         pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
@@ -620,19 +619,15 @@ if submitted:
         pair("お名前", data["name"])
         pair("現在の居住エリア・駅", data["now_area"])
         pair("居住年数（年）", data["now_years"])
-        pair("持ち家・賃貸", data["is_owner"])
-        if data["is_owner"] == "賃貸":
-            pair("住居費（万円/月）", data["now_rent"])
-        else:
-            pair("住宅ローン残債（万円）", data["mortgage_balance"])
-            pair("金利タイプ", data["mortgage_rate_type"])
+        pair("種別（賃貸/持ち家）", data["is_owner"])
+        pair("住居費（万円/月）", data["housing_cost"])
         pair("ご家族構成", data["family"])
 
         # 2) 満足/不満
         title("2) 現在の住まい（満足・不満）")
         pair("満足点", data["sat_point"])
-        pair("満足度（価格/立地/広さ/築年数/スペック）合計", 
-             f"{data['sat_price']}/{data['sat_location']}/{data['sat_size']}/{data['sat_age']}/{data['sat_spec']}（計 {int(data['sat_price'])+int(data['sat_location'])+int(data['sat_size'])+int(data['sat_age'])+int(data['sat_spec'])} / 25）")
+        total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
+        pair("満足度（価格/立地/広さ/築年数/スペック）合計", f"{data['sat_price']}/{data['sat_location']}/{data['sat_size']}/{data['sat_age']}/{data['sat_spec']}（計 {total} / 25）")
         pair("不満な点", data["dissat_free"])
 
         # 3) 収入・勤務
@@ -657,13 +652,8 @@ if submitted:
 
         # 6) 5W2H
         title("6) 5W2H（購入計画）")
-        pair("Why", data["w_why"])
-        pair("When", data["w_when"])
-        pair("Where", data["w_where"])
-        pair("Who", data["w_who"])
-        pair("What", data["w_what"])
-        pair("How", data["w_how"])
-        pair("How much", data["w_howmuch"])
+        pair("Why", data["w_why"]); pair("When", data["w_when"]); pair("Where", data["w_where"])
+        pair("Who", data["w_who"]); pair("What", data["w_what"]); pair("How", data["w_how"]); pair("How much", data["w_howmuch"])
         pair("補足", data["w_free"])
 
         # 7) 優先度 & スペック
@@ -680,24 +670,19 @@ if submitted:
         pair("チェック項目", "・".join(spec_list) if spec_list else "（なし）")
         pair("スペック補足", data["spec_free"])
 
-        # 他社相談/連絡
-        title("8) 他社相談状況")
-        pair("他社相談", data["other_agent"])
-        title("9) 連絡・共有")
-        pair("希望連絡手段・時間帯", data["contact_pref"])
-        pair("資料共有", data["share_method"])
-        pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
+        # 8) 他社相談/9) 連絡
+        title("8) 他社相談状況"); pair("他社相談", data["other_agent"])
+        title("9) 連絡・共有"); pair("希望連絡手段・時間帯", data["contact_pref"]); pair("資料共有", data["share_method"]); pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             pdf.output(tmp_file.name)
             pdf_path = tmp_file.name
-
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
         st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
 
     except Exception as e:
-        st.error("PDFの作成でエラーが発生しました。フォント配置や権限を確認してください。")
+        st.error("PDFの作成でエラーが発生しました。フォント配置をご確認ください。")
         st.exception(e)
         st.stop()
 
@@ -708,11 +693,11 @@ if submitted:
     subj_name = (data.get("name") or "").strip() or "お客様"
     msg["Subject"] = f"{subj_name}様 ヒアリング項目"
     msg.set_content(
-        f"ヒアリング内容のPDFを添付しています。\n\nお名前: {data['name']}\n種別: {data['is_owner']}\n満足度合計: {sat_total}/25\n自動作成。"
+        f"ヒアリング内容のPDFを添付しています。\n\nお名前: {data['name']}\n種別: {data['is_owner']}\n住居費: {data['housing_cost']} 万円/月\n満足度合計: {sat_total}/25\n自動作成。"
     )
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="hearing_sheet.pdf")
     st.download_button("✉️ メール下書き(.eml)をダウンロード（開くとメーラー起動）",
                        data=msg.as_bytes(), file_name="hearing_sheet.eml", mime="message/rfc822")
 
-    st.info("※ ブラウザからメーラーを自動起動はできません。.emlを開くと宛先・件名・本文・PDF添付済みの下書きが開きます。")
+    st.info("※ ブラウザからメーラー自動起動は不可。.eml を開くと宛先・件名・本文・PDF添付済みの下書きが開きます。")
 # ================= /差し替え ここまで =================
