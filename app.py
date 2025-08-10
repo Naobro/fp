@@ -325,12 +325,22 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+import streamlit as st
+
+# ✅ いちばん上で wide にする
+st.set_page_config(page_title="理想の住まい探し", layout="wide", initial_sidebar_state="expanded")
+
+# 万一どこかで幅を細くするCSSを入れていたら削除する（例）
+# st.markdown("<style>.block-container{max-width:900px !important}</style>", unsafe_allow_html=True)
+# ↑こういうCSSがあればコメントアウト/削除してください
+
 st.divider()
 # ============== phase① 条件整理 ==============
-st.subheader("phase③　条件整理")
+st.subheader("phase③ 条件整理")
 st.divider()
 st.subheader("5W2Hで理想の住まい探しを整理しよう")
-st.markdown("""
+st.markdown(
+    """
 - **Why（なぜ）:** なぜ購入を検討していますか？（例：賃貸脱却、子育て環境、資産形成）
 - **When（いつ）:** いつまでに購入したいですか？
 - **Where（どこで）:** どのエリアでお探しですか？
@@ -338,32 +348,33 @@ st.markdown("""
 - **What（何を）:** どんな物件を希望していますか？
 - **How（どのように）:** どんな購入方法をお考えですか？（ローンの利用/頭金の有無/リノベ希望など）
 - **How much（いくらで）:** ご予算や資金計画は？
-""")
+"""
+)
 st.info("これらの項目を一緒に整理して、理想の住まい探しをサポートします！")
 
-# ▼▼▼ ここにお問い合わせフォームリンクを追加 ▼▼▼
-st.markdown(
-    """
-    <div style='margin-top:20px;'>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdbG6xqziJWaKf9fBK8uvsrHBMKibCaRadE7qShR3Nl6Cv8Kg/viewform?usp=pp_url"
-           target="_blank"
-           style="display:inline-block; background:#226BB3; color:white; padding:12px 24px; font-size:18px; font-weight:bold; border-radius:8px; text-decoration:none; margin-bottom:10px;">
-           📩 お問い合わせはこちら
-        </a>
-    </div>
-    """,
-    unsafe_allow_html=True,
+# ▼▼▼ お問い合わせリンク（純正UIを使用：スマホでも安定） ▼▼▼
+st.divider()
+st.subheader("📩 お問い合わせ")
+# Streamlit 1.31+ 推奨：st.link_button（target=_blankとして扱われる）
+st.link_button(
+    "お問い合わせはこちら",
+    "https://docs.google.com/forms/d/e/1FAIpQLSdbG6xqziJWaKf9fBK8uvsrHBMKibCaRadE7qShR3Nl6Cv8Kg/viewform?usp=pp_url",
+    type="primary",
 )
-# ▲▲▲ お問い合わせフォームここまで ▲▲▲
 
 st.divider()
-
 st.subheader("便利ツールへジャンプ")
 tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
-    "住宅ローン　チェッカー": "https://loan-checker.jp/loan",
-   
+    "住宅ローン チェッカー": "https://loan-checker.jp/loan",
 }
+# 2列でボタン表示（スマホは1列にフォールバック）
+cols = st.columns(2)
+i = 0
+for label, url in tools.items():
+    with cols[i % 2]:
+        st.link_button(label, url)
+    i += 1
 for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
 st.divider()
