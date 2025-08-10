@@ -594,7 +594,6 @@ if submitted:
 
     # --- 日本語フォント検出（Regular/Bold） ---
     def find_font(filename: str) -> str | None:
-        # 置いてありそうな場所を順に探す
         candidates = [
             Path(__file__).resolve().parent / "fonts" / filename,   # リポジトリ直下 ./fonts/
             Path.cwd() / "fonts" / filename,                        # 念のため
@@ -608,46 +607,33 @@ if submitted:
         return None
 
     FONT_REG = find_font("NotoSansJP-Regular.ttf")
-    FONT_BLD = find_font("NotoSansJP-Bold.ttf") or FONT_REG  # Bold が無ければ Regular を代用
+    FONT_BLD = find_font("NotoSansJP-Bold.ttf") or FONT_REG  # Boldが無ければRegularを代用
 
     if not FONT_REG:
         st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` をリポジトリに配置して再実行してください。")
         st.stop()
 
-    # フォントのあるディレクトリと、ファイル名（ベース名）を分離
+    # ★ ここで必ず定義（NameError対策）
     font_dir  = os.path.dirname(FONT_REG)
     fname_reg = os.path.basename(FONT_REG)
     fname_bld = os.path.basename(FONT_BLD)
 
-    # 画面で確認（何を使っているか）
+    # 確認表示
     st.caption(f"Font dir: {font_dir}")
     st.caption(f"Use TTF: {fname_reg} / {fname_bld}")
 
-    # --- PDF 作成（重要：fontpath を先にセットして、add_font はベース名で渡す）---
+    # --- PDF 作成 ---
     pdf = FPDF()
     pdf.add_page()
 
-    # --- PDF 作成 ---
-pdf = FPDF()
-pdf.add_page()
-
-# ← ここから置き換え（fontpath ではなく chdir 方式）
-import os
-save_cwd = os.getcwd()
-try:
-    os.chdir(font_dir)  # /mount/src/fp/fonts に一時移動
-    pdf.add_font("NotoSansJP", "", fname_reg, uni=True)  # 例: "NotoSansJP-Regular.ttf"
-    pdf.add_font("NotoSansJP", "B", fname_bld, uni=True) # 例: "NotoSansJP-Bold.ttf"（無ければRegular）
-finally:
-    os.chdir(save_cwd)
-# → ここまで置き換え
-
-def title(t):
-    pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
-def pair(label, val):
-    pdf.set_font("NotoSansJP","B",11); pdf.multi_cell(0, 7, label)
-    pdf.set_font("NotoSansJP","",11); pdf.multi_cell(0, 7, str(val) if val not in [None, ""] else "（未入力）")
-    pdf.ln(1)
+    # ★ この環境のpyfpdfはfontpathを見ないことがある → chdir方式に変更（確実）
+    save_cwd = os.getcwd()
+    try:
+        os.chdir(font_dir)  # 例: /mount/src/fp/fonts
+        pdf.add_font("NotoSansJP", "", fname_reg, uni=True)   # 例: NotoSansJP-Regular.ttf
+        pdf.add_font("NotoSansJP", "B", fname_bld, uni=True)  # 例: NotoSansJP-Bold.ttf（無ければRegular）
+    finally:
+        os.chdir(save_cwd)
 
     def title(t):
         pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
@@ -722,7 +708,7 @@ def pair(label, val):
 
         # 8) 他社相談 / 9) 連絡
         title("8) 他社相談状況"); pair("他社相談", data["other_agent"])
-        title("9) 連絡・共有"); pair("希望連絡手段・時間帯", data["contact_pref"]); pair("資料共有", data["share_method"]); pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
+        title("9) 連絡・共有"); pair("希望連絡手段・時間帯", data["contact_pref"]); pair("資料共有", data["share_method"]); pair("PDF送付先", data.get("pdf_recipient", "naoki.nishiyama@terass.com"))
 
         # PDF書き出し
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
@@ -741,10 +727,11 @@ def pair(label, val):
 
     # --- メール下書き(.eml) ---
     msg = EmailMessage()
-    msg["To"] = data.get("pdf_recipient", TO_EMAIL_DEFAULT)
+    msg["To"] = data.get("pdf_recipient", "naoki.nishiyama@terass.com")
     msg["From"] = ""  # メーラー側で自動選択
     subj_name = (data.get("name") or "").strip() or "お客様"
     msg["Subject"] = f"{subj_name}様 ヒアリング項目"
+    # 念のためここで total 再計算（上のスコープと切れても安全）
     sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
     msg.set_content(
         f"ヒアリング内容のPDFを添付しています。\n\n"
