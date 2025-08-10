@@ -386,7 +386,6 @@ TO_EMAIL_DEFAULT = "naoki.nishiyama@terass.com"
 
 # 既存キーは維持しつつ不足分を補完
 base_defaults = {
-    # 既存
     "name": "", "now_area": "", "now_years": 5, "is_owner": "賃貸",
     "now_rent": 10, "family": "",
     "husband_company": "", "husband_income": 0, "husband_service_years": 3,
@@ -396,20 +395,20 @@ base_defaults = {
     "forecast": "", "event_effect": "", "missed_timing": "", "ideal_life": "",
     "solve_feeling": "", "goal": "", "important": "",
     "must": "", "want": "", "ng": "", "other_agent": "", "why_terass": "",
-    # 追加：共通の住居費
-    "housing_cost": 10,  # 住居費（万円/月）※賃貸でも持ち家でも共通で入力
-    # 追加：夫婦の通勤状況
+    # 共通：住居費（万円/月）
+    "housing_cost": 10,
+    # 夫婦通勤
     "husband_commute": "", "wife_commute": "",
-    # 追加：満足度（1=不満, 5=満足）
+    # 満足度（1=不満, 5=満足）
     "sat_price": 3, "sat_location": 3, "sat_size": 3, "sat_age": 3, "sat_spec": 3,
     "dissat_free": "",
-    # 追加：資金計画
+    # 資金計画
     "self_fund": "", "other_debt": "", "gift_support": "",
-    # 追加：5W2H（1段ずつ）
+    # 5W2H（1段ずつ）
     "w_why": "", "w_when": "", "w_where": "", "w_who": "", "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
-    # 追加：優先度
+    # 優先度
     "prio_price": 3, "prio_location": 3, "prio_size": 3, "prio_age": 3, "prio_spec": 3,
-    # 追加：スペック
+    # スペック（チェック＋自由）
     "spec_parking": False, "spec_bicycle": False, "spec_ev": False, "spec_pet": False,
     "spec_barrierfree": False, "spec_security": False, "spec_disaster": False,
     "spec_mgmt_good": False, "spec_fee_ok": False, "spec_free": "",
@@ -422,8 +421,8 @@ if "hearing_data" not in st.session_state:
 else:
     for k, v in base_defaults.items():
         st.session_state["hearing_data"].setdefault(k, v)
-    # 互換：旧データ(now_rent)があれば housing_cost に引き継ぎ
-    if "housing_cost" in st.session_state["hearing_data"] and st.session_state["hearing_data"].get("housing_cost") in [None, ""]:
+    # 互換：旧データ(now_rent)があれば housing_cost へ移行
+    if not st.session_state["hearing_data"].get("housing_cost"):
         st.session_state["hearing_data"]["housing_cost"] = st.session_state["hearing_data"].get("now_rent", 0)
 
 data = st.session_state["hearing_data"]
@@ -431,6 +430,8 @@ data = st.session_state["hearing_data"]
 from email.message import EmailMessage
 from datetime import datetime
 import tempfile, os
+from pathlib import Path
+from fpdf import FPDF
 
 with st.form("hearing_form", clear_on_submit=False):
     # ---- 1) 現状把握（基礎） ----
@@ -441,9 +442,10 @@ with st.form("hearing_form", clear_on_submit=False):
         data["now_area"]  = st.text_input("現在の居住エリア・駅", value=data["now_area"])
     with c2:
         data["now_years"] = st.number_input("居住年数（年）", min_value=0, max_value=100, value=int(data["now_years"]))
+        # 並びは「賃貸」→「持ち家」
         data["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if data["is_owner"]=="賃貸" else 1)
     with c3:
-        # 種別に関わらず「住居費（万円/月）」のみ入力
+        # 種別に関係なく住居費のみ
         data["housing_cost"] = st.number_input("住居費（万円/月）", min_value=0, max_value=200, value=int(data["housing_cost"]))
     data["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=data["family"])
 
@@ -555,7 +557,7 @@ with st.form("hearing_form", clear_on_submit=False):
         data["spec_barrierfree"] = st.checkbox("バリアフリー", value=bool(data["spec_barrierfree"]))
         data["spec_security"] = st.checkbox("防犯性（オートロック等）", value=bool(data["spec_security"]))
     with csp4:
-        data["spec_disaster"] = st.checkbox("災害リスク許容（高台等）", value=bool(data["spec_disaster"]))
+        data["spec_disaster"] = st.checkbox("災害リスク許容", value=bool(data["spec_disaster"]))
         data["spec_mgmt_good"] = st.checkbox("管理状態が良好", value=bool(data["spec_mgmt_good"]))
     with csp5:
         data["spec_fee_ok"] = st.checkbox("管理費/修繕積立金 許容範囲内", value=bool(data["spec_fee_ok"]))
@@ -585,20 +587,32 @@ with st.form("hearing_form", clear_on_submit=False):
 if submitted:
     st.success("ご入力ありがとうございました！PDFとメール下書きを生成します。")
 
-    # --- フォント解決（必須） ---
-    # 既にアプリ冒頭で FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf") を定義している前提
-    FONT_PATH_ABS = os.path.abspath(FONT_PATH)
-    font_dir = os.path.dirname(FONT_PATH_ABS)
-    if not os.path.exists(FONT_PATH_ABS):
-        st.error(f"日本語フォントが見つかりません：{FONT_PATH_ABS}\n→ /fonts/NotoSansJP-Regular.ttf を配置してください。")
+    # --- フォント解決（絶対パスを直接 add_font に渡す）---
+    def resolve_jp_font() -> str | None:
+        candidates = [
+            # 既にアプリ先頭で FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf") を定義している前提
+            Path(FONT_PATH),
+            Path.cwd() / "fonts" / "NotoSansJP-Regular.ttf",
+            Path(__file__).resolve().parent / "fonts" / "NotoSansJP-Regular.ttf",
+            Path("/mount/src/fp/fonts/NotoSansJP-Regular.ttf"),  # Streamlit Cloud でよくある
+            Path("/app/fonts/NotoSansJP-Regular.ttf"),
+        ]
+        for p in candidates:
+            p = p.resolve()
+            if p.exists():
+                return str(p)
+        return None
+
+    FONT_FILE = resolve_jp_font()
+    if not FONT_FILE:
+        st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` を配置して再実行してください。")
         st.stop()
 
     pdf = FPDF()
     pdf.add_page()
-    # 重要：フォントディレクトリを指定し、ファイル名はベース名で渡す
-    pdf.fontpath = font_dir + ("" if font_dir.endswith(os.sep) else os.sep)
-    pdf.add_font("NotoSansJP", "", os.path.basename(FONT_PATH_ABS), uni=True)
-    pdf.add_font("NotoSansJP", "B", os.path.basename(FONT_PATH_ABS), uni=True)
+    # ★ basename ではなく必ず絶対パスを渡す
+    pdf.add_font("NotoSansJP", "", FONT_FILE, uni=True)
+    pdf.add_font("NotoSansJP", "B", FONT_FILE, uni=True)
 
     def title(t):
         pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
@@ -670,19 +684,20 @@ if submitted:
         pair("チェック項目", "・".join(spec_list) if spec_list else "（なし）")
         pair("スペック補足", data["spec_free"])
 
-        # 8) 他社相談/9) 連絡
+        # 8) 他社相談 / 9) 連絡
         title("8) 他社相談状況"); pair("他社相談", data["other_agent"])
         title("9) 連絡・共有"); pair("希望連絡手段・時間帯", data["contact_pref"]); pair("資料共有", data["share_method"]); pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             pdf.output(tmp_file.name)
             pdf_path = tmp_file.name
+
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
         st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
 
     except Exception as e:
-        st.error("PDFの作成でエラーが発生しました。フォント配置をご確認ください。")
+        st.error("PDFの作成でエラーが発生しました（フォントの実パスをご確認ください）。")
         st.exception(e)
         st.stop()
 
@@ -693,11 +708,14 @@ if submitted:
     subj_name = (data.get("name") or "").strip() or "お客様"
     msg["Subject"] = f"{subj_name}様 ヒアリング項目"
     msg.set_content(
-        f"ヒアリング内容のPDFを添付しています。\n\nお名前: {data['name']}\n種別: {data['is_owner']}\n住居費: {data['housing_cost']} 万円/月\n満足度合計: {sat_total}/25\n自動作成。"
+        f"ヒアリング内容のPDFを添付しています。\n\n"
+        f"お名前: {data['name']}\n"
+        f"種別: {data['is_owner']}\n"
+        f"住居費: {data['housing_cost']} 万円/月\n"
+        f"満足度合計: {sat_total}/25\n"
+        f"自動作成。"
     )
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="hearing_sheet.pdf")
     st.download_button("✉️ メール下書き(.eml)をダウンロード（開くとメーラー起動）",
                        data=msg.as_bytes(), file_name="hearing_sheet.eml", mime="message/rfc822")
-
-    st.info("※ ブラウザからメーラー自動起動は不可。.eml を開くと宛先・件名・本文・PDF添付済みの下書きが開きます。")
 # ================= /差し替え ここまで =================
