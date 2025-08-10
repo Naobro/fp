@@ -279,10 +279,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-try:
-    st.image(asia_img, use_container_width=True, caption="アジア主要都市の都心マンション価格と比較しても、東京はまだ割安感があるという見方。")
-except Exception:
-    pass
+
 
 # 6) 「待つ」シナリオの検証（オリ後／生産緑地）
 st.markdown(
@@ -297,6 +294,11 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+st.markdown(アジア主要都市の都心マンション価格と比較しても、東京はまだ割安感があるという見方)
+try:
+    st.image(asia_img, use_container_width=True, )
+except Exception:
+    pass
 
 # 7) 結論＆行動（FP→予算確定→事前審査）
 st.markdown(
