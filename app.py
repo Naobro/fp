@@ -604,9 +604,11 @@ if submitted:
         return None
 
     FONT_FILE = resolve_jp_font()
-    if not FONT_FILE:
-        st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` を配置して再実行してください。")
-        st.stop()
+st.caption(f"Using font file: {FONT_FILE}")  # 確認用表示
+
+if not FONT_FILE:
+    st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` を配置して再実行してください。")
+    st.stop()
 
     pdf = FPDF()
     pdf.add_page()
