@@ -57,7 +57,11 @@ pdf_url = "https://naobro.github.io/fp/pages/flow_compressed.pdf"
 st.markdown(f"[相談から引き渡しまで]({pdf_url})")
 pdf_url = "https://naobro.github.io/fp/pages/tochi.pdf"
 st.markdown(f"[注文住宅　土地]({pdf_url})")
+st.subheader("不動産売却の流れ")
+pdf_url = "https://naobro.github.io/fp/pages/sale.pdf"
+st.markdown(f"[不動産売却資料]({pdf_url})")
 st.divider()
+
 
 # ============== phase① 不安の解消 ==============
 st.subheader("phase①　不安の解消")
