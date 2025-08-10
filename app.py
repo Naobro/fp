@@ -267,7 +267,7 @@ st.markdown(
 import streamlit as st
 
 st.set_page_config(page_title="GitHub MP4 再生", layout="centered")
-st.title("🎬 MP4 再生")
+st.title("🎬 富裕層の考え方")
 
 # GitHub blob URLをrawに変換
 video_url = "https://raw.githubusercontent.com/Naobro/fp/main/assets/huyu.MP4"
@@ -326,7 +326,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 st.divider()
-
+# ============== phase① 条件整理 ==============
+st.subheader("phase③　条件整理")
+st.divider()
 st.subheader("5W2Hで理想の住まい探しを整理しよう")
 st.markdown("""
 - **Why（なぜ）:** なぜ購入を検討していますか？（例：賃貸脱却、子育て環境、資産形成）
@@ -360,11 +362,7 @@ st.subheader("便利ツールへジャンプ")
 tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
     "住宅ローン　チェッカー": "https://loan-checker.jp/loan",
-    "住宅ローン　提案書": "https://mortgagenao.streamlit.app/",
-    "賃貸 vs 購入 住居費・資産価値シミュレータ": "https://budget1.streamlit.app/",
-    "諸費用計算シート": "https://howmuch1.streamlit.app/",
-    "簡易ライフプランニング表": "https://lifeplan.streamlit.app/",
-    "購入時期診断ツール": "https://when79.streamlit.app/",
+   
 }
 for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
