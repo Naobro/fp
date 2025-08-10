@@ -585,37 +585,54 @@ with st.form("hearing_form", clear_on_submit=False):
 if submitted:
     st.success("ご入力ありがとうございました！PDFとメール下書きを生成します。")
 
-    # --- 日本語フォント（絶対パス固定。無ければ停止） ---
+    # --- 必要モジュール ---
+    import os, tempfile
+    from pathlib import Path
+    from fpdf import FPDF
+    from email.message import EmailMessage
+    from datetime import datetime
+
+    # --- 日本語フォント検出（Regular/Bold） ---
     def find_font(filename: str) -> str | None:
-        cand = [
-            Path(__file__).resolve().parent / "fonts" / filename,  # リポジトリ直下
-            Path.cwd() / "fonts" / filename,                       # 念のため
-            Path("/mount/src/fp/fonts") / filename,                # Streamlit Cloud での典型
-            Path("/app/fonts") / filename,                         # 一部PaaS
+        # 置いてありそうな場所を順に探す
+        candidates = [
+            Path(__file__).resolve().parent / "fonts" / filename,   # リポジトリ直下 ./fonts/
+            Path.cwd() / "fonts" / filename,                        # 念のため
+            Path("/mount/src/fp/fonts") / filename,                 # Streamlit Cloud の典型
+            Path("/app/fonts") / filename,                          # 一部PaaS
         ]
-        for p in cand:
+        for p in candidates:
             p = p.resolve()
             if p.exists():
                 return str(p)
         return None
 
     FONT_REG = find_font("NotoSansJP-Regular.ttf")
-    FONT_BLD = find_font("NotoSansJP-Bold.ttf") or FONT_REG  # Bold がなければ Regular で代用
+    FONT_BLD = find_font("NotoSansJP-Bold.ttf") or FONT_REG  # Bold が無ければ Regular を代用
 
     if not FONT_REG:
         st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` をリポジトリに配置して再実行してください。")
         st.stop()
 
-    # st.caption で実際のパスを表示（確認用）
-    st.caption(f"Using font file (Regular): {FONT_REG}")
-    if FONT_BLD != FONT_REG:
-        st.caption(f"Using font file (Bold): {FONT_BLD}")
+    # フォントのあるディレクトリと、ファイル名（ベース名）を分離
+    font_dir  = os.path.dirname(FONT_REG)
+    fname_reg = os.path.basename(FONT_REG)
+    fname_bld = os.path.basename(FONT_BLD)
 
-    # --- PDF 作成 ---
+    # 画面で確認（何を使っているか）
+    st.caption(f"Font dir: {font_dir}")
+    st.caption(f"Use TTF: {fname_reg} / {fname_bld}")
+
+    # --- PDF 作成（重要：fontpath を先にセットして、add_font はベース名で渡す）---
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("NotoSansJP", "", FONT_REG, uni=True)
-    pdf.add_font("NotoSansJP", "B", FONT_BLD, uni=True)
+
+    # ★ここが今回の肝：先に fontpath を指定
+    pdf.fontpath = font_dir + ("" if font_dir.endswith(os.sep) else os.sep)
+
+    # ★add_font は “ファイル名だけ” で渡す（サブセット化時も fontpath が使われる）
+    pdf.add_font("NotoSansJP", "", fname_reg, uni=True)
+    pdf.add_font("NotoSansJP", "B", fname_bld, uni=True)
 
     def title(t):
         pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
@@ -625,6 +642,7 @@ if submitted:
         pdf.ln(1)
 
     try:
+        # ヘッダ
         pdf.set_font("NotoSansJP", "B", 16)
         pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
         pdf.set_font("NotoSansJP", "", 10)
@@ -696,9 +714,9 @@ if submitted:
             pdf.output(tmp_file.name)
             pdf_path = tmp_file.name
 
+        # ダウンロードボタン（PDF）
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
-
         st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
 
     except Exception as e:
@@ -712,6 +730,7 @@ if submitted:
     msg["From"] = ""  # メーラー側で自動選択
     subj_name = (data.get("name") or "").strip() or "お客様"
     msg["Subject"] = f"{subj_name}様 ヒアリング項目"
+    sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
     msg.set_content(
         f"ヒアリング内容のPDFを添付しています。\n\n"
         f"お名前: {data['name']}\n"
@@ -723,4 +742,3 @@ if submitted:
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="hearing_sheet.pdf")
     st.download_button("✉️ メール下書き(.eml)をダウンロード（開くとメーラー起動）",
                        data=msg.as_bytes(), file_name="hearing_sheet.eml", mime="message/rfc822")
-# ================= /差し替え ここまで =================
