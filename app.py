@@ -581,58 +581,47 @@ with st.form("hearing_form", clear_on_submit=False):
 
     submitted = st.form_submit_button("送信")
 
-# ===== 送信後：PDF生成＋メール下書き(.eml) =====
+# ===== 送信後：PDF生成（メール機能なし・PDFのみ） =====
 if submitted:
-    st.success("ご入力ありがとうございました！PDFとメール下書きを生成します。")
+    st.success("ご入力ありがとうございました！PDFを生成します。")
 
-    # 依存モジュール
     import os, tempfile, urllib.request
     from pathlib import Path
     from fpdf import FPDF
-    from email.message import EmailMessage
     from datetime import datetime
 
-    TO_EMAIL_DEFAULT = "naoki.nishiyama@terass.com"
-
-    # ---------------------------
-    # フォント確保（ローカル→なければGitHubから取得）
-    # ---------------------------
+    # ---------- フォント確保（ローカル優先・無ければGitHub Rawから取得） ----------
     REG_NAME = "NotoSansJP-Regular.ttf"
     BLD_NAME = "NotoSansJP-Bold.ttf"
     RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Regular.ttf"
     RAW_BLD = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Bold.ttf"
 
     def ensure_fonts_dir() -> Path:
-        # 1) 置いてありそうな場所を優先して探す
-        candidate_dirs = [
+        candidates = [
             Path(__file__).resolve().parent / "fonts",
             Path.cwd() / "fonts",
             Path("/mount/src/fp/fonts"),
             Path("/app/fonts"),
         ]
-        for d in candidate_dirs:
+        for d in candidates:
             if (d / REG_NAME).exists() and (d / BLD_NAME).exists():
                 return d.resolve()
-
-        # 2) Regular だけあって Bold がないケースは Regular を両方に使うため、その場を返す
-        for d in candidate_dirs:
-            if (d / REG_NAME).exists():
+        for d in candidates:
+            if (d / REG_NAME).exists():  # Regularだけある
+                # ここでBoldをRegularコピーで補完
+                try:
+                    (d / BLD_NAME).write_bytes((d / REG_NAME).read_bytes())
+                except Exception:
+                    pass
                 return d.resolve()
-
-        # 3) どこにも無ければ、書き込み可能な一時ディレクトリを作ってダウンロード
-        tmp_dir = Path(tempfile.mkdtemp(prefix="fonts_"))
+        # どこにも無ければ一時ディレクトリへDL
+        tmp = Path(tempfile.mkdtemp(prefix="fonts_"))
+        urllib.request.urlretrieve(RAW_REG, str(tmp / REG_NAME))
         try:
-            urllib.request.urlretrieve(RAW_REG, str(tmp_dir / REG_NAME))
-        except Exception as e:
-            st.error(f"日本語フォント({REG_NAME})の取得に失敗しました。fonts フォルダに配置してください。")
-            st.exception(e)
-            st.stop()
-        try:
-            urllib.request.urlretrieve(RAW_BLD, str(tmp_dir / BLD_NAME))
+            urllib.request.urlretrieve(RAW_BLD, str(tmp / BLD_NAME))
         except Exception:
-            # Bold が取れなければ Regular をコピーで代用
-            (tmp_dir / BLD_NAME).write_bytes((tmp_dir / REG_NAME).read_bytes())
-        return tmp_dir.resolve()
+            (tmp / BLD_NAME).write_bytes((tmp / REG_NAME).read_bytes())
+        return tmp.resolve()
 
     font_dir = ensure_fonts_dir()
     reg_path = font_dir / REG_NAME
@@ -641,23 +630,20 @@ if submitted:
         st.error(f"日本語フォントが見つかりません: {reg_path}")
         st.stop()
     if not bld_path.exists():
-        # 念のため最終ガード：Bold を Regular で代用
         bld_path.write_bytes(reg_path.read_bytes())
 
     st.caption(f"Font dir: {font_dir}")
     st.caption(f"Use TTF: {reg_path.name} / {bld_path.name}")
 
-    # ---------------------------
-    # PDF生成（output完了まで chdir 維持）
-    # ---------------------------
+    # ---------- PDF作成（output完了まで chdir を維持） ----------
     save_cwd = os.getcwd()
-    os.chdir(str(font_dir))  # ★ ここから output 終了までフォントディレクトリを維持
+    os.chdir(str(font_dir))  # ★ サブセット化で迷子防止のため最後まで維持
 
     try:
         pdf = FPDF()
         pdf.add_page()
 
-        # ファイル名（ベース名）で登録
+        # フォント登録（ベース名で）
         pdf.add_font("NotoSansJP", "", reg_path.name, uni=True)
         pdf.add_font("NotoSansJP", "B", bld_path.name, uni=True)
 
@@ -731,47 +717,23 @@ if submitted:
         title("9) 連絡・共有")
         pair("希望連絡手段・時間帯", data["contact_pref"])
         pair("資料共有", data["share_method"])
-        pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
+        pair("PDF送付先", data.get("pdf_recipient", "naoki.nishiyama@terass.com"))
 
-        # ★ 重要：出力もフォントディレクトリのままで実行
+        # ★ 出力（フォントDIRのまま）
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             pdf.output(tmp_file.name)
             pdf_path = tmp_file.name
 
     except Exception as e:
-        st.error("PDFの作成でエラーが発生しました（フォントの取得/配置を確認してください）。")
+        st.error("PDFの作成でエラーが発生しました（フォント取得/配置を確認してください）。")
         st.exception(e)
         os.chdir(save_cwd)
         st.stop()
     finally:
-        # output 完了後に戻す
-        os.chdir(save_cwd)
+        os.chdir(save_cwd)  # 元に戻す
 
-    # ダウンロードボタン（PDF）
+    # ダウンロードボタン（PDFのみ）
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
     st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
-
-    # ---------------------------
-    # メール下書き（.eml）
-    # ---------------------------
-    msg = EmailMessage()
-    msg["To"] = data.get("pdf_recipient", TO_EMAIL_DEFAULT)
-    msg["From"] = ""  # メーラー側で自動選択
-    subj_name = (data.get("name") or "").strip() or "お客様"
-    msg["Subject"] = f"{subj_name}様 ヒアリング項目"
-
-    # 念のためここで再計算
-    sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
-    msg.set_content(
-        f"ヒアリング内容のPDFを添付しています。\n\n"
-        f"お名前: {data['name']}\n"
-        f"種別: {data['is_owner']}\n"
-        f"住居費: {data['housing_cost']} 万円/月\n"
-        f"満足度合計: {sat_total}/25\n"
-        f"自動作成。"
-    )
-    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="hearing_sheet.pdf")
-    st.download_button("✉️ メール下書き(.eml)をダウンロード（開くとメーラー起動）",
-                       data=msg.as_bytes(), file_name="hearing_sheet.eml", mime="message/rfc822")
 # ===== /差し替え ここまで =====
