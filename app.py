@@ -379,7 +379,7 @@ for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
 st.divider()
 
-# ================= ヒアリングフォーム（差し替え） =================
+# ================= ヒアリングフォーム（差し替え・完全版） =================
 st.subheader("ヒアリング内容")
 
 TO_EMAIL_DEFAULT = "naoki.nishiyama@terass.com"
@@ -429,7 +429,7 @@ data = st.session_state["hearing_data"]
 
 from email.message import EmailMessage
 from datetime import datetime
-import tempfile, os
+import tempfile
 from pathlib import Path
 from fpdf import FPDF
 
@@ -442,10 +442,8 @@ with st.form("hearing_form", clear_on_submit=False):
         data["now_area"]  = st.text_input("現在の居住エリア・駅", value=data["now_area"])
     with c2:
         data["now_years"] = st.number_input("居住年数（年）", min_value=0, max_value=100, value=int(data["now_years"]))
-        # 並びは「賃貸」→「持ち家」
         data["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if data["is_owner"]=="賃貸" else 1)
     with c3:
-        # 種別に関係なく住居費のみ
         data["housing_cost"] = st.number_input("住居費（万円/月）", min_value=0, max_value=200, value=int(data["housing_cost"]))
     data["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=data["family"])
 
@@ -587,34 +585,37 @@ with st.form("hearing_form", clear_on_submit=False):
 if submitted:
     st.success("ご入力ありがとうございました！PDFとメール下書きを生成します。")
 
-    # --- フォント解決（絶対パスを直接 add_font に渡す）---
-    def resolve_jp_font() -> str | None:
-        candidates = [
-            # 既にアプリ先頭で FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf") を定義している前提
-            Path(FONT_PATH),
-            Path.cwd() / "fonts" / "NotoSansJP-Regular.ttf",
-            Path(__file__).resolve().parent / "fonts" / "NotoSansJP-Regular.ttf",
-            Path("/mount/src/fp/fonts/NotoSansJP-Regular.ttf"),  # Streamlit Cloud でよくある
-            Path("/app/fonts/NotoSansJP-Regular.ttf"),
+    # --- 日本語フォント（絶対パス固定。無ければ停止） ---
+    def find_font(filename: str) -> str | None:
+        cand = [
+            Path(__file__).resolve().parent / "fonts" / filename,  # リポジトリ直下
+            Path.cwd() / "fonts" / filename,                       # 念のため
+            Path("/mount/src/fp/fonts") / filename,                # Streamlit Cloud での典型
+            Path("/app/fonts") / filename,                         # 一部PaaS
         ]
-        for p in candidates:
+        for p in cand:
             p = p.resolve()
             if p.exists():
                 return str(p)
         return None
 
-    FONT_FILE = resolve_jp_font()
-st.caption(f"Using font file: {FONT_FILE}")  # 確認用表示
+    FONT_REG = find_font("NotoSansJP-Regular.ttf")
+    FONT_BLD = find_font("NotoSansJP-Bold.ttf") or FONT_REG  # Bold がなければ Regular で代用
 
-if not FONT_FILE:
-    st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` を配置して再実行してください。")
-    st.stop()
+    if not FONT_REG:
+        st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` をリポジトリに配置して再実行してください。")
+        st.stop()
 
+    # st.caption で実際のパスを表示（確認用）
+    st.caption(f"Using font file (Regular): {FONT_REG}")
+    if FONT_BLD != FONT_REG:
+        st.caption(f"Using font file (Bold): {FONT_BLD}")
+
+    # --- PDF 作成 ---
     pdf = FPDF()
     pdf.add_page()
-    # ★ basename ではなく必ず絶対パスを渡す
-    pdf.add_font("NotoSansJP", "", FONT_FILE, uni=True)
-    pdf.add_font("NotoSansJP", "B", FONT_FILE, uni=True)
+    pdf.add_font("NotoSansJP", "", FONT_REG, uni=True)
+    pdf.add_font("NotoSansJP", "B", FONT_BLD, uni=True)
 
     def title(t):
         pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
@@ -690,12 +691,14 @@ if not FONT_FILE:
         title("8) 他社相談状況"); pair("他社相談", data["other_agent"])
         title("9) 連絡・共有"); pair("希望連絡手段・時間帯", data["contact_pref"]); pair("資料共有", data["share_method"]); pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
 
+        # PDF書き出し
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             pdf.output(tmp_file.name)
             pdf_path = tmp_file.name
 
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
+
         st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
 
     except Exception as e:
