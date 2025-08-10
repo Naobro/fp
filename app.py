@@ -585,64 +585,89 @@ with st.form("hearing_form", clear_on_submit=False):
 if submitted:
     st.success("ご入力ありがとうございました！PDFとメール下書きを生成します。")
 
-    # --- 必要モジュール ---
-    import os, tempfile
+    # 依存モジュール
+    import os, tempfile, urllib.request
     from pathlib import Path
     from fpdf import FPDF
     from email.message import EmailMessage
     from datetime import datetime
 
-    # --- 日本語フォント検出（Regular/Bold） ---
-    def find_font(filename: str) -> str | None:
-        candidates = [
-            Path(__file__).resolve().parent / "fonts" / filename,   # リポジトリ直下 ./fonts/
-            Path.cwd() / "fonts" / filename,                        # 念のため
-            Path("/mount/src/fp/fonts") / filename,                 # Streamlit Cloud の典型
-            Path("/app/fonts") / filename,                          # 一部PaaS
+    TO_EMAIL_DEFAULT = "naoki.nishiyama@terass.com"
+
+    # ---------------------------
+    # フォント確保（ローカル→なければGitHubから取得）
+    # ---------------------------
+    REG_NAME = "NotoSansJP-Regular.ttf"
+    BLD_NAME = "NotoSansJP-Bold.ttf"
+    RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Regular.ttf"
+    RAW_BLD = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Bold.ttf"
+
+    def ensure_fonts_dir() -> Path:
+        # 1) 置いてありそうな場所を優先して探す
+        candidate_dirs = [
+            Path(__file__).resolve().parent / "fonts",
+            Path.cwd() / "fonts",
+            Path("/mount/src/fp/fonts"),
+            Path("/app/fonts"),
         ]
-        for p in candidates:
-            p = p.resolve()
-            if p.exists():
-                return str(p)
-        return None
+        for d in candidate_dirs:
+            if (d / REG_NAME).exists() and (d / BLD_NAME).exists():
+                return d.resolve()
 
-    FONT_REG = find_font("NotoSansJP-Regular.ttf")
-    FONT_BLD = find_font("NotoSansJP-Bold.ttf") or FONT_REG  # Boldが無ければRegularを代用
+        # 2) Regular だけあって Bold がないケースは Regular を両方に使うため、その場を返す
+        for d in candidate_dirs:
+            if (d / REG_NAME).exists():
+                return d.resolve()
 
-    if not FONT_REG:
-        st.error("日本語フォントが見つかりません。`./fonts/NotoSansJP-Regular.ttf` をリポジトリに配置して再実行してください。")
+        # 3) どこにも無ければ、書き込み可能な一時ディレクトリを作ってダウンロード
+        tmp_dir = Path(tempfile.mkdtemp(prefix="fonts_"))
+        try:
+            urllib.request.urlretrieve(RAW_REG, str(tmp_dir / REG_NAME))
+        except Exception as e:
+            st.error(f"日本語フォント({REG_NAME})の取得に失敗しました。fonts フォルダに配置してください。")
+            st.exception(e)
+            st.stop()
+        try:
+            urllib.request.urlretrieve(RAW_BLD, str(tmp_dir / BLD_NAME))
+        except Exception:
+            # Bold が取れなければ Regular をコピーで代用
+            (tmp_dir / BLD_NAME).write_bytes((tmp_dir / REG_NAME).read_bytes())
+        return tmp_dir.resolve()
+
+    font_dir = ensure_fonts_dir()
+    reg_path = font_dir / REG_NAME
+    bld_path = font_dir / BLD_NAME
+    if not reg_path.exists():
+        st.error(f"日本語フォントが見つかりません: {reg_path}")
         st.stop()
+    if not bld_path.exists():
+        # 念のため最終ガード：Bold を Regular で代用
+        bld_path.write_bytes(reg_path.read_bytes())
 
-    # ★ ここで必ず定義（NameError対策）
-    font_dir  = os.path.dirname(FONT_REG)
-    fname_reg = os.path.basename(FONT_REG)
-    fname_bld = os.path.basename(FONT_BLD)
-
-    # 確認表示
     st.caption(f"Font dir: {font_dir}")
-    st.caption(f"Use TTF: {fname_reg} / {fname_bld}")
+    st.caption(f"Use TTF: {reg_path.name} / {bld_path.name}")
 
-    # --- PDF 作成 ---
-    pdf = FPDF()
-    pdf.add_page()
-
-    # ★ この環境のpyfpdfはfontpathを見ないことがある → chdir方式に変更（確実）
+    # ---------------------------
+    # PDF生成（output完了まで chdir 維持）
+    # ---------------------------
     save_cwd = os.getcwd()
-    try:
-        os.chdir(font_dir)  # 例: /mount/src/fp/fonts
-        pdf.add_font("NotoSansJP", "", fname_reg, uni=True)   # 例: NotoSansJP-Regular.ttf
-        pdf.add_font("NotoSansJP", "B", fname_bld, uni=True)  # 例: NotoSansJP-Bold.ttf（無ければRegular）
-    finally:
-        os.chdir(save_cwd)
-
-    def title(t):
-        pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
-    def pair(label, val):
-        pdf.set_font("NotoSansJP","B",11); pdf.multi_cell(0, 7, label)
-        pdf.set_font("NotoSansJP","",11); pdf.multi_cell(0, 7, str(val) if val not in [None, ""] else "（未入力）")
-        pdf.ln(1)
+    os.chdir(str(font_dir))  # ★ ここから output 終了までフォントディレクトリを維持
 
     try:
+        pdf = FPDF()
+        pdf.add_page()
+
+        # ファイル名（ベース名）で登録
+        pdf.add_font("NotoSansJP", "", reg_path.name, uni=True)
+        pdf.add_font("NotoSansJP", "B", bld_path.name, uni=True)
+
+        def title(t):
+            pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
+        def pair(label, val):
+            pdf.set_font("NotoSansJP","B",11); pdf.multi_cell(0, 7, label)
+            pdf.set_font("NotoSansJP","",11); pdf.multi_cell(0, 7, str(val) if val not in [None, ""] else "（未入力）")
+            pdf.ln(1)
+
         # ヘッダ
         pdf.set_font("NotoSansJP", "B", 16)
         pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
@@ -650,7 +675,7 @@ if submitted:
         pdf.cell(0, 8, f"作成日時：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "R")
         pdf.ln(2)
 
-        # 1) 現状把握
+        # ===== 1)〜9) 全項目出力 =====
         title("1) 現状把握（基礎）")
         pair("お名前", data["name"])
         pair("現在の居住エリア・駅", data["now_area"])
@@ -659,14 +684,12 @@ if submitted:
         pair("住居費（万円/月）", data["housing_cost"])
         pair("ご家族構成", data["family"])
 
-        # 2) 満足/不満
         title("2) 現在の住まい（満足・不満）")
         pair("満足点", data["sat_point"])
-        total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
-        pair("満足度（価格/立地/広さ/築年数/スペック）合計", f"{data['sat_price']}/{data['sat_location']}/{data['sat_size']}/{data['sat_age']}/{data['sat_spec']}（計 {total} / 25）")
+        sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
+        pair("満足度（価格/立地/広さ/築年数/スペック）合計", f"{data['sat_price']}/{data['sat_location']}/{data['sat_size']}/{data['sat_age']}/{data['sat_spec']}（計 {sat_total} / 25）")
         pair("不満な点", data["dissat_free"])
 
-        # 3) 収入・勤務
         title("3) 収入・勤務（夫婦2名）")
         pair("ご主人：勤務先・勤務地", data["husband_company"])
         pair("ご主人：年収（万円）／勤続（年）", f"{data['husband_income']}／{data['husband_service_years']}")
@@ -676,23 +699,19 @@ if submitted:
         pair("奥様：通勤状況", data["wife_commute"])
         pair("世帯年収（万円）", (data.get("husband_income",0) or 0) + (data.get("wife_income",0) or 0))
 
-        # 4) 資金計画
         title("4) 資金計画")
         pair("自己資金（頭金＋諸費用）", data["self_fund"])
         pair("借入（自動車ローン等）", data["other_debt"])
         pair("相続・贈与・援助（予定額／有無／時期）", data["gift_support"])
 
-        # 5) ライフイベント
         title("5) ライフイベント・家族計画")
         pair("予定／学区・保育・医療の希望", data["event_effect"])
 
-        # 6) 5W2H
         title("6) 5W2H（購入計画）")
         pair("Why", data["w_why"]); pair("When", data["w_when"]); pair("Where", data["w_where"])
         pair("Who", data["w_who"]); pair("What", data["w_what"]); pair("How", data["w_how"]); pair("How much", data["w_howmuch"])
         pair("補足", data["w_free"])
 
-        # 7) 優先度 & スペック
         title("7) 希望条件の優先度／物件スペック")
         pair("MUST", data["must"]); pair("WANT", data["want"]); pair("NG", data["ng"])
         pair("重要度（価格/立地/広さ/築年数/スペック）", f"{data['prio_price']}/{data['prio_location']}/{data['prio_size']}/{data['prio_age']}/{data['prio_spec']}")
@@ -706,32 +725,43 @@ if submitted:
         pair("チェック項目", "・".join(spec_list) if spec_list else "（なし）")
         pair("スペック補足", data["spec_free"])
 
-        # 8) 他社相談 / 9) 連絡
-        title("8) 他社相談状況"); pair("他社相談", data["other_agent"])
-        title("9) 連絡・共有"); pair("希望連絡手段・時間帯", data["contact_pref"]); pair("資料共有", data["share_method"]); pair("PDF送付先", data.get("pdf_recipient", "naoki.nishiyama@terass.com"))
+        title("8) 他社相談状況")
+        pair("他社相談", data["other_agent"])
 
-        # PDF書き出し
+        title("9) 連絡・共有")
+        pair("希望連絡手段・時間帯", data["contact_pref"])
+        pair("資料共有", data["share_method"])
+        pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
+
+        # ★ 重要：出力もフォントディレクトリのままで実行
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             pdf.output(tmp_file.name)
             pdf_path = tmp_file.name
 
-        # ダウンロードボタン（PDF）
-        with open(pdf_path, "rb") as f:
-            pdf_bytes = f.read()
-        st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
-
     except Exception as e:
-        st.error("PDFの作成でエラーが発生しました（フォントの実パスをご確認ください）。")
+        st.error("PDFの作成でエラーが発生しました（フォントの取得/配置を確認してください）。")
         st.exception(e)
+        os.chdir(save_cwd)
         st.stop()
+    finally:
+        # output 完了後に戻す
+        os.chdir(save_cwd)
 
-    # --- メール下書き(.eml) ---
+    # ダウンロードボタン（PDF）
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+    st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
+
+    # ---------------------------
+    # メール下書き（.eml）
+    # ---------------------------
     msg = EmailMessage()
-    msg["To"] = data.get("pdf_recipient", "naoki.nishiyama@terass.com")
+    msg["To"] = data.get("pdf_recipient", TO_EMAIL_DEFAULT)
     msg["From"] = ""  # メーラー側で自動選択
     subj_name = (data.get("name") or "").strip() or "お客様"
     msg["Subject"] = f"{subj_name}様 ヒアリング項目"
-    # 念のためここで total 再計算（上のスコープと切れても安全）
+
+    # 念のためここで再計算
     sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
     msg.set_content(
         f"ヒアリング内容のPDFを添付しています。\n\n"
@@ -744,3 +774,4 @@ if submitted:
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="hearing_sheet.pdf")
     st.download_button("✉️ メール下書き(.eml)をダウンロード（開くとメーラー起動）",
                        data=msg.as_bytes(), file_name="hearing_sheet.eml", mime="message/rfc822")
+# ===== /差し替え ここまで =====
