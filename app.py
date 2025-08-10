@@ -379,11 +379,13 @@ for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
 st.divider()
 
-### ヒアリングフォーム
+# ============ ヒアリングフォーム（差し替え） ============
 st.subheader("ヒアリング内容")
 
+# 既存キーは維持＋新キーを追加（足し算）
 if "hearing_data" not in st.session_state:
     st.session_state["hearing_data"] = {
+        # --- 既存 ---
         "name": "",
         "now_area": "",
         "now_years": 5,
@@ -417,123 +419,224 @@ if "hearing_data" not in st.session_state:
         "ng": "",
         "other_agent": "",
         "why_terass": "",
+        # --- 追加（夫婦別通勤・不満スコア・資金計画・5W2H・優先度・スペック・連絡） ---
+        # 2) 現在の住まい（不満スコア）
+        "dissat_price": 3,
+        "dissat_location": 3,
+        "dissat_size": 3,
+        "dissat_age": 3,
+        "dissat_spec": 3,
+        "dissat_free": "",
+
+        # 3) 収入・勤務（夫婦別 通勤状況）
+        "husband_commute": "",   # 在宅頻度／出社曜日・時間などフリーテキスト
+        "wife_commute": "",
+
+        # 4) 資金計画
+        "self_fund": "",         # 自己資金（頭金＋諸費用）
+        "other_debt": "",        # 借入（自動車ローン等）
+        "gift_support": "",      # 相続・贈与・援助（予定額・有無・時期）
+
+        # 6) 5W2H
+        "w_why": "",
+        "w_when": "",
+        "w_where": "",
+        "w_who": "",
+        "w_what": "",
+        "w_how": "",
+        "w_howmuch": "",
+        "w_free": "",
+
+        # 7) 優先度ランク（1〜5）
+        "prio_price": 3,
+        "prio_location": 3,  # 資産性含む
+        "prio_size": 3,
+        "prio_age": 3,
+        "prio_spec": 3,
+
+        # 8) 物件スペック（チェック＋自由記述）
+        "spec_parking": False,
+        "spec_bicycle": False,
+        "spec_ev": False,
+        "spec_pet": False,
+        "spec_barrierfree": False,
+        "spec_security": False,
+        "spec_disaster": False,
+        "spec_mgmt_good": False,
+        "spec_fee_ok": False,
+        "spec_free": "",
+
+        # 11) 連絡・共有
+        "contact_pref": "",
+        "share_method": "",
+        "pdf_recipient": "naoki.nishiyama@terass.com",
     }
 
 data = st.session_state["hearing_data"]
 
 with st.form("hearing_form", clear_on_submit=False):
-    data["name"] = st.text_input("お名前", value=data["name"])
-    data["now_area"] = st.text_input("現在の居住エリア・駅", value=data["now_area"])
-    data["now_years"] = st.number_input("居住年数", min_value=0, max_value=100, value=data["now_years"])
-    data["is_owner"] = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=1)
-    data["now_rent"] = st.number_input("住居費（万円/月）", min_value=0, max_value=100, value=data["now_rent"])
-    data["family"] = st.text_input("ご家族構成", value=data["family"])
-    data["commute_time"] = st.text_input("通勤時間", value=data["commute_time"])
-    data["husband_company"] = st.text_input("ご主人の勤務先", value=data["husband_company"])
-    data["husband_income"] = st.number_input("ご主人の年収（万円）", min_value=0, max_value=10000, value=data["husband_income"])
-    data["husband_service_years"] = st.number_input("ご主人の勤続年数", min_value=0, max_value=50, value=data["husband_service_years"])
-    data["wife_company"] = st.text_input("奥様の勤務先", value=data["wife_company"])
-    data["wife_income"] = st.number_input("奥様の年収（万円）", min_value=0, max_value=10000, value=data["wife_income"])
-    data["wife_service_years"] = st.number_input("奥様の勤続年数", min_value=0, max_value=50, value=data["wife_service_years"])
+    # --- 1) 現状把握（基礎） ---
+    st.markdown("#### 1) 現状把握（基礎）")
+    c1, c2, c3 = st.columns([1,1,1])
+    with c1:
+        data["name"] = st.text_input("お名前", value=data["name"])
+        data["now_area"] = st.text_input("現在の居住エリア・駅", value=data["now_area"])
+    with c2:
+        data["now_years"] = st.number_input("居住年数", min_value=0, max_value=100, value=data["now_years"])
+        data["is_owner"] = st.selectbox("持ち家・賃貸", ["持ち家", "賃貸"], index=1 if data["is_owner"]=="賃貸" else 0)
+    with c3:
+        data["now_rent"] = st.number_input("住居費（万円/月） ※賃貸の方", min_value=0, max_value=100, value=data["now_rent"])
+        data["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=data["family"])
 
-    # 記述式の質問
-    for field, label in [
-        ("sat_point", "今の住まいで満足されている点・不満な点"),
-        ("search_status", "物件探しの進捗"),
-        ("why_buy", "なぜ不動産購入したいのか？"),
-        ("task", "不満な点がこうなったらいい？"),
-        ("anxiety", "将来に不安や心配はありますか？"),
-        ("rent_vs_buy", "賃貸と購入、それぞれで迷われている点は？"),
-        ("other_trouble", "他にもお住まい探しで困っていることはありますか？"),
-        ("effect", "その課題や不安が今後も続いた場合、どのような影響があると思いますか？"),
-        ("forecast", "今のままだと数年後どうなりそうですか？"),
-        ("event_effect", "ライフイベントが控えている場合、それが現状の住まいにどんな影響を与えそうですか？"),
-        ("missed_timing", "住み替えのタイミングを逃すことで、家賃の支払いがどれだけ増えるとお考えですか？"),
-        ("ideal_life", "理想の暮らし、理想のお住まいはどんなイメージですか？"),
-        ("solve_feeling", "もし今の課題が解決できるとしたら、どんな気持ちになりますか？"),
-        ("goal", "お住まい購入によって「こうなりたい」という目標はありますか？"),
-        ("important", "住まい選びで一番大切にしたいことは何ですか？"),
-        ("must", "MAST条件3つのみ"),
-        ("want", "WANT条件"),
-        ("ng", "逆にNG条件"),
-        ("other_agent", "他社ともやり取りしていますか？"),
-        ("why_terass", "なぜTERASSに問い合わせをしてくれましたか？"),
-    ]:
-        data[field] = st.text_area(label, value=data[field])
+    st.divider()
+
+    # --- 2) 現在の住まい（満足・不満） ---
+    st.markdown("#### 2) 現在の住まい（満足・不満）")
+    data["sat_point"] = st.text_area("現在の住宅の満足点（自由入力）", value=data["sat_point"])
+
+    sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+    with sc1:
+        data["dissat_price"] = st.slider("不満度：価格", 1, 5, value=int(data["dissat_price"]))
+    with sc2:
+        data["dissat_location"] = st.slider("不満度：立地", 1, 5, value=int(data["dissat_location"]))
+    with sc3:
+        data["dissat_size"] = st.slider("不満度：広さ", 1, 5, value=int(data["dissat_size"]))
+    with sc4:
+        data["dissat_age"] = st.slider("不満度：築年数", 1, 5, value=int(data["dissat_age"]))
+    with sc5:
+        data["dissat_spec"] = st.slider("不満度：スペック", 1, 5, value=int(data["dissat_spec"]))
+
+    dissat_total = int(data["dissat_price"]) + int(data["dissat_location"]) + int(data["dissat_size"]) + int(data["dissat_age"]) + int(data["dissat_spec"])
+    st.caption(f"不満スコア合計：**{dissat_total} / 25**")
+    data["dissat_free"] = st.text_area("不満な点（自由入力）", value=data["dissat_free"])
+
+    st.divider()
+
+    # --- 3) 収入・勤務（夫婦2名） ---
+    st.markdown("#### 3) 収入・勤務（夫婦2名）")
+    st.markdown("**ご主人**")
+    hc1, hc2, hc3 = st.columns(3)
+    with hc1:
+        data["husband_company"] = st.text_input("勤務先・勤務地（ご主人）", value=data["husband_company"])
+    with hc2:
+        data["husband_income"] = st.number_input("年収（ご主人・万円）", min_value=0, max_value=10000, value=int(data["husband_income"]))
+    with hc3:
+        data["husband_service_years"] = st.number_input("勤続年数（ご主人・年）", min_value=0, max_value=50, value=int(data["husband_service_years"]))
+    data["husband_commute"] = st.text_input("通勤状況（在宅頻度／出社曜日・時間）〈ご主人〉", value=data["husband_commute"])
+
+    st.markdown("**奥様**")
+    wc1, wc2, wc3 = st.columns(3)
+    with wc1:
+        data["wife_company"] = st.text_input("勤務先・勤務地（奥様）", value=data["wife_company"])
+    with wc2:
+        data["wife_income"] = st.number_input("年収（奥様・万円）", min_value=0, max_value=10000, value=int(data["wife_income"]))
+    with wc3:
+        data["wife_service_years"] = st.number_input("勤続年数（奥様・年）", min_value=0, max_value=50, value=int(data["wife_service_years"]))
+    data["wife_commute"] = st.text_input("通勤状況（在宅頻度／出社曜日・時間）〈奥様〉", value=data["wife_commute"])
+
+    st.divider()
+
+    # --- 4) 資金計画 ---
+    st.markdown("#### 4) 資金計画")
+    fc1, fc2, fc3 = st.columns(3)
+    with fc1:
+        data["self_fund"] = st.text_input("自己資金（頭金＋諸費用の目安）", value=data["self_fund"])
+    with fc2:
+        data["other_debt"] = st.text_input("借入（自動車ローン等）", value=data["other_debt"])
+    with fc3:
+        data["gift_support"] = st.text_input("相続・贈与・援助（予定額／有無／時期）", value=data["gift_support"])
+
+    st.divider()
+
+    # --- 5) ライフイベント・家族計画 ---
+    st.markdown("#### 5) ライフイベント・家族計画")
+    data["event_effect"] = st.text_area("出産・進学・転勤・同居 等の予定／学区・保育・医療の希望", value=data["event_effect"])
+
+    st.divider()
+
+    # --- 6) 5W2H（購入計画） ---
+    st.markdown("#### 6) 5W2H（購入計画）")
+    data["w_why"] = st.text_input("Why（なぜ）：購入理由", value=data["w_why"])
+    c51, c52, c53 = st.columns(3)
+    with c51:
+        data["w_when"] = st.text_input("When（いつ）：購入／入居タイミング", value=data["w_when"])
+    with c52:
+        data["w_where"] = st.text_input("Where（どこで）：希望エリア・沿線", value=data["w_where"])
+    with c53:
+        data["w_who"] = st.text_input("Who（誰が）：居住メンバー", value=data["w_who"])
+    data["w_what"] = st.text_input("What（何を）：種別・広さ・築年数・階数・設備", value=data["w_what"])
+    c54, c55 = st.columns(2)
+    with c54:
+        data["w_how"] = st.text_input("How（どう買う）：ローン方針・頭金の考え方", value=data["w_how"])
+    with c55:
+        data["w_howmuch"] = st.text_input("How much（いくら）：総予算／月返済の上限", value=data["w_howmuch"])
+    data["w_free"] = st.text_area("補足（自由入力）", value=data["w_free"])
+
+    st.divider()
+
+    # --- 7) 希望条件の優先度（MUST／WANT／NG／重要度ランク） ---
+    st.markdown("#### 7) 希望条件の優先度（MUST／WANT／NG／重要度ランク）")
+    data["must"] = st.text_input("MUST条件（3つまで）", value=data["must"])  # 表記修正
+    data["want"] = st.text_area("WANT条件", value=data["want"])
+    data["ng"] = st.text_area("NG条件", value=data["ng"])
+
+    st.markdown("**重要度のトレードオフ（1=最優先〜5=優先度低）**")
+    p1, p2, p3, p4, p5 = st.columns(5)
+    with p1:
+        data["prio_price"] = st.selectbox("価格", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_price"])) if str(data["prio_price"]).isdigit() else 2)
+    with p2:
+        data["prio_location"] = st.selectbox("立地（資産性）", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_location"])) if str(data["prio_location"]).isdigit() else 2)
+    with p3:
+        data["prio_size"] = st.selectbox("広さ", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_size"])) if str(data["prio_size"]).isdigit() else 2)
+    with p4:
+        data["prio_age"] = st.selectbox("築年数", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_age"])) if str(data["prio_age"]).isdigit() else 2)
+    with p5:
+        data["prio_spec"] = st.selectbox("スペック", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_spec"])) if str(data["prio_spec"]).isdigit() else 2)
+
+    st.divider()
+
+    # --- 8) 物件スペック・住環境（チェック＋自由入力） ---
+    st.markdown("#### 8) 物件スペック・住環境（チェック＋自由入力）")
+    csp1, csp2, csp3, csp4, csp5 = st.columns(5)
+    with csp1:
+        data["spec_parking"] = st.checkbox("駐車場", value=bool(data["spec_parking"]))
+        data["spec_bicycle"] = st.checkbox("駐輪", value=bool(data["spec_bicycle"]))
+    with csp2:
+        data["spec_ev"] = st.checkbox("エレベーター", value=bool(data["spec_ev"]))
+        data["spec_pet"] = st.checkbox("ペット可", value=bool(data["spec_pet"]))
+    with csp3:
+        data["spec_barrierfree"] = st.checkbox("バリアフリー", value=bool(data["spec_barrierfree"]))
+        data["spec_security"] = st.checkbox("防犯性（オートロック等）", value=bool(data["spec_security"]))
+    with csp4:
+        data["spec_disaster"] = st.checkbox("災害リスク許容（高台等）", value=bool(data["spec_disaster"]))
+        data["spec_mgmt_good"] = st.checkbox("管理状態が良好", value=bool(data["spec_mgmt_good"]))
+    with csp5:
+        data["spec_fee_ok"] = st.checkbox("管理費/修繕積立金の許容範囲内", value=bool(data["spec_fee_ok"]))
+    data["spec_free"] = st.text_area("スペック補足（自由入力）", value=data["spec_free"])
+
+    st.divider()
+
+    # --- 9) 他社相談状況 ---
+    st.markdown("#### 9) 他社相談状況")
+    data["other_agent"] = st.text_input("他社への相談状況（有無・内容）", value=data["other_agent"])
+
+    st.divider()
+
+    # --- 10) ご相談内容詳細（自由入力） ---
+    st.markdown("#### 10) ご相談内容詳細（自由入力）")
+    data["why_buy"] = st.text_area("現状・悩み・具体的に聞きたいこと（長文可）", value=data["why_buy"])
+
+    st.divider()
+
+    # --- 11) 連絡・共有 ---
+    st.markdown("#### 11) 連絡・共有")
+    cc1, cc2, cc3 = st.columns(3)
+    with cc1:
+        data["contact_pref"] = st.text_input("希望連絡手段・時間帯", value=data["contact_pref"])
+    with cc2:
+        data["share_method"] = st.text_input("資料共有（LINE／メール 等）", value=data["share_method"])
+    with cc3:
+        data["pdf_recipient"] = st.text_input("PDF送付先メール", value=data.get("pdf_recipient","naoki.nishiyama@terass.com"))
 
     submitted = st.form_submit_button("送信")
-
-if submitted:
-    st.success("ご入力ありがとうございました！下記ボタンからPDFでダウンロードできます。")
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.add_font("NotoSansJP", "", FONT_PATH, uni=True)
-    pdf.add_font("NotoSansJP", "B", FONT_PATH, uni=True)
-
-    pdf.set_font("NotoSansJP", "B", 16)
-    pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    pdf.set_font("NotoSansJP", "", 10)
-    pdf.cell(0, 8, f"作成日時：{now}", 0, 1, "R")
-    pdf.ln(5)
-
-    def pdf_write(label, value):
-        pdf.set_font("NotoSansJP", "B", 12)
-        pdf.multi_cell(0, 8, f"{label}")
-        pdf.set_font("NotoSansJP", "", 12)
-        pdf.multi_cell(0, 8, str(value) if value else "（未入力）")
-        pdf.ln(2)
-
-    pdf_write("お名前", data.get("name", ""))
-    pdf_write("世帯年収（万円）", data.get("husband_income", 0) + data.get("wife_income", 0))
-
-    for key, label in [
-        ("now_area", "現在の居住エリア・駅"),
-        ("now_years", "居住年数"),
-        ("is_owner", "持ち家・賃貸"),
-        ("now_rent", "住居費（月）"),
-        ("family", "ご家族構成"),
-        ("commute_time", "通勤時間"),
-        ("husband_company", "ご主人の勤務先"),
-        ("husband_income", "ご主人の年収（万円）"),
-        ("husband_service_years", "ご主人の勤続年数"),
-        ("wife_company", "奥様の勤務先"),
-        ("wife_income", "奥様の年収（万円）"),
-        ("wife_service_years", "奥様の勤続年数"),
-        ("sat_point", "今の住まいで満足されている点・不満な点"),
-        ("search_status", "物件探しの進捗"),
-        ("why_buy", "なぜ不動産購入したいか"),
-        ("task", "不満な点がこうなったらいい？"),
-        ("anxiety", "将来に不安や心配"),
-        ("rent_vs_buy", "賃貸と購入で迷っている点"),
-        ("other_trouble", "他にもお住まい探しで困っていること"),
-        ("effect", "課題や不安の影響"),
-        ("forecast", "数年後の予想"),
-        ("event_effect", "ライフイベントの影響"),
-        ("missed_timing", "住み替えタイミングを逃す影響"),
-        ("ideal_life", "理想の暮らし・住まい"),
-        ("solve_feeling", "課題解決時の気持ち"),
-        ("goal", "購入による目標"),
-        ("important", "住まい選びで大切なこと"),
-        ("must", "MAST条件3つ"),
-        ("want", "WANT条件"),
-        ("ng", "逆にNG条件"),
-        ("other_agent", "他社とのやり取り状況"),
-        ("why_terass", "TERASSに問い合わせた理由"),
-    ]:
-        pdf_write(label, data.get(key, ""))
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        pdf.output(tmp_file.name)
-        pdf_path = tmp_file.name
-
-    with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-        st.download_button(
-            label="ヒアリング内容をPDFでダウンロード",
-            data=pdf_bytes,
-            file_name="hearing_sheet.pdf",
-            mime="application/pdf",
-        )
+# ============ /ヒアリングフォーム（差し替えここまで） ============
