@@ -201,7 +201,7 @@ else:
             st.code(url, language="text")
         with cols[3]:
             st.caption("操作")
-            st.link_button("開く（新規タブ）", url, type="primary", key=f"open-{c['id']}")
+            st.link_button("開く（新規タブ）", url, type="primary")
         with cols[4]:
             # 個別削除
             if st.button("🗑️", key=f"del-{c['id']}"):
