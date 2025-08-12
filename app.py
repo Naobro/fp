@@ -12,7 +12,7 @@ from fpdf import FPDF
 q = st.query_params
 if q.get("client") and q.get("pin"):
     # ← お客様ページのファイル名が違う場合はここのパスだけ合わせてください
-    st.switch_page("pages/2_お客様ページ_ロードマップ.py")
+   st.switch_page("pages/2_client_portal.py")
 
 # ============================================
 # 1) ページ設定（1ページにつき1回だけ／最初に実行）
