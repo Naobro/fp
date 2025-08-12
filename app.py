@@ -7,10 +7,10 @@ import streamlit as st
 from fpdf import FPDF
 
 # ============================================
-# 0) URLにclientとpinがあれば直接お客様ページへ
+# 0) URLにclientがあれば直接お客様ページへ（PINは見ない）
 # ============================================
 q = st.query_params
-if q.get("client") and q.get("pin"):
+if q.get("client"):
     st.switch_page("pages/2_client_portal.py")  # ← 実ファイル名に合わせる（今はこれでOK）
 
 # ============================================
