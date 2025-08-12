@@ -7,15 +7,14 @@ import streamlit as st
 from fpdf import FPDF
 
 # ============================================
-# 0) URLパラメータでお客様ページへ自動ジャンプ（最上段）
+# 0) URLにclientとpinがあれば直接お客様ページへ
 # ============================================
 q = st.query_params
 if q.get("client") and q.get("pin"):
-    # ← お客様ページのファイル名が違う場合はここのパスだけ合わせてください
-   st.switch_page("pages/2_client_portal.py")
+    st.switch_page("pages/2_client_portal.py")  # ← 実ファイル名に合わせる（今はこれでOK）
 
 # ============================================
-# 1) ページ設定（1ページにつき1回だけ／最初に実行）
+# 1) ページ設定（このページで1回だけ）
 # ============================================
 st.set_page_config(
     page_title="不動産エージェント NAOKI",
