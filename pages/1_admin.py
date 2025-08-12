@@ -1,4 +1,4 @@
-# pages/1_admin.py  ← このファイルを丸ごと置き換え
+# pages/1_admin.py
 
 import streamlit as st
 import secrets, string, json
@@ -7,9 +7,9 @@ from datetime import datetime
 
 st.set_page_config(page_title="管理：お客様発行", layout="centered")
 
-# 共有用ベースURL（本番）
-# ※ secrets に BASE_URL があればそちらを優先し、無いときは固定値を使う
-BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/")
+# 共有用ベースURL（secrets優先。無ければ本番URL）
+BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app")
+BASE_URL = BASE_URL.rstrip("/")  # 末尾スラッシュを除去しておく
 
 DATA_DIR = Path("data/clients")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -52,9 +52,9 @@ if submitted:
             "floor": None,
             "corner": None,
             "inner_corridor": None,
-            "balcony_type": None,   # standard / wide / roof / garden
-            "balcony_aspect": None, # N/E/S/W
-            "view": None,           # open / partial / blocked
+            "balcony_type": None,    # standard / wide / roof / garden
+            "balcony_aspect": None,  # N/E/S/W
+            "view": None,            # open / partial / blocked
             "husband_commute_min": None,
             "wife_commute_min": None,
             "spec_current": {}
@@ -70,17 +70,15 @@ if submitted:
     }
 
     # 保存
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     out = DATA_DIR / f"{client_id}.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # 共有URL（ルート + クエリ。app.py が自動でお客様ページに飛ばす）
-    share_url = f"{BASE_URL}?client={client_id}&pin={pin}"
+    # 共有URL（ルート + クエリ。app.pyが自動でお客様ページに飛ばす）
+    share_url = f"{BASE_URL}/?client={client_id}&pin={pin}"
 
     st.success("お客様を作成しました。下のリンクを共有してください。")
     st.code(f"URL: {share_url}\nID: {client_id}\nPIN: {pin}", language="text")
 
-    # 管理者がこの場で開く（クエリ付与→ページ遷移）
-    if st.button("➡️ このままお客様ページを開く"):
-        # URLパラメータをセットしてから、アプリ内の該当ページへ遷移
-        st.query_params(client=client_id, pin=pin)
-        st.switch_page("pages/2_client_portal.py")
+    # 外部リンクボタンで確実に新規タブを開く
+    st.link_button("➡️ このままお客様ページを開く（新規タブ）", share_url, type="primary")
