@@ -1,37 +1,55 @@
+import os
+from datetime import datetime
+import tempfile
+from pathlib import Path
+
 import streamlit as st
 from fpdf import FPDF
-import tempfile
-from datetime import datetime
-import os
 
-st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide")
+# ============================================
+# 0) URLパラメータでお客様ページへ自動ジャンプ（最上段）
+# ============================================
+q = st.query_params
+if q.get("client") and q.get("pin"):
+    # ← お客様ページのファイル名が違う場合はここのパスだけ合わせてください
+    st.switch_page("pages/2_お客様ページ_ロードマップ.py")
 
-# ✅ fontsフォルダの中のフォントを使う
+# ============================================
+# 1) ページ設定（1ページにつき1回だけ／最初に実行）
+# ============================================
+st.set_page_config(
+    page_title="不動産エージェント NAOKI",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ============================================
+# 2) 共通ユーティリティ／前提チェック
+# ============================================
+# フォント（日本語TTF）の存在確認
 FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf")
 if not os.path.exists(FONT_PATH):
-    st.error(f"フォントファイル {FONT_PATH} が見つかりません。fonts フォルダを確認してください。")
+    st.error(f"フォント {FONT_PATH} が見つかりません。'fonts' フォルダに NotoSansJP-Regular.ttf を配置してください。")
     st.stop()
 
-# --- GitHubの blob URL → raw URL 変換ヘルパー ---
 def gh_raw(url: str) -> str:
-    # 例: https://github.com/Naobro/fp/blob/main/assets/top.png
-    # →  https://raw.githubusercontent.com/Naobro/fp/main/assets/top.png
+    """GitHubの blob URL → raw URL 変換"""
     return url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
 
-# ============== ヒーロー ==============
-# ▼ 指定：タイトルとサブタイトルの“間”にトップ画像
+# ============================================
+# 3) ヒーロー
+# ============================================
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
 st.image(gh_raw(top_img), use_container_width=True)
 
-
 st.title("不動産エージェント NAOKI")
-
 
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
 st.markdown(
     '<span style="color:blue; font-weight:bold; font-size:20px;">不安の解消 × ライフプラン予算 × 条件整理</span>',
     unsafe_allow_html=True,
 )
+
 st.header("理想の住まい探し 成功ロードマップ")
 st.markdown(
     """
@@ -45,36 +63,31 @@ st.markdown(
         border: 2px solid #000080;
         text-align:center;
         ">
-        ①不安の解消 ➡️ ②ライフプランニング ➡️ ③予算確定 ➡️ ④条件整理➡️ ⑤内見
+        ①不安の解消 ➡️ ②ライフプランニング ➡️ ③予算確定 ➡️ ④条件整理 ➡️ ⑤内見
     </div>
     """,
     unsafe_allow_html=True
 )
 st.header("一番重要な事は良い物件と出会った時に即決できる様に、条件整理・資金準備をしておく事")
+
 st.divider()
 st.subheader("不動産購入の流れ")
-pdf_url = "https://naobro.github.io/fp/pages/flow_compressed.pdf"
-st.markdown(f"[相談から引き渡しまで]({pdf_url})")
-pdf_url = "https://naobro.github.io/fp/pages/tochi.pdf"
-st.markdown(f"[注文住宅　土地]({pdf_url})")
+st.markdown("[相談から引き渡しまで](https://naobro.github.io/fp/pages/flow_compressed.pdf)")
+st.markdown("[注文住宅　土地](https://naobro.github.io/fp/pages/tochi.pdf)")
 st.subheader("不動産売却の流れ")
-pdf_url = "https://naobro.github.io/fp/pages/sale.pdf"
-st.markdown(f"[不動産売却資料]({pdf_url})")
+st.markdown("[不動産売却資料](https://naobro.github.io/fp/pages/sale.pdf)")
 st.divider()
 
-
-# ============== phase① 不安の解消 ==============
+# ============================================
+# 4) phase① 不安の解消
+# ============================================
 st.subheader("phase①　不安の解消")
 
-
-# 不安ランキング画像
 huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
 st.image(gh_raw(huan_img), use_container_width=True)
 
-
 st.markdown("## 🏠 不動産購入時の不安ランキング（調査対象：500人）")
 
-# HTMLで横スクロール対応テーブル作成
 table_html = """
 <div style="overflow-x:auto;">
 <table style="border-collapse: collapse; width: 100%; min-width: 600px; font-size:14px;">
@@ -125,41 +138,29 @@ table_html = """
 </table>
 </div>
 """
-
 st.markdown(table_html, unsafe_allow_html=True)
 
-
-
-
-
-
-pdf_url = "https://naobro.github.io/fp/pages/tonari.pdf"
-st.markdown(f"[📄 近隣調査　トナリスク]({pdf_url})")
+st.markdown("[📄 近隣調査　トナリスク](https://naobro.github.io/fp/pages/tonari.pdf)")
 
 st.info("“不安の解消は可視化して、専門家　データで解消　Next：**ライフプラン　予算** 。")
-# ============== phase② ライフプラン　予算 ==============
+
+# ============================================
+# 5) phase② ライフプラン／予算
+# ============================================
 st.subheader("phase②　ライフプラン　予算")
 
-# FPイメージ（任意）：お金の不安→FPで可視化 への橋渡し
 fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
-st.image(gh_raw(fp_img), use_container_width=True, )
-
+st.image(gh_raw(fp_img), use_container_width=True)
 
 st.divider()
-# =========================
-# フェーズ② ライフプラン／予算（あなたの意図120%版）
-# =========================
 st.header("フェーズ② ライフプラン／予算")
 
-# 画像（必要に応じて差し替え）
-huan_img   = "https://naobro.github.io/fp/assets/huan.png"     # 不動産購入の不安：圧倒的1位はお金
-danshin_img= "https://naobro.github.io/fp/assets/danshin.png"   # 団信イラスト
-neage_img  = "https://naobro.github.io/fp/assets/neage.jpeg"    # 家賃値上げの現実（SNS引用イメージ等）
-asia_img   = "https://naobro.github.io/fp/assets/sekai.jpg"     # アジア都市比較（任意）
-
+huan_img   = "https://naobro.github.io/fp/assets/huan.png"
+danshin_img= "https://naobro.github.io/fp/assets/danshin.png"
+neage_img  = "https://naobro.github.io/fp/assets/neage.jpeg"
+asia_img   = "https://naobro.github.io/fp/assets/sekai.jpg"
 
 st.markdown("## 💰 不動産購入時の不安ランキング　圧倒的　第1位🥇　【お金】")
-# 1) もし、から入る（共感の起点）
 st.markdown(
     """
     <div style="background:#fff3cd;border:1px solid #ffe49a;border-radius:10px;padding:14px 16px;">
@@ -171,7 +172,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 2) 本質の問い：それって家賃なら払える？
 st.markdown(
     """
     ### 住宅ローンが払えるか不安な人　それって、家賃なら払えるんですか？
@@ -181,7 +181,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 強調見出し（単独表示）
 st.markdown(
     """
     <div style="font-weight:900; color:#000000; font-size:22px; margin:12px 0 8px;">
@@ -191,7 +190,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 値上げスクショ（2枚）を横並びで表示
 neage_imgs = [
     "https://github.com/Naobro/fp/blob/main/assets/neage.jpg?raw=1",
     "https://github.com/Naobro/fp/blob/main/assets/neage1.jpg?raw=1",
@@ -200,7 +198,6 @@ cols = st.columns(len(neage_imgs))
 for col, url in zip(cols, neage_imgs):
     col.image(url, use_container_width=True)
 
-# 補足注釈（小さく・グレーで）
 st.markdown(
     """
     <div style="color:#6b7280; font-size:12px; margin-top:4px;">
@@ -209,7 +206,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-# 3) 決定的な違い：団信（20万円ケースの具体比較）
+
 st.markdown(
     """
     ### 団信がある“購入”と、団信がない“賃貸”の決定的な差
@@ -239,7 +236,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-# 団信の強調テキスト
+
 st.markdown(
     """
     <div style="font-weight:800; color:#111827; font-size:18px; margin:6px 0 2px;">
@@ -249,14 +246,8 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 団信の画像表示
-danshin_img_url = "https://github.com/Naobro/fp/blob/main/assets/danshin.PNG?raw=1"
-st.image(
-    danshin_img_url,
-    use_container_width=True
-)
+st.image("https://github.com/Naobro/fp/blob/main/assets/danshin.PNG?raw=1", use_container_width=True)
 
-# 4) 100%確実な事実（強調帯）
 st.markdown(
     """
     <div style="background:#E6F4EA;border:1px solid #34A853;border-radius:10px;padding:14px 16px; font-weight:700; text-align:center;">
@@ -268,17 +259,11 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-import streamlit as st
 
-st.set_page_config(page_title="GitHub MP4 再生", layout="centered")
+# （※ set_page_config の重複は削除済み）
 st.title("🎬 富裕層の考え方")
+st.video("https://raw.githubusercontent.com/Naobro/fp/main/assets/huyu.MP4")
 
-# GitHub blob URLをrawに変換
-video_url = "https://raw.githubusercontent.com/Naobro/fp/main/assets/huyu.MP4"
-
-# Streamlit標準プレーヤーで再生
-st.video(video_url)
-# 5) 数字で現実を見る（過去→現在の結果）
 st.markdown(
     """
     中古マンション（70㎡目安）  
@@ -293,8 +278,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
-# 6) 「待つ」シナリオの検証（オリ後／生産緑地）
 st.markdown(
     """
     ### 「下がるまで待つ」は本当に正解？
@@ -308,15 +291,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# テキスト表示
 st.markdown("アジア主要都市の都心マンション価格と比較しても、東京はまだ割安感があるという見方")
-
-# 画像表示
 try:
     st.image(asia_img, use_container_width=True)
 except Exception:
     pass
-# 7) 結論＆行動（FP→予算確定→事前審査）
+
 st.markdown(
     """
     <div style="background:#EEF6FF;border:1px solid #BBD7FF;border-radius:10px;padding:12px 14px;">
@@ -329,17 +309,11 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-import streamlit as st
-
-# ✅ いちばん上で wide にする
-st.set_page_config(page_title="理想の住まい探し", layout="wide", initial_sidebar_state="expanded")
-
-# 万一どこかで幅を細くするCSSを入れていたら削除する（例）
-# st.markdown("<style>.block-container{max-width:900px !important}</style>", unsafe_allow_html=True)
-# ↑こういうCSSがあればコメントアウト/削除してください
 
 st.divider()
-# ============== phase① 条件整理 ==============
+# ============================================
+# 6) phase③ 条件整理
+# ============================================
 st.subheader("phase③ 条件整理")
 st.divider()
 st.subheader("5W2Hで理想の住まい探しを整理しよう")
@@ -356,10 +330,8 @@ st.markdown(
 )
 st.info("これらの項目を一緒に整理して、理想の住まい探しをサポートします！")
 
-# ▼▼▼ お問い合わせリンク（純正UIを使用：スマホでも安定） ▼▼▼
 st.divider()
 st.subheader("📩 お問い合わせ")
-# Streamlit 1.31+ 推奨：st.link_button（target=_blankとして扱われる）
 st.link_button(
     "お問い合わせはこちら",
     "https://docs.google.com/forms/d/e/1FAIpQLSdbG6xqziJWaKf9fBK8uvsrHBMKibCaRadE7qShR3Nl6Cv8Kg/viewform?usp=pp_url",
@@ -372,23 +344,21 @@ tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
     "住宅ローン チェッカー": "https://loan-checker.jp/loan",
 }
-# 2列でボタン表示（スマホは1列にフォールバック）
 cols = st.columns(2)
-i = 0
-for label, url in tools.items():
+for i, (label, url) in enumerate(tools.items()):
     with cols[i % 2]:
         st.link_button(label, url)
-    i += 1
 for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
+
 st.divider()
 
-# ================= ヒアリングフォーム（差し替え・完全版） =================
+# ============================================
+# 7) ヒアリングフォーム ＋ PDF出力
+# ============================================
 st.subheader("ヒアリング内容")
 
 TO_EMAIL_DEFAULT = "naoki.nishiyama@terass.com"
-
-# 既存キーは維持しつつ不足分を補完
 base_defaults = {
     "name": "", "now_area": "", "now_years": 5, "is_owner": "賃貸",
     "now_rent": 10, "family": "",
@@ -399,24 +369,16 @@ base_defaults = {
     "forecast": "", "event_effect": "", "missed_timing": "", "ideal_life": "",
     "solve_feeling": "", "goal": "", "important": "",
     "must": "", "want": "", "ng": "", "other_agent": "", "why_terass": "",
-    # 共通：住居費（万円/月）
     "housing_cost": 10,
-    # 夫婦通勤
     "husband_commute": "", "wife_commute": "",
-    # 満足度（1=不満, 5=満足）
     "sat_price": 3, "sat_location": 3, "sat_size": 3, "sat_age": 3, "sat_spec": 3,
     "dissat_free": "",
-    # 資金計画
     "self_fund": "", "other_debt": "", "gift_support": "",
-    # 5W2H（1段ずつ）
     "w_why": "", "w_when": "", "w_where": "", "w_who": "", "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
-    # 優先度
     "prio_price": 3, "prio_location": 3, "prio_size": 3, "prio_age": 3, "prio_spec": 3,
-    # スペック（チェック＋自由）
     "spec_parking": False, "spec_bicycle": False, "spec_ev": False, "spec_pet": False,
     "spec_barrierfree": False, "spec_security": False, "spec_disaster": False,
     "spec_mgmt_good": False, "spec_fee_ok": False, "spec_free": "",
-    # 連絡
     "contact_pref": "", "share_method": "", "pdf_recipient": TO_EMAIL_DEFAULT,
 }
 
@@ -425,20 +387,12 @@ if "hearing_data" not in st.session_state:
 else:
     for k, v in base_defaults.items():
         st.session_state["hearing_data"].setdefault(k, v)
-    # 互換：旧データ(now_rent)があれば housing_cost へ移行
     if not st.session_state["hearing_data"].get("housing_cost"):
         st.session_state["hearing_data"]["housing_cost"] = st.session_state["hearing_data"].get("now_rent", 0)
 
 data = st.session_state["hearing_data"]
 
-from email.message import EmailMessage
-from datetime import datetime
-import tempfile
-from pathlib import Path
-from fpdf import FPDF
-
 with st.form("hearing_form", clear_on_submit=False):
-    # ---- 1) 現状把握（基礎） ----
     st.markdown("#### 1) 現状把握（基礎）")
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -453,7 +407,6 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    # ---- 2) 現在の住まい（満足・不満） ----
     st.markdown("#### 2) 現在の住まい（満足・不満）")
     data["sat_point"] = st.text_area("現在の住宅の満足点（自由入力）", value=data["sat_point"])
     sc1, sc2, sc3, sc4, sc5 = st.columns(5)
@@ -473,7 +426,6 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    # ---- 3) 収入・勤務（夫婦2名） ----
     st.markdown("#### 3) 収入・勤務（夫婦2名）")
     st.markdown("**ご主人**")
     hc1, hc2, hc3 = st.columns(3)
@@ -497,7 +449,6 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    # ---- 4) 資金計画 ----
     st.markdown("#### 4) 資金計画")
     fc1, fc2, fc3 = st.columns(3)
     with fc1:
@@ -509,13 +460,11 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    # ---- 5) ライフイベント・家族計画 ----
     st.markdown("#### 5) ライフイベント・家族計画")
     data["event_effect"] = st.text_area("出産・進学・転勤・同居 等の予定／学区・保育・医療の希望", value=data["event_effect"])
 
     st.divider()
 
-    # ---- 6) 5W2H（購入計画）※1段ずつ ----
     st.markdown("#### 6) 5W2H（購入計画）")
     data["w_why"]     = st.text_input("Why（なぜ）：購入理由", value=data["w_why"])
     data["w_when"]    = st.text_input("When（いつ）：購入／入居タイミング", value=data["w_when"])
@@ -528,7 +477,6 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    # ---- 7) 希望条件の優先度 & 物件スペック ----
     st.markdown("#### 7) 希望条件の優先度")
     data["must"] = st.text_input("MUST条件（3つまで）", value=data["must"])
     data["want"] = st.text_area("WANT条件", value=data["want"])
@@ -567,13 +515,11 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    # ---- 9) 他社相談状況 ----
     st.markdown("#### 9) 他社相談状況")
     data["other_agent"] = st.text_input("他社への相談状況（有無・内容）", value=data["other_agent"])
 
     st.divider()
 
-    # ---- 10) 連絡・共有 ----
     st.markdown("#### 10) 連絡・共有")
     cc1, cc2, cc3 = st.columns(3)
     with cc1:
@@ -585,16 +531,14 @@ with st.form("hearing_form", clear_on_submit=False):
 
     submitted = st.form_submit_button("送信")
 
-# ===== 送信後：PDF生成（メール機能なし・PDFのみ） =====
+# ============================================
+# 8) PDF生成（送信後）
+# ============================================
 if submitted:
     st.success("ご入力ありがとうございました！PDFを生成します。")
 
-    import os, tempfile, urllib.request
-    from pathlib import Path
-    from fpdf import FPDF
-    from datetime import datetime
+    import urllib.request
 
-    # ---------- フォント確保（ローカル優先・無ければGitHub Rawから取得） ----------
     REG_NAME = "NotoSansJP-Regular.ttf"
     BLD_NAME = "NotoSansJP-Bold.ttf"
     RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Regular.ttf"
@@ -611,14 +555,12 @@ if submitted:
             if (d / REG_NAME).exists() and (d / BLD_NAME).exists():
                 return d.resolve()
         for d in candidates:
-            if (d / REG_NAME).exists():  # Regularだけある
-                # ここでBoldをRegularコピーで補完
+            if (d / REG_NAME).exists():
                 try:
                     (d / BLD_NAME).write_bytes((d / REG_NAME).read_bytes())
                 except Exception:
                     pass
                 return d.resolve()
-        # どこにも無ければ一時ディレクトリへDL
         tmp = Path(tempfile.mkdtemp(prefix="fonts_"))
         urllib.request.urlretrieve(RAW_REG, str(tmp / REG_NAME))
         try:
@@ -639,15 +581,11 @@ if submitted:
     st.caption(f"Font dir: {font_dir}")
     st.caption(f"Use TTF: {reg_path.name} / {bld_path.name}")
 
-    # ---------- PDF作成（output完了まで chdir を維持） ----------
     save_cwd = os.getcwd()
-    os.chdir(str(font_dir))  # ★ サブセット化で迷子防止のため最後まで維持
-
+    os.chdir(str(font_dir))
     try:
         pdf = FPDF()
         pdf.add_page()
-
-        # フォント登録（ベース名で）
         pdf.add_font("NotoSansJP", "", reg_path.name, uni=True)
         pdf.add_font("NotoSansJP", "B", bld_path.name, uni=True)
 
@@ -658,14 +596,12 @@ if submitted:
             pdf.set_font("NotoSansJP","",11); pdf.multi_cell(0, 7, str(val) if val not in [None, ""] else "（未入力）")
             pdf.ln(1)
 
-        # ヘッダ
         pdf.set_font("NotoSansJP", "B", 16)
         pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
         pdf.set_font("NotoSansJP", "", 10)
         pdf.cell(0, 8, f"作成日時：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "R")
         pdf.ln(2)
 
-        # ===== 1)〜9) 全項目出力 =====
         title("1) 現状把握（基礎）")
         pair("お名前", data["name"])
         pair("現在の居住エリア・駅", data["now_area"])
@@ -711,7 +647,8 @@ if submitted:
             ("spec_pet","ペット可"), ("spec_barrierfree","バリアフリー"), ("spec_security","防犯性"),
             ("spec_disaster","災害リスク許容"), ("spec_mgmt_good","管理良好"), ("spec_fee_ok","管理費/修繕積立金 許容")
         ]:
-            if data.get(k): spec_list.append(label)
+            if data.get(k):
+                spec_list.append(label)
         pair("チェック項目", "・".join(spec_list) if spec_list else "（なし）")
         pair("スペック補足", data["spec_free"])
 
@@ -721,23 +658,19 @@ if submitted:
         title("9) 連絡・共有")
         pair("希望連絡手段・時間帯", data["contact_pref"])
         pair("資料共有", data["share_method"])
-        pair("PDF送付先", data.get("pdf_recipient", "naoki.nishiyama@terass.com"))
+        pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
 
-        # ★ 出力（フォントDIRのまま）
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             pdf.output(tmp_file.name)
             pdf_path = tmp_file.name
-
     except Exception as e:
         st.error("PDFの作成でエラーが発生しました（フォント取得/配置を確認してください）。")
         st.exception(e)
         os.chdir(save_cwd)
         st.stop()
     finally:
-        os.chdir(save_cwd)  # 元に戻す
+        os.chdir(save_cwd)
 
-    # ダウンロードボタン（PDFのみ）
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
     st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
-# ===== /差し替え ここまで =====
