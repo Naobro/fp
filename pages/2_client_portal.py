@@ -134,12 +134,13 @@ def score_management(features: dict) -> float:
 # -------- ここから画面 --------
 st.title("理想の住まいへのロードマップ")
 
+# --- URLパラメータ取得（PINは任意） ---
 q = st.query_params
 cid = q.get("client", [""])[0] if isinstance(q.get("client"), list) else q.get("client", "")
 pin = q.get("pin", [""])[0] if isinstance(q.get("pin"), list) else q.get("pin", "")
 
-if not cid or not pin:
-    st.warning("URLに `?client=...&pin=....` を付けてアクセスしてください。")
+if not cid:
+    st.warning("URLに `?client=...` を付けてアクセスしてください。")
     st.stop()
 
 data = load_client(cid)
@@ -147,7 +148,8 @@ if not data:
     st.error("クライアントIDが見つかりません。管理画面で発行してください。")
     st.stop()
 
-if pin != data["meta"]["pin"]:
+# PIN が付いてきた場合だけチェック（無ければスキップ）
+if pin and pin != data["meta"].get("pin"):
     st.error("PINが一致しません。URLをご確認ください。")
     st.stop()
 
