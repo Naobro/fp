@@ -9,7 +9,7 @@ from fpdf import FPDF
 st.set_page_config(page_title="理想の住まいへのロードマップ", layout="wide")
 
 # =========================
-# データ入出力ユーティリティ
+# 共通ユーティリティ
 # =========================
 DATA_DIR = Path("data/clients")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -24,17 +24,25 @@ def save_client(cid: str, data: dict):
     f = DATA_DIR / f"{cid}.json"
     f.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-# 偏差値換算（平均3.0→50、1.0→30、5.0→70）
+def get_query_params() -> dict:
+    """Streamlit の旧新APIどちらでもクエリを取れる互換ヘルパ"""
+    try:
+        qp = st.query_params  # 新API
+        if hasattr(qp, "to_dict"):
+            qp = qp.to_dict()
+    except Exception:
+        qp = st.experimental_get_query_params()  # 旧API
+    # listを単値に寄せる
+    return {k: (v[0] if isinstance(v, list) else v) for k, v in qp.items()}
+
 def to_hensachi(avg_1to5: float) -> float:
     return round(50 + (avg_1to5 - 3.0) * 10, 1)
 
 # ================
-# URLパラメータ
+# URLパラメータ処理（?client=... のみ）
 # ================
-q = st.query_params
-client_id = q.get("client")
-if isinstance(client_id, list):
-    client_id = client_id[0]
+qp = get_query_params()
+client_id = qp.get("client")
 if not client_id:
     st.warning("URL に `?client=...` を付けてアクセスしてください。")
     st.stop()
@@ -49,7 +57,7 @@ st.success(f"{payload.get('meta',{}).get('name','お客様')} 専用ページ（
 
 # ============================================
 # ① ヒアリング（5W2H）＋ PDF出力
-# ※ トレードオフは【価格 / 立地 / 広さ・間取り / スペック（専有） / 管理・共有部・その他】
+#  トレードオフは：価格 / 立地 / 広さ・間取り / スペック（専有） / 管理・共有部・その他
 # ============================================
 st.header("① ヒアリング（5W2H）")
 
@@ -237,7 +245,7 @@ if submitted:
 st.divider()
 
 # ============================================
-# ② 現状把握（現在の住宅の基礎情報）※保存先: payload['baseline']
+# ② 現状把握（現在の住宅の基礎情報）
 # ============================================
 st.header("② 現状把握（現在の住宅の基礎情報）")
 
@@ -247,10 +255,9 @@ if "baseline" not in payload:
         "walk_min": 10,
         "area_m2": 60,
         "floor": 3,
-        "corner": None,                # True/False/None
-        "inner_corridor": None,        # True/False/None
-        "balcony_aspect": "S",         # N/NE/E/SE/S/SW/W/NW
-        "balcony_depth_m": 1.5,        # 奥行
+        "corner": None, "inner_corridor": None,
+        "balcony_aspect": "S",
+        "balcony_depth_m": 1.5,
         "view": "未設定",
         "husband_commute_min": 30,
         "wife_commute_min": 40,
@@ -269,9 +276,9 @@ with st.form("baseline_form"):
         b["floor"] = st.number_input("所在階（数値）", 0, 70, int(b.get("floor",3)))
     with c3:
         corner_sel = st.selectbox("角部屋", ["不明","いいえ","はい"],
-                                   index=0 if b.get("corner") is None else (2 if b.get("corner") else 1))
+                                  index=0 if b.get("corner") is None else (2 if b.get("corner") else 1))
         inner_sel  = st.selectbox("内廊下", ["不明","いいえ","はい"],
-                                   index=0 if b.get("inner_corridor") is None else (2 if b.get("inner_corridor") else 1))
+                                  index=0 if b.get("inner_corridor") is None else (2 if b.get("inner_corridor") else 1))
     with c4:
         b["balcony_aspect"] = st.selectbox("バルコニー向き", ["N","NE","E","SE","S","SW","W","NW"],
                                            index=["N","NE","E","SE","S","SW","W","NW"].index(b.get("balcony_aspect","S")))
@@ -325,6 +332,7 @@ if "current_home" not in payload:
         "c_seismic": False, "c_security": True,
         "c_design_level": "普通",
         "c_ev_count": 2, "c_pet_ok": True,
+        "c_building_age_note": "",
     }
 
 cur = payload["current_home"]
@@ -419,8 +427,7 @@ with st.expander("管理・共用部（築年数はここに統合）", expanded
         cur["c_pet_ok"]   = st.checkbox("ペット飼育可", value=cur["c_pet_ok"])
 
     st.caption("※ ‘築年数’ は比較時に “管理・共有部・その他” の評価として扱います（ここでは任意メモ）。")
-    cur.setdefault("c_building_age_note", "")
-    cur["c_building_age_note"] = st.text_input("築年数メモ（任意）", value=cur["c_building_age_note"])
+    cur["c_building_age_note"] = st.text_input("築年数メモ（任意）", value=cur.get("c_building_age_note",""))
 
 if st.button("③ 現状スコアリングを保存"):
     payload["current_home"] = cur
@@ -515,14 +522,21 @@ if st.button("④ 希望条件を保存"):
 st.divider()
 
 # ============================================
-# ⑤ 物件比較（別ページへ）
+# ⑤ 物件比較（別ページ）への遷移
 # ============================================
 st.header("⑤ 物件比較（別ページ）")
-st.caption("このページでは“プロフィール”を整えます。比較は別ページで、複数物件を横並びで偏差値表示します。")
+st.caption("このページでは“ヒアリングと基礎情報”を整えます。比較は別ページで横並び採点・偏差値表示。")
 
 link_label = "↔ 物件比較ページを開く"
-# Streamlit の pages 構成でも、単体ファイルでも動くように2通り用意
-try:
-    st.page_link("pages/3_compare.py", label=link_label, icon="↔️")
-except Exception:
-    st.markdown(f"[{link_label}](./3_compare.py?client={client_id})")
+# pages/compare.py → pages/3_compare.py → compare.py の順で試す
+ok = False
+for path in ["pages/compare.py", "pages/3_compare.py", "compare.py"]:
+    try:
+        st.page_link(path, label=link_label, icon="↔️")
+        ok = True
+        break
+    except Exception:
+        pass
+
+if not ok:
+    st.markdown(f"[{link_label}](./compare?client={client_id})")
