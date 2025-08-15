@@ -8,52 +8,37 @@ from fpdf import FPDF
 
 st.set_page_config(page_title="理想の住まいへのロードマップ", layout="wide")
 
-# =========================================================
-# ここは“共通ロジック”。お客様専用ランチャー側で client_id を渡す。
-# 例） pages/client/c-xxxx.py で:
-#     from 2_client_portal import render_client_portal
-#     CLIENT_ID = "c-xxxx"
-#     render_client_portal(CLIENT_ID)
-# =========================================================
+# ====== ここだけお客様ごとに変更 ======
+CLIENT_ID = "c-XXXXXX"   # ← この1行をお客様IDに置換してください（例: c-b62z51）
+# =====================================
 
-# ------------------------
-# データ入出力
-# ------------------------
 DATA_DIR = Path("data/clients")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-def load_client(cid: str):
-    f = DATA_DIR / f"{cid}.json"
+def _client_path(cid: str) -> Path:
+    return DATA_DIR / f"{cid}.json"
+
+def load_or_init_client(cid: str):
+    f = _client_path(cid)
     if not f.exists():
-        return None
+        payload = {"meta": {"id": cid, "name": ""}}
+        f.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return payload
     return json.loads(f.read_text(encoding="utf-8"))
 
 def save_client(cid: str, data: dict):
-    f = DATA_DIR / f"{cid}.json"
-    f.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _client_path(cid).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-def to_hensachi_relative(avg_1to5: float, base_avg_1to5: float) -> float:
-    """
-    現住居の総合平均(=base_avg)を 偏差値50 として線形換算。
-    1.0点差 ≒ 偏差値10 とするシンプル版。
-    """
-    return round(50 + (avg_1to5 - base_avg_1to5) * 10, 1)
-
-# ------------------------
-# ポータル本体
-# ------------------------
 def render_client_portal(client_id: str):
-    payload = load_client(client_id)
-    if not payload:
-        st.error("このお客様IDのデータが見つかりません。（管理側でJSONを1件作成してください）")
-        st.stop()
+    payload = load_or_init_client(client_id)
 
     st.title("理想の住まいへのロードマップ")
-    st.success(f"{payload.get('meta',{}).get('name','お客様')} 専用ページ（ID: {client_id}）")
+    header_name = payload.get("meta",{}).get("name") or "お客様"
+    st.success(f"{header_name} 専用ページ（ID: {client_id}）")
 
-    # ============================================
-    # ① ヒアリング（5W2H）＋ PDF出力
-    # ============================================
+    # =========================
+    # ① ヒアリング（5W2H）＋PDF
+    # =========================
     st.header("① ヒアリング（5W2H）")
 
     TO_EMAIL_DEFAULT = payload.get("hearing",{}).get("pdf_recipient","naoki.nishiyama@terass.com")
@@ -74,9 +59,9 @@ def render_client_portal(client_id: str):
         "dissat_free": "",
         "self_fund": "", "other_debt": "", "gift_support": "",
         "w_why": "", "w_when": "", "w_where": "", "w_who": "", "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
-        # 大カテゴリー（トレードオフ5本に統一）
+        # トレードオフ（大カテゴリー5本）
         "prio_price": 3, "prio_location": 3, "prio_size_layout": 3, "prio_spec": 3, "prio_mgmt": 3,
-        # チェック（任意）
+        # 任意チェック
         "spec_parking": False, "spec_bicycle": False, "spec_ev": False, "spec_pet": False,
         "spec_barrierfree": False, "spec_security": False, "spec_disaster": False,
         "spec_mgmt_good": False, "spec_fee_ok": False, "spec_free": "",
@@ -98,10 +83,10 @@ def render_client_portal(client_id: str):
             hearing["name"]      = st.text_input("お名前", value=hearing["name"])
             hearing["now_area"]  = st.text_input("現在の居住エリア・駅", value=hearing["now_area"])
         with c2:
-            hearing["now_years"] = st.number_input("居住年数（年）", min_value=0, max_value=100, value=int(hearing["now_years"]))
+            hearing["now_years"] = st.number_input("居住年数（年）", 0, 100, int(hearing["now_years"]))
             hearing["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if hearing["is_owner"]=="賃貸" else 1)
         with c3:
-            hearing["housing_cost"] = st.number_input("住居費（万円/月）", min_value=0, max_value=200, value=int(hearing["housing_cost"]))
+            hearing["housing_cost"] = st.number_input("住居費（万円/月）", 0, 200, int(hearing["housing_cost"]))
         hearing["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=hearing["family"])
 
         st.divider()
@@ -156,10 +141,12 @@ def render_client_portal(client_id: str):
     # PDF生成 & 保存
     if submitted:
         payload["hearing"] = hearing
+        # ヘッダー名も更新
+        payload.setdefault("meta", {}).update({"name": hearing.get("name","")})
         save_client(client_id, payload)
         st.success("ヒアリング内容を保存しました。PDFを生成します。")
 
-        # フォント（NotoSansJP）準備
+        # フォント準備
         import urllib.request
         REG_NAME = "NotoSansJP-Regular.ttf"
         BLD_NAME = "NotoSansJP-Bold.ttf"
@@ -167,25 +154,18 @@ def render_client_portal(client_id: str):
         RAW_BLD = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Bold.ttf"
 
         def ensure_fonts_dir() -> Path:
-            candidates = [
-                Path(__file__).resolve().parent / "fonts",
-                Path.cwd() / "fonts",
-                Path("/mount/src/fp/fonts"),
-                Path("/app/fonts"),
-            ]
+            candidates = [Path(__file__).resolve().parent / "fonts", Path.cwd() / "fonts",
+                          Path("/mount/src/fp/fonts"), Path("/app/fonts")]
             for d in candidates:
                 if (d / REG_NAME).exists() and (d / BLD_NAME).exists():
                     return d.resolve()
             for d in candidates:
                 if (d / REG_NAME).exists():
-                    (d / BLD_NAME).write_bytes((d / REG_NAME).read_bytes())
-                    return d.resolve()
+                    (d / BLD_NAME).write_bytes((d / REG_NAME).read_bytes()); return d.resolve()
             tmp = Path(tempfile.mkdtemp(prefix="fonts_"))
             urllib.request.urlretrieve(RAW_REG, str(tmp / REG_NAME))
-            try:
-                urllib.request.urlretrieve(RAW_BLD, str(tmp / BLD_NAME))
-            except Exception:
-                (tmp / BLD_NAME).write_bytes((tmp / REG_NAME).read_bytes())
+            try: urllib.request.urlretrieve(RAW_BLD, str(tmp / BLD_NAME))
+            except Exception: (tmp / BLD_NAME).write_bytes((tmp / REG_NAME).read_bytes())
             return tmp.resolve()
 
         font_dir = ensure_fonts_dir()
@@ -243,26 +223,19 @@ def render_client_portal(client_id: str):
 
     st.divider()
 
-    # ============================================
-    # ② 現状把握（現在の住宅の基礎情報）
-    # ============================================
+    # =========================
+    # ② 現状把握（基礎）
+    # =========================
     st.header("② 現状把握（現在の住宅の基礎情報）")
 
     if "baseline" not in payload:
         payload["baseline"] = {
-            "housing_cost_m": 10,
-            "walk_min": 10,
-            "area_m2": 60,
-            "floor": 3,
-            "corner": None,                # True/False/None
-            "inner_corridor": None,        # True/False/None
-            "balcony_aspect": "S",         # N/NE/E/SE/S/SW/W/NW
-            "balcony_depth_m": 1.5,        # 奥行
+            "housing_cost_m": 10, "walk_min": 10, "area_m2": 60, "floor": 3,
+            "corner": None, "inner_corridor": None,
+            "balcony_aspect": "S", "balcony_depth_m": 1.5,
             "view": "未設定",
-            "husband_commute_min": 30,
-            "wife_commute_min": 40,
+            "husband_commute_min": 30, "wife_commute_min": 40,
         }
-
     b = payload["baseline"]
 
     with st.form("baseline_form"):
@@ -274,15 +247,14 @@ def render_client_portal(client_id: str):
             b["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, int(b.get("area_m2",60)))
             b["floor"] = st.number_input("所在階（数値）", 0, 70, int(b.get("floor",3)))
         with c3:
-            v_corner = st.selectbox("角部屋", ["不明","いいえ","はい"],
-                                    index=0 if b.get("corner") is None else (2 if b.get("corner") else 1))
-            v_inner  = st.selectbox("内廊下", ["不明","いいえ","はい"],
-                                    index=0 if b.get("inner_corridor") is None else (2 if b.get("inner_corridor") else 1))
+            _corner = st.selectbox("角部屋", ["不明","いいえ","はい"],
+                                   index=0 if b.get("corner") is None else (2 if b.get("corner") else 1))
+            _inner  = st.selectbox("内廊下", ["不明","いいえ","はい"],
+                                   index=0 if b.get("inner_corridor") is None else (2 if b.get("inner_corridor") else 1))
         with c4:
             b["balcony_aspect"] = st.selectbox("バルコニー向き", ["N","NE","E","SE","S","SW","W","NW"],
                                                index=["N","NE","E","SE","S","SW","W","NW"].index(b.get("balcony_aspect","S")))
             b["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, float(b.get("balcony_depth_m",1.5)), step=0.1)
-
         c5, c6 = st.columns(2)
         with c5:
             b["view"] = st.selectbox("眺望", ["未設定","開放","一部遮り","正面に遮り"],
@@ -292,17 +264,17 @@ def render_client_portal(client_id: str):
             b["wife_commute_min"]    = st.number_input("奥様 通勤（分）", 0, 180, int(b.get("wife_commute_min",40)))
 
         if st.form_submit_button("② 現状把握を保存"):
-            b["corner"] = (True if v_corner=="はい" else (False if v_corner=="いいえ" else None))
-            b["inner_corridor"] = (True if v_inner=="はい" else (False if v_inner=="いいえ" else None))
+            b["corner"] = True if _corner=="はい" else (False if _corner=="いいえ" else None)
+            b["inner_corridor"] = True if _inner=="はい" else (False if _inner=="いいえ" else None)
             payload["baseline"] = b
             save_client(client_id, payload)
             st.success("保存しました。")
 
     st.divider()
 
-    # ============================================
-    # ③ 現在の住居スコアリング（定性・設備）
-    # ============================================
+    # =========================
+    # ③ 現在の住居スコアリング
+    # =========================
     st.header("③ 現在の住居スコアリング")
 
     if "current_home" not in payload:
@@ -314,8 +286,7 @@ def render_client_portal(client_id: str):
             "park_level": "普通", "noise_level": "普通",
             # 広さ・間取り
             "area_m2": b.get("area_m2",60), "living_jyo": 12,
-            "layout_type": "田の字", "storage_level": "普通",
-            "ceiling_level": "普通",
+            "layout_type": "田の字", "storage_level": "普通", "ceiling_level": "普通",
             "balcony_aspect": b.get("balcony_aspect","S"), "balcony_depth_m": b.get("balcony_depth_m",1.5),
             "sun_wind_level": "普通", "hall_flow_level": "普通",
             # 専有（設備）
@@ -331,7 +302,6 @@ def render_client_portal(client_id: str):
             "c_design_level": "普通",
             "c_ev_count": 2, "c_pet_ok": True,
         }
-
     cur = payload["current_home"]
 
     with st.expander("立地・環境", expanded=True):
@@ -430,15 +400,13 @@ def render_client_portal(client_id: str):
 
     st.divider()
 
-    # ============================================
+    # =========================
     # ④ 希望条件（◎/○/△/×）
-    # ============================================
+    # =========================
     st.header("④ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
 
     CHO = {"◎ 必要":"must","○ あったほうがよい":"want","△ どちらでもよい":"neutral","× なくてよい":"no_need"}
-
-    if "wish" not in payload:
-        payload["wish"] = {}
+    if "wish" not in payload: payload["wish"] = {}
     wish = payload["wish"]
 
     def wish_select(label, key):
@@ -484,7 +452,7 @@ def render_client_portal(client_id: str):
             wish_select({"h_floorheat":"床暖房","h_aircon_built":"エアコン（備付）"}[k], k)
         st.caption("【窓・建具】")
         for k in ["w_multi","w_low_e","w_double_sash","w_premium_doors"]:
-            wish_select({"w_multi":"複層ガラス","w_low_e":"Low-Eガラス","w_double_sash":"二重サッシ",
+            wish_select({"w_multi":"複層ガラス","w_low_e":"Low-Eガラス","w_double_sッシ",
                          "w_premium_doors":"建具ハイグレード（鏡面等）"}[k], k)
         st.caption("【収納】")
         for k in ["s_allrooms","s_wic","s_sic","s_pantry","s_linen"]:
@@ -493,7 +461,7 @@ def render_client_portal(client_id: str):
         for k in ["sec_tvphone","sec_sensor","net_ftth"]:
             wish_select({"sec_tvphone":"TVモニター付インターホン","sec_sensor":"玄関センサーライト","net_ftth":"光配線方式（各戸まで）"}[k], k)
 
-    with st.expander("管理・共用部・その他", expanded=False):
+    with st.expander("管理・共有部・その他", expanded=False):
         for key, label in [
             ("c_concierge","コンシェルジュサービス"), ("c_box","宅配ボックス"), ("c_guest","ゲストルーム"),
             ("c_lounge_kids","ラウンジ/キッズルーム"), ("c_gym_pool","ジム/プール"),
@@ -512,21 +480,15 @@ def render_client_portal(client_id: str):
 
     st.divider()
 
-    # ============================================
-    # ⑤ 物件比較（別ページへ誘導：固定URL式）
-    # ============================================
+    # =========================
+    # ⑤ 物件比較（別ページに誘導）
+    # =========================
     st.header("⑤ 物件比較（別ページ）")
-    st.caption("このページでは“ヒアリング＆プロフィール”を整えます。比較は専用ページで横並び入力・偏差値表示。")
-
-    # お客様専用の比較ページ（ランチャー）を作成しておく想定：
-    #   pages/compare/c-xxxx.py → そこから 3_compare.render_compare('c-xxxx') を呼ぶ
-    compare_page_path = f"pages/compare/{client_id}.py"
-    btn_label = "↔ 物件比較ページを開く"
+    st.caption("比較ページで、現住居=偏差値50 を基準に内見物件の優劣を表示します。")
     try:
-        st.page_link(compare_page_path, label=btn_label, icon="↔️")
+        st.page_link("3_compare.py", label="↔ 物件比較ページを開く", icon="↔️")
     except Exception:
-        st.info("サイドバーの『物件比較』からお進みください。")
+        st.markdown("サイドバーから **3_compare** を開いてください。")
 
-# 直接実行された場合（開発向けメッセージ）
-if __name__ == "__main__":
-    st.write("このファイルは共通ロジックです。お客様専用ランチャーから呼び出してください。")
+# ---- 直アクセス（ランチャー不要） ----
+render_client_portal(CLIENT_ID)

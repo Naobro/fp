@@ -5,36 +5,33 @@ from pathlib import Path
 
 st.set_page_config(page_title="物件比較（偏差値：現住居=50）", layout="wide")
 
-# =========================================================
-# ここも“共通ロジック”。お客様専用ランチャー側で client_id を渡す。
-# 例） pages/compare/c-xxxx.py で:
-#     from 3_compare import render_compare
-#     CLIENT_ID = "c-xxxx"
-#     render_compare(CLIENT_ID)
-# =========================================================
+# ====== ここだけお客様ごとに変更 ======
+CLIENT_ID = "c-XXXXXX"   # ← 2_client_portal.py と同じIDにしてください
+# =====================================
 
 DATA_DIR = Path("data/clients")
 
-def load_client(cid: str):
-    f = DATA_DIR / f"{cid}.json"
+def _client_path(cid: str) -> Path:
+    return DATA_DIR / f"{cid}.json"
+
+def load_or_init_client(cid: str):
+    f = _client_path(cid)
     if not f.exists():
-        return None
+        payload = {"meta": {"id": cid, "name": ""}}
+        f.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return payload
     return json.loads(f.read_text(encoding="utf-8"))
 
 def to_hensachi_relative(avg_1to5: float, base_avg_1to5: float) -> float:
-    # 現住居の総合平均(=base_avg)を 偏差値50 とする線形換算（1点差=偏差値10）
     return round(50 + (avg_1to5 - base_avg_1to5) * 10, 1)
 
-# ------- 簡易スコア関数（1〜5） -------
+# ---- 簡易スコア関数 ----
 def map3(x, good="良い", mid="普通", bad="悪い"):
-    if x in ["充実","近い","静か","低い"] or x == good:
-        return 5.0
-    if x == mid:
-        return 3.0
+    if x in ["充実","近い","静か","低い"] or x == good: return 5.0
+    if x == mid: return 3.0
     return 2.5
 
-def bool_score(b):
-    return 5.0 if b else 2.5
+def bool_score(b): return 5.0 if b else 2.5
 
 def price_score(price_m):
     if price_m <= 5000: return 4.0
@@ -66,24 +63,15 @@ def mgmt_score(m):
     pts = 0; n = 0
     for k in ["concierge","box","guest","lounge","gym","pool","gomi","seismic","sec","brand","pet"]:
         if k in m:
-            n += 1
-            pts += 1 if m[k] else 0
+            n += 1; pts += 1 if m[k] else 0
     if n == 0: return 3.0
-    ratio = pts / n
-    return 2.5 + ratio * 2.5  # 2.5〜5.0
+    return 2.5 + (pts/n) * 2.5  # 2.5〜5.0
 
-# ------- 現住居の「比較用スコア」を算出（基準=50） -------
 def baseline_category_scores(payload):
-    """
-    現在の住居（payload['current_home'] と一部 baseline）から
-    5大カテゴリー別 1〜5 をざっくり算出
-    """
     cur = payload.get("current_home", {})
     b   = payload.get("baseline", {})
-    # 価格：現住居は“所有コスト”ベースの簡易スコア（情報がなければ3.0）
-    s_price = 3.0
+    s_price = 3.0  # 現住居の価格は中立扱い
 
-    # 立地
     walk = b.get("walk_min", 10)
     lines = cur.get("multi_lines", 1)
     acc = cur.get("access_min", 30)
@@ -100,8 +88,7 @@ def baseline_category_scores(payload):
         map3(cur.get("noise_level","普通"), "静か","普通","うるさい")
     )/10
 
-    # 広さ・間取り
-    area = b.get("area_m2", 60); liv = cur.get("living_jyo", 12)
+    area = b.get("area_m2",60); liv = cur.get("living_jyo",12)
     layout = cur.get("layout_type","田の字")
     storage = cur.get("storage_level","普通")
     ceil = cur.get("ceiling_level","普通")
@@ -111,15 +98,14 @@ def baseline_category_scores(payload):
     s_size = (
         size_score(area, liv) +
         (3.5 if layout in ["ワイドスパン","センターイン"] else 3.0) +
-        map3(storage, "多い","普通","少ない") +
-        map3(ceil, "高い","普通","低い") +
+        map3(storage,"多い","普通","少ない") +
+        map3(ceil,"高い","普通","低い") +
         3.0 +
         (4.0 if depth>=1.5 else 3.0) +
-        map3(sunwind, "良い","普通","悪い") +
-        map3(flow, "良い","普通","悪い")
+        map3(sunwind,"良い","普通","悪い") +
+        map3(flow,"良い","普通","悪い")
     )/8
 
-    # スペック（専有）
     keys = [
         "k_dishwasher","k_disposer","k_purifier","k_bi_oven","k_highend_cooktop",
         "b_dryer","b_reheating","b_mist_sauna","b_tv","b_window",
@@ -127,42 +113,26 @@ def baseline_category_scores(payload):
         "s_allrooms","s_wic","s_sic","s_pantry","s_linen",
         "sec_tvphone","sec_sensor","net_ftth"
     ]
-    s_spec = sum(bool_score(bool(cur.get(k, False))) for k in keys)/len(keys)
+    s_spec = sum(5.0 if cur.get(k) else 2.5 for k in keys)/len(keys)
 
-    # 管理・共有部・その他
     mg = {
         "concierge": False,
         "box": bool(cur.get("c_box", False)),
-        "guest": False,
-        "lounge": False,
-        "gym": False,
-        "pool": False,
+        "guest": False, "lounge": False, "gym": False, "pool": False,
         "gomi": bool(cur.get("c_gomi24", False)),
         "seismic": bool(cur.get("c_seismic", False)),
         "sec": bool(cur.get("c_security", False)),
-        "brand": False,
-        "pet": bool(cur.get("c_pet_ok", False)),
+        "brand": False, "pet": bool(cur.get("c_pet_ok", False)),
     }
     s_mgmt = mgmt_score(mg)
 
-    return {
-        "price": s_price,
-        "location": s_loc,
-        "size_layout": s_size,
-        "spec": s_spec,
-        "mgmt": s_mgmt,
-    }
+    return {"price": s_price, "location": s_loc, "size_layout": s_size, "spec": s_spec, "mgmt": s_mgmt}
 
 def render_compare(client_id: str):
-    payload = load_client(client_id)
-    if not payload:
-        st.error("このお客様IDのデータが見つかりません。")
-        st.stop()
-
+    payload = load_or_init_client(client_id)
     st.title("物件比較（偏差値：現住居=50）")
     st.caption(f"対象お客様：{payload.get('meta',{}).get('name','')}（ID: {client_id}）")
 
-    # 重要度（重み）：ヒアリングから反映。なければ=3
     pri = payload.get("hearing", {})
     w_price = int(pri.get("prio_price", 3))
     w_location = int(pri.get("prio_location", 3))
@@ -171,15 +141,11 @@ def render_compare(client_id: str):
     w_mgmt = int(pri.get("prio_mgmt", 3))
     st.info(f"重み（価格:{w_price} / 立地:{w_location} / 広さ:{w_size} / スペック:{w_spec} / 管理:{w_mgmt}）")
 
-    # 現住居のカテゴリー平均（1〜5）を算出 → 総合平均を“基準”に
     base_cat = baseline_category_scores(payload)
     base_avg = (base_cat["price"]*w_price + base_cat["location"]*w_location + base_cat["size_layout"]*w_size +
                 base_cat["spec"]*w_spec + base_cat["mgmt"]*w_mgmt) / (w_price+w_location+w_size+w_spec+w_mgmt)
     st.caption(f"現住居の基準平均（偏差値50の基準）：{base_avg:.2f} / 5.00")
 
-    # =========================
-    # 物件入力（A/B/C）
-    # =========================
     st.subheader("横並び入力：A・B・C（必要に応じて拡張可）")
     if "compare_rows" not in st.session_state:
         st.session_state["compare_rows"] = 3
@@ -193,7 +159,6 @@ def render_compare(client_id: str):
 
     st.divider()
 
-    # --- ① 価格
     st.markdown("### ① 価格")
     c_price = st.columns(rows)
     price_val = []; tsubo_val = []; fee_val = []; renov_val = []
@@ -204,7 +169,6 @@ def render_compare(client_id: str):
             fee_val.append(st.number_input(f"{names[i]}：管理費等（月額・円）", 0, 200000, 0, key=f"fee_{i}"))
             renov_val.append(st.number_input(f"{names[i]}：追加リフォーム費用（万円）", 0, 5000, 0, key=f"renov_{i}"))
 
-    # --- ② 立地
     st.markdown("### ② 立地（資産性）")
     loc_inputs = []
     for i in range(rows):
@@ -224,7 +188,6 @@ def render_compare(client_id: str):
             noise = st.selectbox(f"{names[i]}：騒音", ["静か","普通","うるさい"], key=f"noise_{i}")
         loc_inputs.append((walk,lines,acc,shop,edu,med,sec,haz,park,noise))
 
-    # --- ③ 広さ・間取り
     st.markdown("### ③ 広さ・間取り")
     size_inputs = []
     for i in range(rows):
@@ -243,7 +206,6 @@ def render_compare(client_id: str):
             flow = st.selectbox(f"{names[i]}：廊下幅・家事動線", ["良い","普通","悪い"], key=f"flow_{i}")
         size_inputs.append((area, liv, layout, storage, ceil, aspect, depth, sunwind, flow))
 
-    # --- ④ スペック（専有部分）
     st.markdown("### ④ スペック（専有部分）")
     spec_inputs = []
     for i in range(rows):
@@ -265,19 +227,13 @@ def render_compare(client_id: str):
             bwin = st.checkbox(f"{names[i]}：浴室に窓", key=f"bwin_{i}")
 
         h1,h2,h3,h4 = st.columns(4)
-        with h1:
-            fh = st.checkbox(f"{names[i]}：床暖房", key=f"fh_{i}")
-        with h2:
-            ac = st.checkbox(f"{names[i]}：エアコン（備付）", key=f"ac_{i}")
-        with h3:
-            lowe = st.checkbox(f"{names[i]}：Low-E", key=f"lowe_{i}")
-        with h4:
-            twin = st.checkbox(f"{names[i]}：二重サッシ", key=f"twin_{i}")
+        with h1: fh = st.checkbox(f"{names[i]}：床暖房", key=f"fh_{i}")
+        with h2: ac = st.checkbox(f"{names[i]}：エアコン（備付）", key=f"ac_{i}")
+        with h3: lowe = st.checkbox(f"{names[i]}：Low-E", key=f"lowe_{i}")
+        with h4: twin = st.checkbox(f"{names[i]}：二重サッシ", key=f"twin_{i}")
         w1,w2 = st.columns(2)
-        with w1:
-            multi = st.checkbox(f"{names[i]}：複層ガラス", key=f"multi_{i}")
-        with w2:
-            doors = st.checkbox(f"{names[i]}：建具ハイグレード（鏡面等）", key=f"doors_{i}")
+        with w1: multi = st.checkbox(f"{names[i]}：複層ガラス", key=f"multi_{i}")
+        with w2: doors = st.checkbox(f"{names[i]}：建具ハイグレード（鏡面等）", key=f"doors_{i}")
 
         s1,s2,s3,s4,s5 = st.columns(5)
         with s1: allst = st.checkbox(f"{names[i]}：全居室収納", key=f"allst_{i}")
@@ -299,7 +255,6 @@ def render_compare(client_id: str):
             "video":video, "sensor":sensor, "ftth":ftth
         })
 
-    # --- ⑤ 管理・共有部・その他
     st.markdown("### ⑤ 管理・共有部・その他（※築年数含む）")
     mgmt_inputs = []
     for i in range(rows):
@@ -317,76 +272,63 @@ def render_compare(client_id: str):
             parking = st.selectbox(f"{names[i]}：駐車場形態", ["平置き","機械式","なし"], key=f"park_{i}")
 
         line2 = st.columns(5)
-        with line2[0]:
-            gomi = st.checkbox(f"{names[i]}：24hゴミ出し", key=f"gomi_{i}")
-        with line2[1]:
-            seismic = st.checkbox(f"{names[i]}：免震・制震", key=f"sei_{i}")
-        with line2[2]:
-            sec = st.checkbox(f"{names[i]}：セキュリティ強", key=f"sec_{i}")
-        with line2[3]:
-            design = st.selectbox(f"{names[i]}：外観・エントランス", ["良い","普通","弱い"], key=f"design_{i}")
-        with line2[4]:
-            build_year = st.number_input(f"{names[i]}：築年数（年）", 0, 100, 20, key=f"year_{i}")
+        with line2[0]: gomi = st.checkbox(f"{names[i]}：24hゴミ出し", key=f"gomi_{i}")
+        with line2[1]: seismic = st.checkbox(f"{names[i]}：免震・制震", key=f"sei_{i}")
+        with line2[2]: sec = st.checkbox(f"{names[i]}：セキュリティ強", key=f"sec_{i}")
+        with line2[3]: design = st.selectbox(f"{names[i]}：外観・エントランス", ["良い","普通","弱い"], key=f"design_{i}")
+        with line2[4]: build_year = st.number_input(f"{names[i]}：築年数（年）", 0, 100, 20, key=f"year_{i}")
 
         line3 = st.columns(4)
-        with line3[0]:
-            ev = st.number_input(f"{names[i]}：EV台数（基数）", 0, 20, 2, key=f"ev_{i}")
-        with line3[1]:
-            brand = st.checkbox(f"{names[i]}：ブランド/タワー属性", key=f"brand_{i}")
-        with line3[2]:
-            pet = st.checkbox(f"{names[i]}：ペット可", key=f"pet_{i}")
-        with line3[3]:
-            note = st.text_input(f"{names[i]}：備考", key=f"note_{i}")
-        mgmt_inputs.append({
-            "concierge":concierge,"box":box,"guest":guest,"lounge":lounge,
-            "gym":gym,"pool":pool,"parking":parking,"gomi":gomi,"seismic":seismic,
-            "sec":sec,"design":design,"ev":ev,"brand":brand,"pet":pet,"year":build_year,"note":note
-        })
+        with line3[0]: ev = st.number_input(f"{names[i]}：EV台数（基数）", 0, 20, 2, key=f"ev_{i}")
+        with line3[1]: brand = st.checkbox(f"{names[i]}：ブランド/タワー属性", key=f"brand_{i}")
+        with line3[2]: pet = st.checkbox(f"{names[i]}：ペット可", key=f"pet_{i}")
+        with line3[3]: note = st.text_input(f"{names[i]}：備考", key=f"note_{i}")
+
+        mgmt_inputs.append({"concierge":concierge,"box":box,"guest":guest,"lounge":lounge,
+                            "gym":gym,"pool":pool,"parking":parking,"gomi":gomi,"seismic":seismic,
+                            "sec":sec,"design":design,"ev":ev,"brand":brand,"pet":pet,"year":build_year,"note":note})
 
     st.divider()
 
     if st.button("スコア計算・偏差値表示"):
+        pri = payload.get("hearing", {})
+        w_price = int(pri.get("prio_price", 3))
+        w_location = int(pri.get("prio_location", 3))
+        w_size = int(pri.get("prio_size_layout", 3))
+        w_spec = int(pri.get("prio_spec", 3))
+        w_mgmt = int(pri.get("prio_mgmt", 3))
+        wsum = w_price + w_location + w_size + w_spec + w_mgmt
+
+        base_cat = baseline_category_scores(payload)
+        base_avg = (base_cat["price"]*w_price + base_cat["location"]*w_location + base_cat["size_layout"]*w_size +
+                    base_cat["spec"]*w_spec + base_cat["mgmt"]*w_mgmt) / wsum
+
         st.subheader("結果（カテゴリー別 / 総合：現住居=偏差値50）")
         for i in range(rows):
-            # ①価格
             s_price = (price_score(price_val[i]) + tsubo_score(tsubo_val[i]) + fee_score(fee_val[i]))/3
-            # ②立地
             walk, lines, acc, shop, edu, med, secu, haz, park, noise = loc_inputs[i]
             s_loc = ( (5.0 if walk<=5 else 4.0 if walk<=10 else 3.0 if walk<=15 else 2.5) +
                       (5.0 if lines>=3 else 4.0 if lines==2 else 3.0 if lines==1 else 2.5) +
                       (5.0 if acc<=20 else 4.0 if acc<=35 else 3.0 if acc<=50 else 2.5) +
-                      map3(shop,"充実","普通","乏しい") +
-                      map3(edu,"良い","普通","弱い") +
-                      map3(med,"近い","普通","遠い") +
-                      map3(secu,"良い","普通","悪い") +
-                      map3(haz,"低い","中","高") +
-                      map3(park,"充実","普通","乏しい") +
-                      map3(noise,"静か","普通","うるさい")
-                    ) / 10
-            # ③広さ
+                      map3(shop,"充実","普通","乏しい") + map3(edu,"良い","普通","弱い") +
+                      map3(med,"近い","普通","遠い") + map3(secu,"良い","普通","悪い") +
+                      map3(haz,"低い","中","高") + map3(park,"充実","普通","乏しい") +
+                      map3(noise,"静か","普通","うるさい") ) / 10
             area, liv, layout, storage, ceil, aspect, depth, sunwind, flow = size_inputs[i]
             lay = 3.5 if layout in ["ワイドスパン","センターイン"] else 3.0
             s_size = ( size_score(area, liv) + lay + map3(storage,"多い","普通","少ない")
-                       + map3(ceil,"高い","普通","低い")
-                       + 3.0
+                       + map3(ceil,"高い","普通","低い") + 3.0
                        + (4.0 if depth>=1.5 else 3.0)
                        + map3(sunwind,"良い","普通","悪い")
-                       + map3(flow,"良い","普通","悪い")
-                     ) / 8
-            # ④スペック（専有）
+                       + map3(flow,"良い","普通","悪い") ) / 8
             sp = spec_inputs[i]
             keys = ["dw","disp","pur","oven","cook","dry","reh","sauna","btv","bwin","fh","ac","lowe","twin","multi","doors","allst","wic","sic","pantry","linen","video","sensor","ftth"]
             s_spec = sum(bool_score(sp[k]) for k in keys)/len(keys)
-            # ⑤管理・その他（築年数は若いほど+）
             m = mgmt_inputs[i]
             s_mgmt = mgmt_score(m) + (0.5 if m["year"]<=10 else (0.2 if m["year"]<=20 else 0.0))
             s_mgmt = min(5.0, s_mgmt)
 
-            # 重み付き平均（1〜5）
-            wsum = w_price + w_location + w_size + w_spec + w_mgmt
             avg = (s_price*w_price + s_loc*w_location + s_size*w_size + s_spec*w_spec + s_mgmt*w_mgmt) / wsum
-
-            # 偏差値（現住居の平均=50）
             hensachi = to_hensachi_relative(avg, base_avg)
 
             c1,c2,c3,c4,c5,c6 = st.columns(6)
@@ -397,8 +339,7 @@ def render_compare(client_id: str):
             with c5: st.metric(f"{names[i]}｜管理その他", f"{s_mgmt:.1f}/5")
             with c6: st.metric(f"{names[i]}｜総合偏差値", f"{hensachi}")
 
-        st.caption("※ 偏差値は“現住居の重み付き平均スコア=50”となる相対換算（1点差=偏差値10）。実運用で係数・閾値は調整可能。")
+        st.caption("※ 偏差値は“現住居の重み付き平均スコア=50”となる相対換算（1点差=偏差値10）。運用で係数・閾値は調整可。")
 
-# 直接実行された場合（開発向けメッセージ）
-if __name__ == "__main__":
-    st.write("このファイルは共通ロジックです。お客様専用ランチャーから呼び出してください。")
+# ---- 直アクセス（ランチャー不要） ----
+render_compare(CLIENT_ID)
