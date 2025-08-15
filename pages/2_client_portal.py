@@ -505,6 +505,7 @@ st.markdown("""
 """)
 
 if st.button("物件比較ページを開く"):
-    # ここで比較ページのURLに飛ばす
-    compare_url = st.secrets["BASE_URL"] + "/3_compare"  # BASE_URLはconfigやsecretsに定義
-    st.markdown(f"[➡ 物件比較ページはこちら]({compare_url})", unsafe_allow_html=True)
+    try:
+        st.switch_page("pages/3_compare.py")  # Streamlit 1.30以降
+    except Exception:
+        st.page_link("pages/3_compare.py", label="↔ 物件比較ページを開く", icon="↔️")
