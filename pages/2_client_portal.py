@@ -63,7 +63,6 @@ base_defaults = {
     "w_why": "", "w_when": "", "w_where": "", "w_who": "",
     "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
     # 大カテゴリーのトレードオフ（1〜5）
-    # 1.価格 / 2.立地 / 3.広さ・間取り / 4.スペック / 5.管理・共有部・その他
     "prio_price": 3, "prio_location": 3, "prio_size_layout": 3, "prio_spec": 3, "prio_mgmt": 3,
     # 連絡・共有
     "contact_pref": "", "share_method": "", "pdf_recipient": TO_EMAIL_DEFAULT,
@@ -240,10 +239,10 @@ if "baseline" not in payload:
         "walk_min": 10,
         "area_m2": 60,
         "floor": 3,
-        "corner": None,                # True/False/None
-        "inner_corridor": None,        # True/False/None
-        "balcony_aspect": "S",         # N/NE/E/SE/S/SW/W/NW
-        "balcony_depth_m": 1.5,        # 奥行
+        "corner": None,
+        "inner_corridor": None,
+        "balcony_aspect": "S",
+        "balcony_depth_m": 1.5,
         "view": "未設定",
         "husband_commute_min": 30,
         "wife_commute_min": 40,
@@ -460,25 +459,52 @@ with st.expander("広さ・間取り", expanded=False):
 with st.expander("スペック（専有部分）", expanded=False):
     st.caption("【キッチン】")
     for k in ["k_dishwasher","k_purifier","k_disposer","k_highend_cooktop","k_bi_oven"]:
-        wish_select({"k_dishwasher":"食洗機","k_purifier":"浄水器／整水器","k_disposer":"ディスポーザー",
-                     "k_highend_cooktop":"高機能コンロ（IH/高火力）","k_bi_oven":"ビルトインオーブン"}[k], k)
+        wish_select({
+            "k_dishwasher":"食洗機",
+            "k_purifier":"浄水器／整水器",
+            "k_disposer":"ディスポーザー",
+            "k_highend_cooktop":"高機能コンロ（IH/高火力）",
+            "k_bi_oven":"ビルトインオーブン"
+        }[k], k)
     st.caption("【バスルーム】")
     for k in ["b_dryer","b_reheating","b_mist_sauna","b_tv","b_window"]:
-        wish_select({"b_dryer":"浴室暖房乾燥機","b_reheating":"追い焚き機能","b_mist_sauna":"ミストサウナ",
-                     "b_tv":"浴室テレビ","b_window":"浴室に窓"}[k], k)
+        wish_select({
+            "b_dryer":"浴室暖房乾燥機",
+            "b_reheating":"追い焚き機能",
+            "b_mist_sauna":"ミストサウナ",
+            "b_tv":"浴室テレビ",
+            "b_window":"浴室に窓"
+        }[k], k)
     st.caption("【暖房・空調】")
     for k in ["h_floorheat","h_aircon_built"]:
-        wish_select({"h_floorheat":"床暖房","h_aircon_built":"エアコン（備付）"}[k], k)
+        wish_select({
+            "h_floorheat":"床暖房",
+            "h_aircon_built":"エアコン（備付）"
+        }[k], k)
     st.caption("【窓・建具】")
     for k in ["w_multi","w_low_e","w_double_sash","w_premium_doors"]:
-        wish_select({"w_multi":"複層ガラス","w_low_e":"Low-Eガラス","w_double_sッシ",
-                     "w_premium_doors":"建具ハイグレード（鏡面等）"}[k], k)
+        wish_select({
+            "w_multi":"複層ガラス",
+            "w_low_e":"Low-Eガラス",
+            "w_double_sash":"二重サッシ",
+            "w_premium_doors":"建具ハイグレード（鏡面等）"
+        }[k], k)
     st.caption("【収納】")
     for k in ["s_allrooms","s_wic","s_sic","s_pantry","s_linen"]:
-        wish_select({"s_allrooms":"全居室収納","s_wic":"WIC","s_sic":"SIC","s_pantry":"パントリー","s_linen":"リネン庫"}[k], k)
+        wish_select({
+            "s_allrooms":"全居室収納",
+            "s_wic":"WIC",
+            "s_sic":"SIC",
+            "s_pantry":"パントリー",
+            "s_linen":"リネン庫"
+        }[k], k)
     st.caption("【セキュリティ・通信】")
     for k in ["sec_tvphone","sec_sensor","net_ftth"]:
-        wish_select({"sec_tvphone":"TVモニター付インターホン","sec_sensor":"玄関センサーライト","net_ftth":"光配線方式（各戸まで）"}[k], k)
+        wish_select({
+            "sec_tvphone":"TVモニター付インターホン",
+            "sec_sensor":"玄関センサーライト",
+            "net_ftth":"光配線方式（各戸まで）"
+        }[k], k)
 
 with st.expander("管理・共有部・その他", expanded=False):
     for key, label in [
@@ -504,5 +530,4 @@ st.divider()
 # ============================================
 st.header("⑤ 物件比較（別ページ）")
 st.caption("このページでは“ヒアリング＆プロフィール”を整えます。比較は専用ページで横並び入力・偏差値表示。")
-# クエリ無し・相対リンク（同ディレクトリ想定）
 st.markdown("**↔ [物件比較ページを開く](./3_compare.py)**")
