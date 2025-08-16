@@ -421,7 +421,106 @@ st.divider()
 # ============================================
 # ④ 希望条件（◎/○/△/×）
 # ============================================
-st.header("④ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
+
+# ============================================
+# ③.5 基本の希望条件（マスト項目：④の前に入れる）
+# ============================================
+st.header("④.5 基本の希望条件（マスト項目）")
+
+# 既存payloadに格納（クライアント別JSONに入れる）
+if "basic_prefs" not in payload:
+    payload["basic_prefs"] = {
+        "budget_man": None,
+        "areas": {
+            "line1":"", "ekifrom1":"", "ekito1":"",
+            "line2":"", "ekifrom2":"", "ekito2":"",
+            "line3":"", "ekifrom3":"", "ekito3":"",
+            "free":""
+        },
+        "types": [],                 # ["戸建","マンション",...]
+        "layout_free": "",           # 記述式
+        "age_limit_year": None,      # 〜年まで
+        "dist_limit_min": None,      # 駅〜分まで
+        "bus_ok": "不問",            # 可/不可/不問
+        "parking_must": False,       # 駐車場 必須
+        "must_free": "",             # その他 MUST 条件（記述）
+        # 重要度（1=最優先〜5）…compare側の重みに使う
+        "importance": {
+            "price": 1, "location": 2, "size_layout": 3, "spec": 4, "management": 5
+        }
+    }
+
+bp = payload["basic_prefs"]
+
+with st.form("basic_prefs_form", clear_on_submit=False):
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        bp["budget_man"] = st.number_input("予算（万円）", min_value=0, value=int(bp.get("budget_man") or 0), step=100)
+        bp["age_limit_year"] = st.number_input("築年数（〜年まで）", min_value=0, value=int(bp.get("age_limit_year") or 0), step=1)
+        bp["dist_limit_min"] = st.number_input("駅までの距離（〜分）", min_value=0, value=int(bp.get("dist_limit_min") or 0), step=1)
+    with c2:
+        bp["bus_ok"] = st.selectbox("バス便 可否", ["可","不可","不問"], index={"可":0,"不可":1,"不問":2}.get(bp.get("bus_ok","不問"),2))
+        bp["parking_must"] = st.checkbox("駐車場 必須", value=bool(bp.get("parking_must", False)))
+        bp["types"] = st.multiselect("物件種別（複数選択可）",
+                                     ["戸建","マンション","注文住宅（土地）","投資用","節税対策","リゾート"],
+                                     default=bp.get("types", []))
+    with c3:
+        bp["layout_free"] = st.text_input("間取り（記述）", value=bp.get("layout_free",""))
+        bp["must_free"] = st.text_area("その他 MUST 条件（記述）", value=bp.get("must_free",""), height=90)
+
+    st.markdown("**エリア希望（第1〜第3）／自由記述**")
+    a1,a2,a3,a4 = st.columns(4)
+    with a1:
+        bp["areas"]["line1"]    = st.text_input("第1：路線", value=bp["areas"].get("line1",""))
+        bp["areas"]["ekifrom1"] = st.text_input("第1：駅（起点）", value=bp["areas"].get("ekifrom1",""))
+        bp["areas"]["ekito1"]   = st.text_input("第1：駅（終点）", value=bp["areas"].get("ekito1",""))
+    with a2:
+        bp["areas"]["line2"]    = st.text_input("第2：路線", value=bp["areas"].get("line2",""))
+        bp["areas"]["ekifrom2"] = st.text_input("第2：駅（起点）", value=bp["areas"].get("ekifrom2",""))
+        bp["areas"]["ekito2"]   = st.text_input("第2：駅（終点）", value=bp["areas"].get("ekito2",""))
+    with a3:
+        bp["areas"]["line3"]    = st.text_input("第3：路線", value=bp["areas"].get("line3",""))
+        bp["areas"]["ekifrom3"] = st.text_input("第3：駅（起点）", value=bp["areas"].get("ekifrom3",""))
+        bp["areas"]["ekito3"]   = st.text_input("第3：駅（終点）", value=bp["areas"].get("ekito3",""))
+    with a4:
+        bp["areas"]["free"]     = st.text_area("（または）エリア自由記述", value=bp["areas"].get("free",""), height=90)
+
+    st.markdown("**重要度のトレードオフ（1=最優先〜5）**")
+    i1,i2,i3,i4,i5 = st.columns(5)
+    bp["importance"]["price"]       = i1.number_input("価格", min_value=1, max_value=5, value=int(bp["importance"].get("price",1)))
+    bp["importance"]["location"]    = i2.number_input("立地", min_value=1, max_value=5, value=int(bp["importance"].get("location",2)))
+    bp["importance"]["size_layout"] = i3.number_input("広さ・間取り", min_value=1, max_value=5, value=int(bp["importance"].get("size_layout",3)))
+    bp["importance"]["spec"]        = i4.number_input("スペック（専有）", min_value=1, max_value=5, value=int(bp["importance"].get("spec",4)))
+    bp["importance"]["management"]  = i5.number_input("管理・共有部・その他", min_value=1, max_value=5, value=int(bp["importance"].get("management",5)))
+
+    submitted_basic = st.form_submit_button("③.5 基本の希望条件を保存")
+
+if submitted_basic:
+    payload["basic_prefs"] = bp
+    save_client(CLIENT_ID, payload)
+    # compare 側と連携したい場合の簡易エクスポート（任意）
+    try:
+        export = {
+            "budget_man": bp.get("budget_man"),
+            "age_limit_year": bp.get("age_limit_year"),
+            "dist_limit_min": bp.get("dist_limit_min"),
+            "bus_ok": bp.get("bus_ok"),
+            "parking_must": bp.get("parking_must"),
+            "types": bp.get("types", []),
+            "layout_free": bp.get("layout_free",""),
+            "must_free": bp.get("must_free",""),
+            "areas": bp.get("areas", {}),
+            "importance": bp.get("importance", {})
+        }
+        os.makedirs("data", exist_ok=True)
+        with open("data/client_prefs.json","w",encoding="utf-8") as f:
+            json.dump(export, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    st.success("保存しました（クライアントJSONへ反映／任意の連携用JSONも出力）")
+st.header("⑤ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
+
+
 
 CHO = {"◎ 必要":"must","○ あったほうがよい":"want","△ どちらでもよい":"neutral","× なくてよい":"no_need"}
 if "wish" not in payload: payload["wish"] = {}
