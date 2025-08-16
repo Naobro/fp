@@ -353,21 +353,49 @@ with st.expander("立地・環境", expanded=True):
 with st.expander("広さ・間取り", expanded=True):
     c1,c2,c3 = st.columns(3)
     with c1:
-        cur["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, float(cur["area_m2"]))
-        cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0, 50, float(cur["living_jyo"]))
-        cur["layout_type"] = st.selectbox("間取りタイプ", ["田の字","ワイドスパン","センターイン","その他"], index=["田の字","ワイドスパン","センターイン","その他"].index(cur["layout_type"]))
+        cur["area_m2"] = st.number_input("専有面積（㎡）", 0.0, 300.0, float(cur["area_m2"]))
+        cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0.0, 50.0, float(cur["living_jyo"]))
+        cur["layout_type"] = st.selectbox(
+            "間取りタイプ",
+            ["田の字","ワイドスパン","センターイン","その他"],
+            index=["田の字","ワイドスパン","センターイン","その他"].index(cur["layout_type"])
+        )
     with c2:
-        cur["storage_level"] = st.selectbox("収納量（WIC・SIC含む総合）", ["多い","普通","少ない"], index=["多い","普通","少ない"].index(cur["storage_level"]))
-        cur["ceiling_level"] = st.selectbox("天井高", ["高い","普通","低い"], index=["高い","普通","低い"].index(cur["ceiling_level"]))
+        cur["storage_level"] = st.selectbox(
+            "収納量（WIC・SIC含む総合）",
+            ["多い","普通","少ない"],
+            index=["多い","普通","少ない"].index(cur["storage_level"])
+        )
+        cur["ceiling_level"] = st.selectbox(
+            "天井高",
+            ["高い","普通","低い"],
+            index=["高い","普通","低い"].index(cur["ceiling_level"])
+        )
         # 方位：日本語表示→コード保存
         opts2 = [d for d,_ in _load_master_balcony_pairs()]
         cur_disp2 = _code_to_disp(cur.get("balcony_aspect","S"))
-        sel_disp2 = st.selectbox("バルコニー向き", opts2, index=opts2.index(cur_disp2) if cur_disp2 in opts2 else 4)
+        sel_disp2 = st.selectbox(
+            "バルコニー向き",
+            opts2,
+            index=opts2.index(cur_disp2) if cur_disp2 in opts2 else 4
+        )
         cur["balcony_aspect"] = _disp_to_code(sel_disp2)
     with c3:
-        cur["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, float(cur.get("balcony_depth_m",1.5)), step=0.1)
-        cur["sun_wind_level"] = st.selectbox("採光・通風", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["sun_wind_level"]))
-        cur["hall_flow_level"] = st.selectbox("廊下幅・家事動線効率", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["hall_flow_level"]))
+        cur["balcony_depth_m"] = st.number_input(
+            "バルコニー奥行（m）",
+            0.0, 5.0, float(cur.get("balcony_depth_m",1.5)),
+            step=0.1
+        )
+        cur["sun_wind_level"] = st.selectbox(
+            "採光・通風",
+            ["良い","普通","悪い"],
+            index=["良い","普通","悪い"].index(cur["sun_wind_level"])
+        )
+        cur["hall_flow_level"] = st.selectbox(
+            "廊下幅・家事動線効率",
+            ["良い","普通","悪い"],
+            index=["良い","普通","悪い"].index(cur["hall_flow_level"])
+        )
 
 with st.expander("専有部分スペック（ある/ない）", expanded=False):
     st.caption("【キッチン】")
