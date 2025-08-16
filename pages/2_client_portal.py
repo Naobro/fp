@@ -6,6 +6,35 @@ from pathlib import Path
 import streamlit as st
 from fpdf import FPDF
 
+# --- バルコニー方位：マスター ↔ UI 変換ユーティリティ ---
+from pathlib import Path as _Path
+import json as _json
+
+def _load_master_balcony_pairs():
+    p = _Path("data/master_options.json")
+    if not p.exists():
+        # 予備（日本語表示 / 英字コード）
+        return [["北","N"],["北東","NE"],["東","E"],["南東","SE"],
+                ["南","S"],["南西","SW"],["西","W"],["北西","NW"]]
+    try:
+        m = _json.loads(p.read_text(encoding="utf-8"))
+        return m.get("balcony_facings", [])
+    except Exception:
+        return [["北","N"],["北東","NE"],["東","E"],["南東","SE"],
+                ["南","S"],["南西","SW"],["西","W"],["北西","NW"]]
+
+def _code_to_disp(code: str) -> str:
+    for disp, c in _load_master_balcony_pairs():
+        if c == code:
+            return disp
+    return "不明"
+
+def _disp_to_code(disp: str) -> str:
+    for d, code in _load_master_balcony_pairs():
+        if d == disp:
+            return code
+    return "S"  # 既定値（南）
+
 st.set_page_config(page_title="理想の住まいへのロードマップ", layout="wide")
 
 # ====== ここだけお客様ごとに変更 ======
@@ -264,10 +293,10 @@ with st.form("baseline_form"):
         _inner  = st.selectbox("内廊下", ["不明","いいえ","はい"],
                                index=0 if b.get("inner_corridor") is None else (2 if b.get("inner_corridor") else 1))
     with c4:
+        # ▼ マスター（data/master_options.json）から“表示名”を列挙して選ぶ
         opts = [d for d,_ in _load_master_balcony_pairs()]
-cur_disp = _code_to_disp(b.get("balcony_aspect","S"))
-b_disp = st.selectbox("バルコニー向き", opts, index=opts.index(cur_disp) if cur_disp in opts else 0)
-# ← フォームの送信ボタンを押した時に code に戻して保存
+        cur_disp = _code_to_disp(b.get("balcony_aspect","S"))
+        b_disp = st.selectbox("バルコニー向き", opts, index=opts.index(cur_disp) if cur_disp in opts else 0)
         b["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, float(b.get("balcony_depth_m",1.5)), step=0.1)
 
     c5, c6 = st.columns(2)
@@ -279,12 +308,13 @@ b_disp = st.selectbox("バルコニー向き", opts, index=opts.index(cur_disp) 
         b["wife_commute_min"]    = st.number_input("奥様 通勤（分）", 0, 180, int(b.get("wife_commute_min",40)))
 
     if st.form_submit_button("② 現状把握を保存"):
+        # 日本語表示 → 英字コードに変換して保存
+        b["balcony_aspect"] = _disp_to_code(b_disp)
         b["corner"] = True if _corner=="はい" else (False if _corner=="いいえ" else None)
         b["inner_corridor"] = True if _inner=="はい" else (False if _inner=="いいえ" else None)
         payload["baseline"] = b
         save_client(CLIENT_ID, payload)
         st.success("保存しました。")
-
 st.divider()
 
 # ============================================
