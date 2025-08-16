@@ -375,25 +375,74 @@ for i, tab in enumerate(tabs):
         st.subheader(f"{p['name']}：詳細")
         with st.container(border=True):
             cA,cB,cC,cD = st.columns(4)
-            with cA:
-                price_man = st.number_input("売出価格（万円）", min_value=0.0, value=float(p.get("price_man",0.0)), step=10.0, key=f"dp{i}")
-                area_m2   = st.number_input("専有面積（㎡）", min_value=0.0, value=float(p.get("area_m2",0.0)), step=0.5, key=f"da{i}")
-                st.markdown(f"**坪単価（万/坪・自動）**：{auto_tsubo_price(price_man, area_m2):.1f}")
-            with cB:
-                year_built = st.number_input("築年（西暦）", min_value=0, value=int(p.get("year_built",0)), step=1, key=f"dy{i}")
-                st.caption(build_age_text(year_built) if year_built else "—")
-                floor = st.number_input("所在階", min_value=0, value=int(p.get("floor",0)), step=1, key=f"fl{i}")
-            with cC:
-                kanri = st.number_input("管理費（円/月）", min_value=0.0, value=float(p.get("kanri",0.0)), step=500.0, key=f"dk{i}")
-                shuzen= st.number_input("修繕積立金（円/月）", min_value=0.0, value=float(p.get("shuzen",0.0)), step=500.0, key=f"ds{i}")
-            with cD:
-                facing_j = st.selectbox("バルコニー向き", BALC_J, index=4 if p.get("facing_j") is None else BALC_J.index(p.get("facing_j","南")), key=f"fj{i}")
-                balc_d   = st.number_input("バルコニー奥行（m）", min_value=0.0, value=float(p.get("balcony_depth",1.5)), step=0.1, key=f"bd{i}")
 
-            p.update(dict(price_man=price_man, area_m2=area_m2, year_built=year_built,
-                          kanri=kanri, shuzen=shuzen, facing_j=facing_j,
-                          balcony_depth=balc_d, floor=floor))
-            p["tsubo_price"] = auto_tsubo_price(price_man, area_m2)
+            # A列：価格・面積・坪単価（価格は整数、面積は小数）
+            with cA:
+                price_man = st.number_input(
+                    "売出価格（万円）",
+                    min_value=0, step=1, format="%d",
+                    value=int(p.get("price_man", 0)), key=f"dp{i}"
+                )
+                area_m2 = st.number_input(
+                    "専有面積（㎡）",
+                    min_value=0.0, step=0.01, format="%.2f",
+                    value=float(p.get("area_m2", 0.0)), key=f"da{i}"
+                )
+                st.markdown(f"**坪単価（万/坪・自動）**：{auto_tsubo_price(float(price_man), float(area_m2)):.1f}")
+
+            # B列：築年・所在階（どちらも整数）
+            with cB:
+                year_built = st.number_input(
+                    "築年（西暦）",
+                    min_value=0, step=1, format="%d",
+                    value=int(p.get("year_built", 0)), key=f"dy{i}"
+                )
+                st.caption(build_age_text(year_built) if year_built else "—")
+                floor = st.number_input(
+                    "所在階",
+                    min_value=0, step=1, format="%d",
+                    value=int(p.get("floor", 0)), key=f"fl{i}"
+                )
+
+            # C列：管理費・修繕積立金（整数・円単位）
+            with cC:
+                kanri = st.number_input(
+                    "管理費（円/月）",
+                    min_value=0, step=100, format="%d",
+                    value=int(p.get("kanri", 0)), key=f"dk{i}"
+                )
+                shuzen = st.number_input(
+                    "修繕積立金（円/月）",
+                    min_value=0, step=100, format="%d",
+                    value=int(p.get("shuzen", 0)), key=f"ds{i}"
+                )
+
+            # D列：向き・バルコニー奥行（奥行は小数）
+            with cD:
+                facing_j = st.selectbox(
+                    "バルコニー向き",
+                    BALC_J,
+                    index=(BALC_J.index(p.get("facing_j", "南"))
+                           if p.get("facing_j") in BALC_J else 4),
+                    key=f"fj{i}"
+                )
+                balc_d = st.number_input(
+                    "バルコニー奥行（m）",
+                    min_value=0.0, step=0.1, format="%.2f",
+                    value=float(p.get("balcony_depth", 1.5)), key=f"bd{i}"
+                )
+
+            p.update(dict(
+                price_man=int(price_man),
+                area_m2=float(area_m2),
+                year_built=int(year_built),
+                kanri=int(kanri),
+                shuzen=int(shuzen),
+                facing_j=facing_j,
+                balcony_depth=float(balc_d),
+                floor=int(floor),
+            ))
+            p["tsubo_price"] = auto_tsubo_price(float(price_man), float(area_m2))
 
         st.subheader("立地（資産性）")
         with st.container(border=True):
