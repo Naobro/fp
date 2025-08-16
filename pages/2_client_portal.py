@@ -84,8 +84,22 @@ base_defaults = {
     "name": payload.get("meta",{}).get("name",""),
     "now_area": "", "now_years": 5, "is_owner": "賃貸",
     "now_rent": 10, "family": "",
-    "husband_company": "", "husband_income": 0, "husband_service_years": 3,
-    "wife_company": "", "wife_income": 0, "wife_service_years": 3,
+
+    # 家計・勤務（★ここから追加・整理）
+    "self_fund_man": 0,                      # 自己資金（万円）
+    "other_debt": "",                        # 他社借入（そのままテキスト）
+    "husband_company": "",                   # 勤続先
+    "husband_service_years": 3,              # 勤続年数（年）
+    "husband_workplace": "",                 # 勤務地（最寄りエリアなど）
+    "husband_income": 0,                     # 年収（万円）
+    "husband_holidays": "",                  # 休日（例：土日祝／シフト制）
+    "wife_company": "",
+    "wife_service_years": 3,
+    "wife_workplace": "",
+    "wife_income": 0,
+    "wife_holidays": "",
+    # ★ここまで
+
     "sat_point": "", "search_status": "", "why_buy": "", "task": "",
     "anxiety": "", "rent_vs_buy": "", "other_trouble": "", "effect": "",
     "forecast": "", "event_effect": "", "missed_timing": "", "ideal_life": "",
@@ -95,7 +109,7 @@ base_defaults = {
     "husband_commute": "", "wife_commute": "",
     "sat_price": 3, "sat_location": 3, "sat_size": 3, "sat_age": 3, "sat_spec": 3,
     "dissat_free": "",
-    "self_fund": "", "other_debt": "", "gift_support": "",
+    "self_fund": "", "gift_support": "",
     "w_why": "", "w_when": "", "w_where": "", "w_who": "", "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
     # トレードオフ（大カテゴリー5本）
     "prio_price": 3, "prio_location": 3, "prio_size_layout": 3, "prio_spec": 3, "prio_mgmt": 3,
@@ -126,6 +140,29 @@ with st.form("hearing_form", clear_on_submit=False):
     with c3:
         hearing["housing_cost"] = st.number_input("住居費（万円/月）", 0, 200, int(hearing["housing_cost"]), key="h_housing_cost")
     hearing["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=hearing["family"], key="h_family")
+
+    st.divider()
+
+    # ★ 追加：家計・勤務
+    st.markdown("#### 家計・勤務")
+    ca, cb, cc = st.columns(3)
+    with ca:
+        hearing["self_fund_man"] = st.number_input("自己資金（万円）", min_value=0, value=int(hearing.get("self_fund_man",0)), step=50, key="h_self_fund_man")
+        hearing["other_debt"]    = st.text_input("他社借入（任意・金額/残債など）", value=hearing.get("other_debt",""), key="h_other_debt")
+    with cb:
+        st.caption("ご主人様")
+        hearing["husband_company"]       = st.text_input("勤続先（会社名など）", value=hearing.get("husband_company",""), key="h_hus_company")
+        hearing["husband_service_years"] = st.number_input("勤続年数（年）", min_value=0, max_value=80, value=int(hearing.get("husband_service_years",0)), key="h_hus_years")
+        hearing["husband_workplace"]     = st.text_input("勤務地（最寄りエリア）", value=hearing.get("husband_workplace",""), key="h_hus_workplace")
+        hearing["husband_income"]        = st.number_input("年収（万円）", min_value=0, value=int(hearing.get("husband_income",0)), step=50, key="h_hus_income")
+        hearing["husband_holidays"]      = st.text_input("休日（例：土日祝／シフト制）", value=hearing.get("husband_holidays",""), key="h_hus_holidays")
+    with cc:
+        st.caption("奥様")
+        hearing["wife_company"]       = st.text_input("勤続先（会社名など）", value=hearing.get("wife_company",""), key="h_wife_company")
+        hearing["wife_service_years"] = st.number_input("勤続年数（年）", min_value=0, max_value=80, value=int(hearing.get("wife_service_years",0)), key="h_wife_years")
+        hearing["wife_workplace"]     = st.text_input("勤務地（最寄りエリア）", value=hearing.get("wife_workplace",""), key="h_wife_workplace")
+        hearing["wife_income"]        = st.number_input("年収（万円）", min_value=0, value=int(hearing.get("wife_income",0)), step=50, key="h_wife_income")
+        hearing["wife_holidays"]      = st.text_input("休日（例：土日祝／シフト制）", value=hearing.get("wife_holidays",""), key="h_wife_holidays")
 
     st.divider()
 
