@@ -141,11 +141,6 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    st.markdown("#### 連絡・共有")
-    cc1, cc2, cc3 = st.columns(3)
-    with cc1: hearing["contact_pref"] = st.text_input("希望連絡手段・時間帯", value=hearing["contact_pref"])
-    with cc2: hearing["share_method"] = st.text_input("資料共有（LINE／メール 等）", value=hearing["share_method"])
-    with cc3: hearing["pdf_recipient"] = st.text_input("PDF送付先メール", value=hearing.get("pdf_recipient", TO_EMAIL_DEFAULT))
 
     submitted = st.form_submit_button("保存 / PDF作成")
 
@@ -269,8 +264,10 @@ with st.form("baseline_form"):
         _inner  = st.selectbox("内廊下", ["不明","いいえ","はい"],
                                index=0 if b.get("inner_corridor") is None else (2 if b.get("inner_corridor") else 1))
     with c4:
-        b["balcony_aspect"] = st.selectbox("バルコニー向き", ["N","NE","E","SE","S","SW","W","NW"],
-                                           index=["N","NE","E","SE","S","SW","W","NW"].index(b.get("balcony_aspect","S")))
+        opts = [d for d,_ in _load_master_balcony_pairs()]
+cur_disp = _code_to_disp(b.get("balcony_aspect","S"))
+b_disp = st.selectbox("バルコニー向き", opts, index=opts.index(cur_disp) if cur_disp in opts else 0)
+# ← フォームの送信ボタンを押した時に code に戻して保存
         b["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, float(b.get("balcony_depth_m",1.5)), step=0.1)
 
     c5, c6 = st.columns(2)
@@ -485,20 +482,15 @@ with st.form("basic_prefs_form", clear_on_submit=False):
     with a4:
         bp["areas"]["free"]     = st.text_area("（または）エリア自由記述", value=bp["areas"].get("free",""), height=90)
 
-    st.markdown("**重要度のトレードオフ（1=最優先〜5）**")
-    i1,i2,i3,i4,i5 = st.columns(5)
-    bp["importance"]["price"]       = i1.number_input("価格", min_value=1, max_value=5, value=int(bp["importance"].get("price",1)))
-    bp["importance"]["location"]    = i2.number_input("立地", min_value=1, max_value=5, value=int(bp["importance"].get("location",2)))
-    bp["importance"]["size_layout"] = i3.number_input("広さ・間取り", min_value=1, max_value=5, value=int(bp["importance"].get("size_layout",3)))
-    bp["importance"]["spec"]        = i4.number_input("スペック（専有）", min_value=1, max_value=5, value=int(bp["importance"].get("spec",4)))
-    bp["importance"]["management"]  = i5.number_input("管理・共有部・その他", min_value=1, max_value=5, value=int(bp["importance"].get("management",5)))
+st.markdown("**重要度のトレードオフ（1=最優先〜5）**")
+st.caption("※ 各カテゴリに 1,2,3,4,5 を一度ずつ割り当て（重複不可）。")
 
-    submitted_basic = st.form_submit_button("③.5 基本の希望条件を保存")
+# 既存のフォームはこのまま継続して使う
+submitted_basic = st.form_submit_button("③.5 基本の希望条件を保存")
 
 if submitted_basic:
     payload["basic_prefs"] = bp
     save_client(CLIENT_ID, payload)
-    # compare 側と連携したい場合の簡易エクスポート（任意）
     try:
         export = {
             "budget_man": bp.get("budget_man"),
@@ -510,7 +502,7 @@ if submitted_basic:
             "layout_free": bp.get("layout_free",""),
             "must_free": bp.get("must_free",""),
             "areas": bp.get("areas", {}),
-            "importance": bp.get("importance", {})
+            "importance": bp.get("importance", {})  # ← 暫定（下のUIで上書き保存可能）
         }
         os.makedirs("data", exist_ok=True)
         with open("data/client_prefs.json","w",encoding="utf-8") as f:
@@ -518,6 +510,90 @@ if submitted_basic:
     except Exception:
         pass
     st.success("保存しました（クライアントJSONへ反映／任意の連携用JSONも出力）")
+
+# ========= 重要度（1=最優先〜5）重複なし UI（フォームの外で動的制御） =========
+st.subheader("⑥ 重要度（1=最優先〜5）— 重複不可")
+CATS = [
+    ("price",       "価格"),
+    ("location",    "立地"),
+    ("size_layout", "広さ・間取り"),
+    ("spec",        "スペック（専有）"),
+    ("management",  "管理・共有部・その他"),
+]
+
+def _normalize_importance(imp: dict) -> dict:
+    imp = dict(imp or {})
+    cur = {k: v for k, v in imp.items() if v in [1,2,3,4,5]}
+    used = set(cur.values())
+    remain = [v for v in [1,2,3,4,5] if v not in used]
+    for k,_ in CATS:
+        if k not in cur:
+            cur[k] = remain.pop(0) if remain else 3
+    # 最終的に 1..5 になっていなければリセット
+    if sorted(cur.values()) != [1,2,3,4,5]:
+        cur = {k: i+1 for i,(k,_) in enumerate(CATS)}
+    return cur
+
+# 初期化（bp["importance"] を元にセッションへ）
+if "imp_state" not in st.session_state:
+    st.session_state.imp_state = _normalize_importance(bp.get("importance", {
+        "price":1, "location":2, "size_layout":3, "spec":4, "management":5
+    }))
+
+def _opts_for(cat_key: str) -> list[int]:
+    used_other = {v for k,v in st.session_state.imp_state.items() if k != cat_key}
+    cur = st.session_state.imp_state.get(cat_key)
+    return [n for n in [1,2,3,4,5] if (n not in used_other) or (n == cur)]
+
+def _on_change(cat_key: str, widget_key: str):
+    new_val = st.session_state.get(widget_key, None)
+    if new_val is None:
+        return
+    # 競合しているカテゴリを空席へ寄せる（自分が優先）
+    for k in list(st.session_state.imp_state.keys()):
+        if k != cat_key and st.session_state.imp_state[k] == new_val:
+            # 自分の旧値も使える候補に含める
+            old_self = st.session_state.imp_state.get(cat_key)
+            free = [n for n in [1,2,3,4,5] if n not in st.session_state.imp_state.values() or n == old_self]
+            st.session_state.imp_state[k] = sorted(free)[0] if free else (old_self or 3)
+    st.session_state.imp_state[cat_key] = int(new_val)
+
+row1 = st.columns(3)
+row2 = st.columns(2)
+rows = row1 + row2
+
+for idx, (k, label) in enumerate(CATS):
+    col = rows[idx]
+    cur = st.session_state.imp_state.get(k)
+    opts = _opts_for(k)
+    key = f"imp_{k}"
+    col.selectbox(
+        label, options=opts,
+        index=opts.index(cur) if cur in opts else 0,
+        key=key, on_change=_on_change, args=(k, key,),
+        help="各カテゴリは 1,2,3,4,5 を重複なく割り当て"
+    )
+
+c1, c2 = st.columns(2)
+with c1:
+    if st.button("↺ リセット（1,2,3,4,5 に戻す）", use_container_width=True):
+        st.session_state.imp_state = {k: i+1 for i,(k,_) in enumerate(CATS)}
+        st.experimental_rerun()
+
+with c2:
+    if st.button("💾 重要度を保存", type="primary", use_container_width=True):
+        bp["importance"] = dict(st.session_state.imp_state)
+        payload["basic_prefs"] = bp
+        save_client(CLIENT_ID, payload)
+        # エクスポート（compare 用）
+        try:
+            export = json.load(open("data/client_prefs.json","r",encoding="utf-8")) if os.path.exists("data/client_prefs.json") else {}
+            export["importance"] = dict(st.session_state.imp_state)
+            with open("data/client_prefs.json","w",encoding="utf-8") as f:
+                json.dump(export, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        st.success("重要度を保存しました（重複なしの一意順位）。")
 st.header("⑤ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
 
 

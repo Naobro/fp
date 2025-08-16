@@ -213,3 +213,26 @@ st.divider()
 if st.button("💾 すべて保存"):
     save_master(M)
     st.success("保存しました。")
+
+# --- バルコニー方位：マスター ↔ UI 変換ユーティリティ ---
+from pathlib import Path
+def _load_master_balcony_pairs():
+    # data/master_options.json から [["北","N"], ...] を読む
+    p = Path("data/master_options.json")
+    if not p.exists():
+        return [["北","N"],["北東","NE"],["東","E"],["南東","SE"],["南","S"],["南西","SW"],["西","W"],["北西","NW"]]
+    import json
+    m = json.loads(p.read_text(encoding="utf-8"))
+    return m.get("balcony_facings", [])
+
+def _code_to_disp(code: str) -> str:
+    for disp, c in _load_master_balcony_pairs():
+        if c == code:
+            return disp
+    return "不明"
+
+def _disp_to_code(disp: str) -> str:
+    for d, code in _load_master_balcony_pairs():
+        if d == disp:
+            return code
+    return "S"  # 既定は南
