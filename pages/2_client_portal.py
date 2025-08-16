@@ -268,10 +268,7 @@ if "baseline" not in payload:
         "walk_min": 10,
         "area_m2": 60,
         "floor": 3,
-        "corner": None,                # True/False/None
-        "inner_corridor": None,        # True/False/None
         "balcony_aspect": "S",         # N/NE/E/SE/S/SW/W/NW
-        "balcony_depth_m": 1.5,        # 奥行
         "view": "未設定",
         "husband_commute_min": 30,
         "wife_commute_min": 40,
@@ -341,11 +338,11 @@ if "current_home" not in payload:
         "w_multi": False, "w_low_e": False, "w_double_sash": False, "w_premium_doors": False,
         "s_allrooms": False, "s_wic": False, "s_sic": False, "s_pantry": False, "s_linen": False,
         "sec_tvphone": False, "sec_sensor": False, "net_ftth": False,
-        # 管理・共用
-        "c_box": True, "c_parking": "機械式", "c_gomi24": True,
-        "c_seismic": False, "c_security": True,
-        "c_design_level": "普通",
-        "c_ev_count": 2, "c_pet_ok": True,
+# 管理・共用（デフォルトは全て未チェック）
+"c_box": False, "c_parking": "なし", "c_gomi24": False,
+"c_seismic": False, "c_security": False,
+"c_design_level": "普通",
+"c_ev_count": 0, "c_pet_ok": False,
     }
 cur = payload["current_home"]
 
@@ -370,15 +367,44 @@ with st.expander("広さ・間取り", expanded=True):
     with c1:
         cur["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, cur["area_m2"])
         cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0, 50, cur["living_jyo"])
-        cur["layout_type"] = st.selectbox("間取りタイプ", ["田の字","ワイドスパン","センターイン","その他"], index=["田の字","ワイドスパン","センターイン","その他"].index(cur["layout_type"]))
+        cur["layout_type"] = st.selectbox(
+            "間取りタイプ",
+            ["田の字","ワイドスパン","センターイン","その他"],
+            index=["田の字","ワイドスパン","センターイン","その他"].index(cur["layout_type"])
+        )
     with c2:
-        cur["storage_level"] = st.selectbox("収納量（WIC・SIC含む総合）", ["多い","普通","少ない"], index=["多い","普通","少ない"].index(cur["storage_level"]))
-        cur["ceiling_level"] = st.selectbox("天井高", ["高い","普通","低い"], index=["高い","普通","低い"].index(cur["ceiling_level"]))
-        cur["balcony_aspect"] = st.selectbox("バルコニー向き", ["N","NE","E","SE","S","SW","W","NW"], index=["N","NE","E","SE","S","SW","W","NW"].index(cur["balcony_aspect"]))
+        cur["storage_level"] = st.selectbox(
+            "収納量（WIC・SIC含む総合）",
+            ["多い","普通","少ない"],
+            index=["多い","普通","少ない"].index(cur["storage_level"])
+        )
+        cur["ceiling_level"] = st.selectbox(
+            "天井高",
+            ["高い","普通","低い"],
+            index=["高い","普通","低い"].index(cur["ceiling_level"])
+        )
+        # ▼▼ ここが置換ポイント（日本語表示 → コード保存）▼▼
+        opts2 = [d for d,_ in _load_master_balcony_pairs()]
+        cur_disp2 = _code_to_disp(cur.get("balcony_aspect","S"))
+        sel_disp2 = st.selectbox(
+            "バルコニー向き",
+            opts2,
+            index=opts2.index(cur_disp2) if cur_disp2 in opts2 else 0
+        )
+        cur["balcony_aspect"] = _disp_to_code(sel_disp2)
+        # ▲▲ ここまで置換 ▲▲
     with c3:
         cur["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, float(cur["balcony_depth_m"]), step=0.1)
-        cur["sun_wind_level"] = st.selectbox("採光・通風", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["sun_wind_level"]))
-        cur["hall_flow_level"] = st.selectbox("廊下幅・家事動線効率", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["hall_flow_level"]))
+        cur["sun_wind_level"] = st.selectbox(
+            "採光・通風",
+            ["良い","普通","悪い"],
+            index=["良い","普通","悪い"].index(cur["sun_wind_level"])
+        )
+        cur["hall_flow_level"] = st.selectbox(
+            "廊下幅・家事動線効率",
+            ["良い","普通","悪い"],
+            index=["良い","普通","悪い"].index(cur["hall_flow_level"])
+        )
 
 with st.expander("専有部分スペック（ある/ない）", expanded=False):
     st.caption("【キッチン】")
@@ -512,11 +538,8 @@ with st.form("basic_prefs_form", clear_on_submit=False):
     with a4:
         bp["areas"]["free"]     = st.text_area("（または）エリア自由記述", value=bp["areas"].get("free",""), height=90)
 
-st.markdown("**重要度のトレードオフ（1=最優先〜5）**")
-st.caption("※ 各カテゴリに 1,2,3,4,5 を一度ずつ割り当て（重複不可）。")
-
-# 既存のフォームはこのまま継続して使う
-submitted_basic = st.form_submit_button("③.5 基本の希望条件を保存")
+    # ←← フォームの中で押す！
+    submitted_basic = st.form_submit_button("③.5 基本の希望条件を保存")
 
 if submitted_basic:
     payload["basic_prefs"] = bp
@@ -542,7 +565,10 @@ if submitted_basic:
     st.success("保存しました（クライアントJSONへ反映／任意の連携用JSONも出力）")
 
 # ========= 重要度（1=最優先〜5）重複なし UI（フォームの外で動的制御） =========
-st.subheader("⑥ 重要度（1=最優先〜5）— 重複不可")
+# ========= 重要度（1=最優先〜5）重複なし UI（「1番」表記） =========
+st.subheader("⑥ 重要度のトレードオフ（1=最優先〜5）")
+st.caption("※ 各カテゴリに 1番,2番,3番,4番,5番 を一度ずつ割当て（重複不可）。")
+
 CATS = [
     ("price",       "価格"),
     ("location",    "立地"),
@@ -559,12 +585,11 @@ def _normalize_importance(imp: dict) -> dict:
     for k,_ in CATS:
         if k not in cur:
             cur[k] = remain.pop(0) if remain else 3
-    # 最終的に 1..5 になっていなければリセット
     if sorted(cur.values()) != [1,2,3,4,5]:
         cur = {k: i+1 for i,(k,_) in enumerate(CATS)}
     return cur
 
-# 初期化（bp["importance"] を元にセッションへ）
+# 初期化
 if "imp_state" not in st.session_state:
     st.session_state.imp_state = _normalize_importance(bp.get("importance", {
         "price":1, "location":2, "size_layout":3, "spec":4, "management":5
@@ -579,14 +604,15 @@ def _on_change(cat_key: str, widget_key: str):
     new_val = st.session_state.get(widget_key, None)
     if new_val is None:
         return
-    # 競合しているカテゴリを空席へ寄せる（自分が優先）
     for k in list(st.session_state.imp_state.keys()):
         if k != cat_key and st.session_state.imp_state[k] == new_val:
-            # 自分の旧値も使える候補に含める
             old_self = st.session_state.imp_state.get(cat_key)
             free = [n for n in [1,2,3,4,5] if n not in st.session_state.imp_state.values() or n == old_self]
             st.session_state.imp_state[k] = sorted(free)[0] if free else (old_self or 3)
     st.session_state.imp_state[cat_key] = int(new_val)
+
+def _fmt(n: int) -> str:
+    return f"{n}番"
 
 row1 = st.columns(3)
 row2 = st.columns(2)
@@ -601,12 +627,13 @@ for idx, (k, label) in enumerate(CATS):
         label, options=opts,
         index=opts.index(cur) if cur in opts else 0,
         key=key, on_change=_on_change, args=(k, key,),
-        help="各カテゴリは 1,2,3,4,5 を重複なく割り当て"
+        format_func=_fmt,
+        help="各カテゴリは 1番〜5番 を重複なく割当て"
     )
 
 c1, c2 = st.columns(2)
 with c1:
-    if st.button("↺ リセット（1,2,3,4,5 に戻す）", use_container_width=True):
+    if st.button("↺ リセット（1番→価格, 2番→立地 ...）", use_container_width=True):
         st.session_state.imp_state = {k: i+1 for i,(k,_) in enumerate(CATS)}
         st.experimental_rerun()
 
@@ -615,7 +642,6 @@ with c2:
         bp["importance"] = dict(st.session_state.imp_state)
         payload["basic_prefs"] = bp
         save_client(CLIENT_ID, payload)
-        # エクスポート（compare 用）
         try:
             export = json.load(open("data/client_prefs.json","r",encoding="utf-8")) if os.path.exists("data/client_prefs.json") else {}
             export["importance"] = dict(st.session_state.imp_state)
@@ -623,7 +649,7 @@ with c2:
                 json.dump(export, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
-        st.success("重要度を保存しました（重複なしの一意順位）。")
+        st.success("重要度を保存しました（重複なし・1番〜5番）。")
 st.header("⑤ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
 
 
