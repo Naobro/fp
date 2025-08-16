@@ -159,15 +159,112 @@ with st.form("hearing_form", clear_on_submit=False):
 
     st.divider()
 
-    st.markdown("#### 重要度のトレードオフ（1=最優先〜5）")
-    # 大カテゴリー統一：価格 / 立地 / 広さ・間取り / スペック / 管理・共有部・その他
-    p1, p2, p3, p4, p5 = st.columns(5)
-    with p1: hearing["prio_price"]       = st.selectbox("価格", [1,2,3,4,5], index=int(hearing["prio_price"])-1)
-    with p2: hearing["prio_location"]    = st.selectbox("立地", [1,2,3,4,5], index=int(hearing["prio_location"])-1)
-    with p3: hearing["prio_size_layout"] = st.selectbox("広さ・間取り", [1,2,3,4,5], index=int(hearing["prio_size_layout"])-1)
-    with p4: hearing["prio_spec"]        = st.selectbox("スペック（専有）", [1,2,3,4,5], index=int(hearing["prio_spec"])-1)
-    with p5: hearing["prio_mgmt"]        = st.selectbox("管理・共有部・その他", [1,2,3,4,5], index=int(hearing["prio_mgmt"])-1)
+   # ========= 重要度（1=最優先〜5）重複なし UI（「1番」表記） =========
+st.subheader("⑥ 重要度のトレードオフ（1=最優先〜5）")
+st.caption("※ 各カテゴリに 1番,2番,3番,4番,5番 を一度ずつ割当て（重複不可）。")
 
+CATS = [
+    ("price",       "価格"),
+    ("location",    "立地"),
+    ("size_layout", "広さ・間取り"),
+    ("spec",        "スペック（専有）"),
+    ("management",  "管理・共有部・その他"),
+]
+
+LABEL_MAP = {1:"1番", 2:"2番", 3:"3番", 4:"4番", 5:"5番"}
+
+def _normalize_importance(imp: dict) -> dict:
+    # 1..5 を各カテゴリに一意に割当て（不足/重複を解消）
+    imp = dict(imp or {})
+    cur = {k: int(v) for k, v in imp.items() if v in [1,2,3,4,5]}
+    used = []
+    out = {}
+    # 既存の順（CATSの並び）で確定 → 重複は後で空きを埋める
+    for k,_ in CATS:
+        v = cur.get(k)
+        if v in [1,2,3,4,5] and v not in used:
+            out[k] = v
+            used.append(v)
+    # 空きを小さい順で埋める
+    free = [n for n in [1,2,3,4,5] if n not in used]
+    for k,_ in CATS:
+        if k not in out:
+            out[k] = free.pop(0)
+    return out
+
+# セッション初期化（basic_prefsのimportanceを採用）
+if "imp_state" not in st.session_state:
+    st.session_state.imp_state = _normalize_importance(bp.get("importance", {
+        "price":1, "location":2, "size_layout":3, "spec":4, "management":5
+    }))
+
+def _available_for(cat_key: str):
+    # 他カテゴリで使用中の番号は選べない。現在値は選択肢に残す。
+    cur_all = dict(st.session_state.imp_state)
+    cur_val = cur_all.get(cat_key)
+    used_other = {v for k, v in cur_all.items() if k != cat_key}
+    opts = [n for n in [1,2,3,4,5] if (n == cur_val) or (n not in used_other)]
+    return opts, cur_val
+
+def _on_change(cat_key: str, widget_key: str):
+    new_val = st.session_state.get(widget_key, None)
+    if new_val is None:
+        return
+    new_val = int(new_val)
+    cur_all = dict(st.session_state.imp_state)
+    old_self = cur_all.get(cat_key)
+
+    # 同じ番号を使っている他カテゴリを探す → そのカテゴリを最小の空席へ自動退避
+    for k in list(cur_all.keys()):
+        if k != cat_key and cur_all[k] == new_val:
+            # 空席を探す（自分の旧値は空席として許可）
+            occupied = set(cur_all.values()) - {old_self}
+            free = [n for n in [1,2,3,4,5] if n not in occupied and n != new_val]
+            st.session_state.imp_state[k] = free[0] if free else (6 - new_val)  # 念のためフォールバック
+    st.session_state.imp_state[cat_key] = new_val
+
+def _fmt(n: int) -> str:
+    return LABEL_MAP.get(n, f"{n}番")
+
+# 2行レイアウト
+row1 = st.columns(3); row2 = st.columns(2); rows = row1 + row2
+
+for idx, (k, label) in enumerate(CATS):
+    col = rows[idx]
+    opts, cur = _available_for(k)
+    key = f"imp_{k}"
+    col.selectbox(
+        label,
+        options=opts,
+        index=opts.index(cur) if cur in opts else 0,
+        key=key,
+        on_change=_on_change,
+        args=(k, key),
+        format_func=_fmt,
+        help="各カテゴリに 1番〜5番 を重複なく割当て"
+    )
+
+c1, c2 = st.columns(2)
+with c1:
+    if st.button("↺ リセット（1番→価格, 2番→立地 ...）", use_container_width=True):
+        st.session_state.imp_state = {k: i+1 for i,(k,_) in enumerate(CATS)}
+        st.experimental_rerun()
+
+with c2:
+    if st.button("💾 重要度を保存", type="primary", use_container_width=True):
+        bp["importance"] = dict(st.session_state.imp_state)  # 値は 1..5（内部値）
+        payload["basic_prefs"] = bp
+        save_client(CLIENT_ID, payload)
+        # compare 連携用JSONにも反映（任意）
+        try:
+            export_path = "data/client_prefs.json"
+            export = json.load(open(export_path,"r",encoding="utf-8")) if os.path.exists(export_path) else {}
+            export["importance"] = dict(st.session_state.imp_state)
+            with open(export_path,"w",encoding="utf-8") as f:
+                json.dump(export, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        st.success("重要度を保存しました（重複なし・1番〜5番）。")
     st.divider()
 
 
