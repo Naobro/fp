@@ -79,7 +79,7 @@ st.success(f"{header_name} 専用ページ")
 # ============================================
 st.header("① ヒアリング（5W2H）")
 
-TO_EMAIL_DEFAULT = payload.get("hearing",{}).get("pdf_recipient","naoki.nishiyama@terass.com")
+TO_EMAIL_DEFAULT = payload.get("hearing",{}).get("pdf_recipient","")
 base_defaults = {
     "name": payload.get("meta",{}).get("name",""),
     "now_area": "", "now_years": 5, "is_owner": "賃貸",
@@ -112,69 +112,72 @@ if "hearing_data" not in st.session_state:
 else:
     for k, v in base_defaults.items():
         st.session_state["hearing_data"].setdefault(k, v)
-
 hearing = st.session_state["hearing_data"]
 
 with st.form("hearing_form", clear_on_submit=False):
     st.markdown("#### 基礎情報")
     c1, c2, c3 = st.columns(3)
     with c1:
-        hearing["name"]      = st.text_input("お名前", value=hearing["name"])
-        hearing["now_area"]  = st.text_input("現在の居住エリア・駅", value=hearing["now_area"])
+        hearing["name"]      = st.text_input("お名前", value=hearing["name"], key="h_name")
+        hearing["now_area"]  = st.text_input("現在の居住エリア・駅", value=hearing["now_area"], key="h_now_area")
     with c2:
-        hearing["now_years"] = st.number_input("居住年数（年）", 0, 100, int(hearing["now_years"]))
-        hearing["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if hearing["is_owner"]=="賃貸" else 1)
+        hearing["now_years"] = st.number_input("居住年数（年）", 0, 100, int(hearing["now_years"]), key="h_now_years")
+        hearing["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if hearing["is_owner"]=="賃貸" else 1, key="h_is_owner")
     with c3:
-        hearing["housing_cost"] = st.number_input("住居費（万円/月）", 0, 200, int(hearing["housing_cost"]))
-    hearing["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=hearing["family"])
+        hearing["housing_cost"] = st.number_input("住居費（万円/月）", 0, 200, int(hearing["housing_cost"]), key="h_housing_cost")
+    hearing["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=hearing["family"], key="h_family")
 
     st.divider()
 
     st.markdown("#### 現在の住まい（満足・不満）")
-    hearing["sat_point"] = st.text_area("現在の住宅の満足点（自由入力）", value=hearing["sat_point"])
+    hearing["sat_point"] = st.text_area("現在の住宅の満足点（自由入力）", value=hearing["sat_point"], key="h_sat_point")
     sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-    with sc1: hearing["sat_price"] = st.slider("満足度：価格", 1, 5, int(hearing["sat_price"]))
-    with sc2: hearing["sat_location"] = st.slider("満足度：立地", 1, 5, int(hearing["sat_location"]))
-    with sc3: hearing["sat_size"] = st.slider("満足度：広さ", 1, 5, int(hearing["sat_size"]))
-    with sc4: hearing["sat_age"] = st.slider("満足度：築年数", 1, 5, int(hearing["sat_age"]))
-    with sc5: hearing["sat_spec"] = st.slider("満足度：スペック", 1, 5, int(hearing["sat_spec"]))
+    with sc1: hearing["sat_price"]    = st.slider("満足度：価格", 1, 5, int(hearing["sat_price"]), key="h_sat_price")
+    with sc2: hearing["sat_location"] = st.slider("満足度：立地", 1, 5, int(hearing["sat_location"]), key="h_sat_location")
+    with sc3: hearing["sat_size"]     = st.slider("満足度：広さ", 1, 5, int(hearing["sat_size"]), key="h_sat_size")
+    with sc4: hearing["sat_age"]      = st.slider("満足度：築年数", 1, 5, int(hearing["sat_age"]), key="h_sat_age")
+    with sc5: hearing["sat_spec"]     = st.slider("満足度：スペック", 1, 5, int(hearing["sat_spec"]), key="h_sat_spec")
     sat_total = int(hearing["sat_price"]) + int(hearing["sat_location"]) + int(hearing["sat_size"]) + int(hearing["sat_age"]) + int(hearing["sat_spec"])
     st.caption(f"満足度スコア合計：**{sat_total} / 25**")
-    hearing["dissat_free"] = st.text_area("不満な点（自由入力）", value=hearing["dissat_free"])
+    hearing["dissat_free"] = st.text_area("不満な点（自由入力）", value=hearing["dissat_free"], key="h_dissat_free")
 
     st.divider()
 
     st.markdown("#### 5W2H（購入計画）")
     c1, c2 = st.columns(2)
     with c1:
-        hearing["w_why"]     = st.text_input("Why（なぜ）：購入理由", value=hearing["w_why"])
-        hearing["w_when"]    = st.text_input("When（いつ）：購入／入居タイミング", value=hearing["w_when"])
-        hearing["w_where"]   = st.text_input("Where（どこで）：希望エリア・沿線", value=hearing["w_where"])
-        hearing["w_who"]     = st.text_input("Who（誰が）：居住メンバー", value=hearing["w_who"])
+        hearing["w_why"]   = st.text_input("Why（なぜ）：購入理由", value=hearing["w_why"], key="h_w_why")
+        hearing["w_when"]  = st.text_input("When（いつ）：購入／入居タイミング", value=hearing["w_when"], key="h_w_when")
+        hearing["w_where"] = st.text_input("Where（どこで）：希望エリア・沿線", value=hearing["w_where"], key="h_w_where")
+        hearing["w_who"]   = st.text_input("Who（誰が）：居住メンバー", value=hearing["w_who"], key="h_w_who")
     with c2:
-        hearing["w_what"]    = st.text_input("What（何を）：種別・広さ・階数・設備", value=hearing["w_what"])
-        hearing["w_how"]     = st.text_input("How（どう買う）：ローン・頭金", value=hearing["w_how"])
-        hearing["w_howmuch"] = st.text_input("How much（いくら）：総予算／月返済上限", value=hearing["w_howmuch"])
-        hearing["w_free"]    = st.text_area("補足（自由入力）", value=hearing["w_free"])
+        hearing["w_what"]     = st.text_input("What（何を）：種別・広さ・階数・設備", value=hearing["w_what"], key="h_w_what")
+        hearing["w_how"]      = st.text_input("How（どう買う）：ローン・頭金", value=hearing["w_how"], key="h_w_how")
+        hearing["w_howmuch"]  = st.text_input("How much（いくら）：総予算／月返済上限", value=hearing["w_howmuch"], key="h_w_howmuch")
+        hearing["w_free"]     = st.text_area("補足（自由入力）", value=hearing["w_free"], key="h_w_free")
 
     st.divider()
 
-    st.markdown("#### 重要度のトレードオフ（1=最優先〜5）")
-    p1, p2, p3, p4, p5 = st.columns(5)
-    with p1: hearing["prio_price"]       = st.selectbox("価格", [1,2,3,4,5], index=int(hearing["prio_price"])-1, format_func=lambda x: f"{x}番")
-    with p2: hearing["prio_location"]    = st.selectbox("立地", [1,2,3,4,5], index=int(hearing["prio_location"])-1, format_func=lambda x: f"{x}番")
-    with p3: hearing["prio_size_layout"] = st.selectbox("広さ・間取り", [1,2,3,4,5], index=int(hearing["prio_size_layout"])-1, format_func=lambda x: f"{x}番")
-    with p4: hearing["prio_spec"]        = st.selectbox("スペック（専有）", [1,2,3,4,5], index=int(hearing["prio_spec"])-1, format_func=lambda x: f"{x}番")
-    with p5: hearing["prio_mgmt"]        = st.selectbox("管理・共有部・その他", [1,2,3,4,5], index=int(hearing["prio_mgmt"])-1, format_func=lambda x: f"{x}番")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        save_only = st.form_submit_button("💾 ① 入力を上書き保存")
+    with col_b:
+        save_and_pdf = st.form_submit_button("📄 保存してPDF作成")
 
-    # ←← これがフォームの中に必要（外に出すと Missing Submit Button エラーの原因）
-    submitted = st.form_submit_button("保存 / PDF作成")
-
-# PDF生成 & 保存
-if submitted:
-    payload["hearing"] = hearing
+# 保存ハンドラ
+if 'save_only' in locals() and save_only:
+    payload["hearing"] = dict(hearing)
     payload.setdefault("meta", {}).update({"name": hearing.get("name","")})
     save_client(CLIENT_ID, payload)
+    st.session_state["hearing_data"] = dict(payload["hearing"])
+    st.success("① ヒアリングを上書き保存しました。")
+    st.experimental_rerun()
+
+if 'save_and_pdf' in locals() and save_and_pdf:
+    payload["hearing"] = dict(hearing)
+    payload.setdefault("meta", {}).update({"name": hearing.get("name","")})
+    save_client(CLIENT_ID, payload)
+    st.session_state["hearing_data"] = dict(payload["hearing"])
     st.success("ヒアリング内容を保存しました。PDFを生成します。")
 
     # フォント準備
@@ -265,12 +268,11 @@ if "baseline" not in payload:
         "walk_min": 10,
         "area_m2": 60,
         "floor": 3,
-        "balcony_aspect": "S",   # N/NE/E/SE/S/SW/W/NW
+        "balcony_aspect": "S",         # N/NE/E/SE/S/SW/W/NW
         "view": "未設定",
         "husband_commute_min": 30,
         "wife_commute_min": 40,
     }
-
 b = payload["baseline"]
 
 with st.form("baseline_form"):
@@ -282,26 +284,22 @@ with st.form("baseline_form"):
         b["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, int(b.get("area_m2",60)))
         b["floor"] = st.number_input("所在階（数値）", 0, 70, int(b.get("floor",3)))
     with c3:
-        # 角部屋・内廊下：削除済み
         opts = [d for d,_ in _load_master_balcony_pairs()]
         cur_disp = _code_to_disp(b.get("balcony_aspect","S"))
-        b_disp = st.selectbox("バルコニー向き", opts, index=opts.index(cur_disp) if cur_disp in opts else 0)
+        b_disp = st.selectbox("バルコニー向き", opts, index=opts.index(cur_disp) if cur_disp in opts else 4)  # 既定は「南」
     with c4:
-        # バルコニー奥行（m）：削除済み
         b["view"] = st.selectbox("眺望", ["未設定","開放","一部遮り","正面に遮り"],
                                  index=["未設定","開放","一部遮り","正面に遮り"].index(b.get("view","未設定")))
 
-    c5, c6 = st.columns(2)
-    with c5:
-        b["husband_commute_min"] = st.number_input("ご主人様 通勤（分）", 0, 180, int(b.get("husband_commute_min",30)))
-    with c6:
-        b["wife_commute_min"]    = st.number_input("奥様 通勤（分）", 0, 180, int(b.get("wife_commute_min",40)))
+    submitted_baseline = st.form_submit_button("💾 ② 現状把握を上書き保存")
 
-    if st.form_submit_button("② 現状把握を保存"):
-        b["balcony_aspect"] = _disp_to_code(b_disp)  # 日本語 → コード
-        payload["baseline"] = b
-        save_client(CLIENT_ID, payload)
-        st.success("保存しました。")
+if submitted_baseline:
+    b["balcony_aspect"] = _disp_to_code(b_disp)
+    payload["baseline"] = dict(b)
+    save_client(CLIENT_ID, payload)
+    st.success("② 現状把握を上書き保存しました。")
+    st.experimental_rerun()
+
 st.divider()
 
 # ============================================
@@ -339,9 +337,9 @@ cur = payload["current_home"]
 with st.expander("立地・環境", expanded=True):
     c1,c2,c3 = st.columns(3)
     with c1:
-        cur["walk_min"] = st.number_input("最寄駅までの徒歩分数", 0, 60, cur["walk_min"])
-        cur["multi_lines"] = st.number_input("複数路線利用の可否（本数）", 0, 10, cur["multi_lines"])
-        cur["access_min"] = st.number_input("職場までのアクセス時間（分）", 0, 180, cur["access_min"])
+        cur["walk_min"] = st.number_input("最寄駅までの徒歩分数", 0, 60, int(cur["walk_min"]))
+        cur["multi_lines"] = st.number_input("複数路線利用の可否（本数）", 0, 10, int(cur["multi_lines"]))
+        cur["access_min"] = st.number_input("職場までのアクセス時間（分）", 0, 180, int(cur["access_min"]))
     with c2:
         cur["shop_level"] = st.selectbox("商業施設の充実度", ["充実","普通","乏しい"], index=["充実","普通","乏しい"].index(cur["shop_level"]))
         cur["edu_level"]  = st.selectbox("教育環境", ["良い","普通","弱い"], index=["良い","普通","弱い"].index(cur["edu_level"]))
@@ -355,19 +353,19 @@ with st.expander("立地・環境", expanded=True):
 with st.expander("広さ・間取り", expanded=True):
     c1,c2,c3 = st.columns(3)
     with c1:
-        cur["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, cur["area_m2"])
-        cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0, 50, cur["living_jyo"])
+        cur["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, float(cur["area_m2"]))
+        cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0, 50, float(cur["living_jyo"]))
         cur["layout_type"] = st.selectbox("間取りタイプ", ["田の字","ワイドスパン","センターイン","その他"], index=["田の字","ワイドスパン","センターイン","その他"].index(cur["layout_type"]))
     with c2:
         cur["storage_level"] = st.selectbox("収納量（WIC・SIC含む総合）", ["多い","普通","少ない"], index=["多い","普通","少ない"].index(cur["storage_level"]))
         cur["ceiling_level"] = st.selectbox("天井高", ["高い","普通","低い"], index=["高い","普通","低い"].index(cur["ceiling_level"]))
-        # 日本語表示で選択→コード保存
+        # 方位：日本語表示→コード保存
         opts2 = [d for d,_ in _load_master_balcony_pairs()]
         cur_disp2 = _code_to_disp(cur.get("balcony_aspect","S"))
-        sel_disp2 = st.selectbox("バルコニー向き", opts2, index=opts2.index(cur_disp2) if cur_disp2 in opts2 else 0)
+        sel_disp2 = st.selectbox("バルコニー向き", opts2, index=opts2.index(cur_disp2) if cur_disp2 in opts2 else 4)
         cur["balcony_aspect"] = _disp_to_code(sel_disp2)
     with c3:
-        cur["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, float(cur["balcony_depth_m"]), step=0.1)
+        cur["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, float(cur.get("balcony_depth_m",1.5)), step=0.1)
         cur["sun_wind_level"] = st.selectbox("採光・通風", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["sun_wind_level"]))
         cur["hall_flow_level"] = st.selectbox("廊下幅・家事動線効率", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["hall_flow_level"]))
 
@@ -426,13 +424,14 @@ with st.expander("管理・共用部", expanded=False):
         cur["c_security"] = st.checkbox("オートロック等セキュリティ", value=cur["c_security"])
         cur["c_design_level"] = st.selectbox("外観・エントランスのデザイン", ["良い","普通","弱い"], index=["良い","普通","弱い"].index(cur["c_design_level"]))
     with m4:
-        cur["c_ev_count"] = st.number_input("エレベーター台数（基数）", 0, 20, cur["c_ev_count"])
+        cur["c_ev_count"] = st.number_input("エレベーター台数（基数）", 0, 20, int(cur["c_ev_count"]))
         cur["c_pet_ok"] = st.checkbox("ペット飼育可", value=cur["c_pet_ok"])
 
-if st.button("③ 現状スコアリングを保存"):
-    payload["current_home"] = cur
+if st.button("💾 ③ 現状スコアリングを上書き保存"):
+    payload["current_home"] = dict(cur)
     save_client(CLIENT_ID, payload)
-    st.success("保存しました。")
+    st.success("③ 現状スコアリングを上書き保存しました。")
+    st.experimental_rerun()
 
 st.divider()
 
@@ -444,12 +443,7 @@ st.header("④.5 基本の希望条件（マスト項目）")
 if "basic_prefs" not in payload:
     payload["basic_prefs"] = {
         "budget_man": None,
-        "areas": {
-            "line1":"", "ekifrom1":"", "ekito1":"",
-            "line2":"", "ekifrom2":"", "ekito2":"",
-            "line3":"", "ekifrom3":"", "ekito3":"",
-            "free":""
-        },
+        "areas": {"line1":"", "ekifrom1":"", "ekito1":"", "line2":"", "ekifrom2":"", "ekito2":"", "line3":"", "ekifrom3":"", "ekito3":"", "free":""},
         "types": [],
         "layout_free": "",
         "age_limit_year": None,
@@ -457,11 +451,8 @@ if "basic_prefs" not in payload:
         "bus_ok": "不問",
         "parking_must": False,
         "must_free": "",
-        "importance": {
-            "price": 1, "location": 2, "size_layout": 3, "spec": 4, "management": 5
-        }
+        "importance": {"price":1, "location":2, "size_layout":3, "spec":4, "management":5}
     }
-
 bp = payload["basic_prefs"]
 
 with st.form("basic_prefs_form", clear_on_submit=False):
@@ -473,9 +464,7 @@ with st.form("basic_prefs_form", clear_on_submit=False):
     with c2:
         bp["bus_ok"] = st.selectbox("バス便 可否", ["可","不可","不問"], index={"可":0,"不可":1,"不問":2}.get(bp.get("bus_ok","不問"),2))
         bp["parking_must"] = st.checkbox("駐車場 必須", value=bool(bp.get("parking_must", False)))
-        bp["types"] = st.multiselect("物件種別（複数選択可）",
-                                     ["戸建","マンション","注文住宅（土地）","投資用","節税対策","リゾート"],
-                                     default=bp.get("types", []))
+        bp["types"] = st.multiselect("物件種別（複数選択可）", ["戸建","マンション","注文住宅（土地）","投資用","節税対策","リゾート"], default=bp.get("types", []))
     with c3:
         bp["layout_free"] = st.text_input("間取り（記述）", value=bp.get("layout_free",""))
         bp["must_free"] = st.text_area("その他 MUST 条件（記述）", value=bp.get("must_free",""), height=90)
@@ -497,11 +486,12 @@ with st.form("basic_prefs_form", clear_on_submit=False):
     with a4:
         bp["areas"]["free"]     = st.text_area("（または）エリア自由記述", value=bp["areas"].get("free",""), height=90)
 
-    submitted_basic = st.form_submit_button("③.5 基本の希望条件を保存")
+    submitted_basic = st.form_submit_button("💾 ④.5 基本の希望条件を上書き保存")
 
 if submitted_basic:
-    payload["basic_prefs"] = bp
+    payload["basic_prefs"] = dict(bp)
     save_client(CLIENT_ID, payload)
+    # 任意エクスポート
     try:
         export = {
             "budget_man": bp.get("budget_man"),
@@ -520,7 +510,8 @@ if submitted_basic:
             json.dump(export, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
-    st.success("保存しました（クライアントJSONへ反映／任意の連携用JSONも出力）")
+    st.success("④.5 基本の希望条件を上書き保存しました。")
+    st.experimental_rerun()
 
 # ========= 重要度（1=最優先〜5）重複なし UI（「1番」表記） =========
 st.subheader("⑥ 重要度のトレードオフ（1=最優先〜5）")
@@ -533,80 +524,80 @@ CATS = [
     ("spec",        "スペック（専有）"),
     ("management",  "管理・共有部・その他"),
 ]
+LABEL_MAP = {1:"1番", 2:"2番", 3:"3番", 4:"4番", 5:"5番"}
 
 def _normalize_importance(imp: dict) -> dict:
+    # 1..5 を各カテゴリに一意に割当て（不足/重複を解消）
     imp = dict(imp or {})
-    cur = {k: v for k, v in imp.items() if v in [1,2,3,4,5]}
-    used = set(cur.values())
-    remain = [v for v in [1,2,3,4,5] if v not in used]
+    cur = {k: int(v) for k, v in imp.items() if v in [1,2,3,4,5]}
+    used = []
+    out = {}
     for k,_ in CATS:
-        if k not in cur:
-            cur[k] = remain.pop(0) if remain else 3
-    if sorted(cur.values()) != [1,2,3,4,5]:
-        cur = {k: i+1 for i,(k,_) in enumerate(CATS)}
-    return cur
+        v = cur.get(k)
+        if v in [1,2,3,4,5] and v not in used:
+            out[k] = v; used.append(v)
+    free = [n for n in [1,2,3,4,5] if n not in used]
+    for k,_ in CATS:
+        if k not in out:
+            out[k] = free.pop(0)
+    return out
 
-# 初期化
+# 初期化（basic_prefs → セッション）
 if "imp_state" not in st.session_state:
-    st.session_state.imp_state = _normalize_importance(bp.get("importance", {
-        "price":1, "location":2, "size_layout":3, "spec":4, "management":5
-    }))
+    st.session_state.imp_state = _normalize_importance(bp.get("importance", {"price":1,"location":2,"size_layout":3,"spec":4,"management":5}))
 
-def _opts_for(cat_key: str) -> list[int]:
-    used_other = {v for k,v in st.session_state.imp_state.items() if k != cat_key}
-    cur = st.session_state.imp_state.get(cat_key)
-    return [n for n in [1,2,3,4,5] if (n not in used_other) or (n == cur)]
+def _available_for(cat_key: str):
+    cur_all = dict(st.session_state.imp_state)
+    cur_val = cur_all.get(cat_key)
+    used_other = {v for k, v in cur_all.items() if k != cat_key}
+    opts = [n for n in [1,2,3,4,5] if (n == cur_val) or (n not in used_other)]
+    return opts, cur_val
 
 def _on_change(cat_key: str, widget_key: str):
     new_val = st.session_state.get(widget_key, None)
-    if new_val is None:
-        return
-    for k in list(st.session_state.imp_state.keys()):
-        if k != cat_key and st.session_state.imp_state[k] == new_val:
-            old_self = st.session_state.imp_state.get(cat_key)
-            free = [n for n in [1,2,3,4,5] if n not in st.session_state.imp_state.values() or n == old_self]
-            st.session_state.imp_state[k] = sorted(free)[0] if free else (old_self or 3)
-    st.session_state.imp_state[cat_key] = int(new_val)
+    if new_val is None: return
+    new_val = int(new_val)
+    cur_all = dict(st.session_state.imp_state)
+    old_self = cur_all.get(cat_key)
+    for k in list(cur_all.keys()):
+        if k != cat_key and cur_all[k] == new_val:
+            occupied = set(cur_all.values()) - {old_self}
+            free = [n for n in [1,2,3,4,5] if n not in occupied and n != new_val]
+            st.session_state.imp_state[k] = free[0] if free else (6 - new_val)
+    st.session_state.imp_state[cat_key] = new_val
 
 def _fmt(n: int) -> str:
-    return f"{n}番"
+    return LABEL_MAP.get(n, f"{n}番")
 
-row1 = st.columns(3)
-row2 = st.columns(2)
-rows = row1 + row2
-
+row1 = st.columns(3); row2 = st.columns(2); rows = row1 + row2
 for idx, (k, label) in enumerate(CATS):
     col = rows[idx]
-    cur_imp = st.session_state.imp_state.get(k)
-    opts = _opts_for(k)
+    opts, curv = _available_for(k)
     key = f"imp_{k}"
-    col.selectbox(
-        label, options=opts,
-        index=opts.index(cur_imp) if cur_imp in opts else 0,
-        key=key, on_change=_on_change, args=(k, key,),
-        format_func=_fmt,
-        help="各カテゴリは 1番〜5番 を重複なく割当て"
-    )
+    col.selectbox(label, options=opts, index=opts.index(curv) if curv in opts else 0,
+                  key=key, on_change=_on_change, args=(k, key,), format_func=_fmt,
+                  help="各カテゴリに 1番〜5番 を重複なく割当て")
 
 c1, c2 = st.columns(2)
 with c1:
     if st.button("↺ リセット（1番→価格, 2番→立地 ...）", use_container_width=True):
         st.session_state.imp_state = {k: i+1 for i,(k,_) in enumerate(CATS)}
         st.experimental_rerun()
-
 with c2:
-    if st.button("💾 重要度を保存", type="primary", use_container_width=True):
+    if st.button("💾 重要度を上書き保存", type="primary", use_container_width=True):
         bp["importance"] = dict(st.session_state.imp_state)
         payload["basic_prefs"] = bp
         save_client(CLIENT_ID, payload)
         try:
-            export = json.load(open("data/client_prefs.json","r",encoding="utf-8")) if os.path.exists("data/client_prefs.json") else {}
+            export_path = "data/client_prefs.json"
+            export = json.load(open(export_path,"r",encoding="utf-8")) if os.path.exists(export_path) else {}
             export["importance"] = dict(st.session_state.imp_state)
-            with open("data/client_prefs.json","w",encoding="utf-8") as f:
+            with open(export_path,"w",encoding="utf-8") as f:
                 json.dump(export, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
         st.success("重要度を保存しました（重複なし・1番〜5番）。")
+        st.experimental_rerun()
 
 st.header("⑤ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
 
@@ -678,10 +669,11 @@ with st.expander("管理・共有部・その他", expanded=False):
     ]:
         wish_select(label, key)
 
-if st.button("④ 希望条件を保存"):
-    payload["wish"] = wish
+if st.button("💾 ④ 希望条件を上書き保存"):
+    payload["wish"] = dict(wish)
     save_client(CLIENT_ID, payload)
-    st.success("保存しました。")
+    st.success("④ 希望条件を上書き保存しました。")
+    st.experimental_rerun()
 
 st.divider()
 
@@ -693,6 +685,6 @@ st.markdown("""
 
 if st.button("物件比較ページを開く"):
     try:
-        st.switch_page("pages/3_compare.py")  # Streamlit 1.30以降
+        st.switch_page("pages/3_compare.py")
     except Exception:
         st.page_link("pages/3_compare.py", label="↔ 物件比較ページを開く", icon="↔️")
