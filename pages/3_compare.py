@@ -500,6 +500,37 @@ for i, tab in enumerate(tabs):
                 val = col.checkbox(feat, value=bool(p.get("mgmt",{}).get(feat, False)), key=k)
                 p.setdefault("mgmt", {})[feat] = val
                 mg_presence[feat] = val
+        # --- 内見時チェックリスト（採点に不使用） ---
+        st.subheader("内見時チェックリスト")
+        with st.container(border=True):
+            p.setdefault("visit_check", {})
+
+            check_items = {
+                "リフォーム": [
+                    "バスルーム全部","バスルーム一部","キッチン全","キッチン一部",
+                    "洗面台","トイレ","給湯器","エアコン",
+                    "クロス","フローリング","建具","間取り変更",
+                    "外壁","屋根","太陽光蓄電池"
+                ],
+                "マンション管理": [
+                    "管理人　常勤",
+                    "エントランス・共用廊下の清掃状態",
+                    "掲示板の状況（管理組合の情報）",
+                    "エレベーターの老朽化",
+                    "ゴミ置き場やメールボックスの衛生状態",
+                    "駐輪場・駐車場の使いやすさ"
+                ],
+            }
+
+            for cat, items in check_items.items():
+                with st.expander(f"【{cat}】", expanded=False):
+                    cols = st.columns(3)
+                    for j, label in enumerate(items):
+                        col = cols[j % 3]
+                        key = f"vc_{i}_{cat}_{j}"
+                        current = bool(p.get("visit_check", {}).get(cat, {}).get(label, False))
+                        val = col.checkbox(label, value=current, key=key)
+                        p.setdefault("visit_check", {}).setdefault(cat, {})[label] = val
 
         # ======== ブロック別適合度（候補） ========
         labels_spec = labels_from_prefs("spec")
