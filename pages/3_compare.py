@@ -297,18 +297,50 @@ props: List[Dict[str,Any]] = st.session_state.props
 
 st.header("③ 5物件の基本情報（先にまとめて入力・保存可）")
 with st.container(border=True):
+
+    def _to_int(s):
+        try:
+            return int(str(s).replace(",", "").strip())
+        except:
+            return 0
+    def _to_float(s):
+        try:
+            return float(str(s).replace(",", "").strip())
+        except:
+            return 0.0
+    def _blank(v):
+        if v in (None, "", 0, 0.0):
+            return ""
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))
+        return str(v)
+
     cols = st.columns([1.1,1,1,1,1,1,1])
     for i,h in enumerate(["名称","価格（万円）","築：西暦","築表示","専有面積（㎡）","管理費（円/月）","修繕積立（円/月）"]):
         cols[i].markdown(f"**{h}**")
+
     for idx in range(5):
         c0,c1,c2,c3,c4,c5,c6 = st.columns([1.1,1,1,1,1,1,1], gap="small")
-        props[idx]["name"]       = c0.text_input("名称", value=props[idx].get("name", f"物件{idx+1}"), key=f"name{idx}")
-        props[idx]["price_man"]  = c1.number_input("価格", min_value=0.0, step=10.0, value=float(props[idx].get("price_man",0.0)), key=f"p{idx}")
-        props[idx]["year_built"] = c2.number_input("築西暦", min_value=0, step=1, value=int(props[idx].get("year_built",0)), key=f"y{idx}")
-        c3.write(build_age_text(int(props[idx]["year_built"])) if props[idx]["year_built"] else "—")
-        props[idx]["area_m2"]    = c4.number_input("面積", min_value=0.0, step=0.5, value=float(props[idx].get("area_m2",0.0)), key=f"a{idx}")
-        props[idx]["kanri"]      = c5.number_input("管理費", min_value=0.0, step=500.0, value=float(props[idx].get("kanri",0.0)), key=f"k{idx}")
-        props[idx]["shuzen"]     = c6.number_input("修繕", min_value=0.0, step=500.0, value=float(props[idx].get("shuzen",0.0)), key=f"s{idx}")
+
+        # 入力をテキスト化（デフォルト空欄、±ボタン無し）
+        name_in   = c0.text_input("名称", value=props[idx].get("name", f"物件{idx+1}"), key=f"name{idx}")
+        price_in  = c1.text_input("価格（万円）", value=_blank(props[idx].get("price_man", "")), key=f"p{idx}")
+        ybuilt_in = c2.text_input("築：西暦", value=_blank(props[idx].get("year_built", "")), key=f"y{idx}")
+        area_in   = c4.text_input("専有面積（㎡）", value=_blank(props[idx].get("area_m2", "")), key=f"a{idx}")
+        kanri_in  = c5.text_input("管理費（円/月）", value=_blank(props[idx].get("kanri", "")), key=f"k{idx}")
+        shuzen_in = c6.text_input("修繕積立（円/月）", value=_blank(props[idx].get("shuzen", "")), key=f"s{idx}")
+
+        # 築表示
+        ybuilt_int = _to_int(ybuilt_in)
+        c3.write(build_age_text(ybuilt_int) if ybuilt_int else "—")
+
+        # 保存用に変換
+        props[idx]["name"]       = name_in or f"物件{idx+1}"
+        props[idx]["price_man"]  = _to_int(price_in)   # 万円（整数）
+        props[idx]["year_built"] = ybuilt_int          # 西暦
+        props[idx]["area_m2"]    = _to_float(area_in)  # ㎡（float）
+        props[idx]["kanri"]      = _to_int(kanri_in)   # 円（整数）
+        props[idx]["shuzen"]     = _to_int(shuzen_in)  # 円（整数）
 
     b1,b2,b3 = st.columns(3)
     with b1:
