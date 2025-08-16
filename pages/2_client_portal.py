@@ -208,7 +208,7 @@ if 'save_only' in locals() and save_only:
     save_client(CLIENT_ID, payload)
     st.session_state["hearing_data"] = dict(payload["hearing"])
     st.success("① ヒアリングを上書き保存しました。")
-    st.experimental_rerun()
+    st.rerun()
 
 if 'save_and_pdf' in locals() and save_and_pdf:
     payload["hearing"] = dict(hearing)
@@ -335,7 +335,7 @@ if submitted_baseline:
     payload["baseline"] = dict(b)
     save_client(CLIENT_ID, payload)
     st.success("② 現状把握を上書き保存しました。")
-    st.experimental_rerun()
+    st.rerun()
 
 st.divider()
 
@@ -496,7 +496,7 @@ if st.button("💾 ③ 現状スコアリングを上書き保存"):
     payload["current_home"] = dict(cur)
     save_client(CLIENT_ID, payload)
     st.success("③ 現状スコアリングを上書き保存しました。")
-    st.experimental_rerun()
+    st.rerun()
 
 st.divider()
 
@@ -576,7 +576,7 @@ if submitted_basic:
     except Exception:
         pass
     st.success("④.5 基本の希望条件を上書き保存しました。")
-    st.experimental_rerun()
+    st.rerun()
 
 # ========= 重要度（1=最優先〜5）重複なし UI（「1番」表記） =========
 st.subheader("⑥ 重要度のトレードオフ（1=最優先〜5）")
@@ -647,7 +647,7 @@ c1, c2 = st.columns(2)
 with c1:
     if st.button("↺ リセット（1番→価格, 2番→立地 ...）", use_container_width=True):
         st.session_state.imp_state = {k: i+1 for i,(k,_) in enumerate(CATS)}
-        st.experimental_rerun()
+        st.rerun()
 with c2:
     if st.button("💾 重要度を上書き保存", type="primary", use_container_width=True):
         bp["importance"] = dict(st.session_state.imp_state)
@@ -662,7 +662,7 @@ with c2:
         except Exception:
             pass
         st.success("重要度を保存しました（重複なし・1番〜5番）。")
-        st.experimental_rerun()
+        st.rerun()
 
 st.header("⑤ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
 
@@ -738,7 +738,7 @@ if st.button("💾 ④ 希望条件を上書き保存"):
     payload["wish"] = dict(wish)
     save_client(CLIENT_ID, payload)
     st.success("④ 希望条件を上書き保存しました。")
-    st.experimental_rerun()
+    st.rerun()
 
 st.divider()
 
