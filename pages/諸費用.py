@@ -1,10 +1,14 @@
-# pages/諸費用明細.py
+# pages/諸費用明細.py（先頭〜A4定義までをこの内容で上書き）
 import os
 import re
 import tempfile
 import streamlit as st
-from fpdf import FPDF
-from utils import create_pdf_with_fonts  # 日本語フォント登録済みFPDFを取得
+from utils import create_pdf_with_fonts, FONT_DIR, FONT_REGULAR, FONT_BOLD  # 日本語フォント登録＆確認用
+
+# ▼▼ 一時確認（True/TrueならOK。確認後はこの3行を削除） ▼▼
+st.caption(f"FONT_DIR={FONT_DIR}")
+st.caption(f"REGULAR exists={FONT_REGULAR.exists()}  BOLD exists={FONT_BOLD.exists()}")
+# ▲▲ 一時確認ここまで ▲▲
 
 A4_W = 210
 A4_H = 297
