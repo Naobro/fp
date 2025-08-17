@@ -5,11 +5,6 @@ import tempfile
 import streamlit as st
 from utils import create_pdf_with_fonts
 
-# ▼▼ 一時確認（True/TrueならOK。確認後はこの3行を削除） ▼▼
-st.caption(f"FONT_DIR={FONT_DIR}")
-st.caption(f"REGULAR exists={FONT_REGULAR.exists()}  BOLD exists={FONT_BOLD.exists()}")
-# ▲▲ 一時確認ここまで ▲▲
-
 A4_W = 210
 A4_H = 297
 
