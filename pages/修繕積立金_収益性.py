@@ -1,10 +1,29 @@
 # pages/修繕積立金_収益性.py
-# 入力（8項目）だけで：
-# ① 修繕積立金の妥当性（円/㎡・月）→ 基準250円と比較して「高い/安い」
-# ② 今後の値上がり予想（インフレ3%・35年計画で、10年後いくら必要か）
-# ③ 収益性（表面利回り）→ 4%基準で「高い/低い」
-# その根拠として、インフレ3%複利・国交省様式の考え方に沿った「いつ・何を・いくら」の年次表も併記。
-# ※ 物件利回りの判定には価格が必須のため、「想定価格（任意）」を入力しない場合は③のみN/A表示。
+# 目的：
+# ・入力8項目だけで、横＝年度（右に進むほど未来）、縦＝項目（建築/設備/足場仮設＋工事項目＋周期）で
+#   「万円」単位の長期修繕表を pandas で生成・表示する
+# ・雛形の体裁（横テーブル）を固定。中身の数字のみ自動計算。
+# ・インフレ率3%（複利）、税10%、諸経費10% を内部固定。単価・周期も内部固定でUI非表示。
+#
+# 入力（8項目）：
+#   現在の修繕積立金（月額・マンション全体）
+#   専有面積（あなたの住戸・㎡）  ※専有比率の参考用（表には出さない）
+#   延べ床面積（㎡）
+#   築年（西暦）
+#   戸数（戸）
+#   階数（階）
+#   EV台数（基）
+#   近隣家賃相場（円/㎡・月）     ※表には出さない
+#
+# 表示：
+#   ・「万 円」単位の横テーブル（右：2025→2060、縦：項目）
+#   ・上段＝建築、設備、足場仮設（工事項目行＋周期列）
+#   ・中段＝諸経費/消費税/支出合計
+#   ・下段＝期首繰越/修繕積立金収入/収入合計/当期収支/期末残高
+#
+# 備考：
+#   ・外壁面積などの詳細は入力させず、延べ床・階数から推定して概算する（内部推定）。
+#   ・数値は整数・カンマ付きで見やすく表示（pandas→文字列化）。
 
 import math
 import datetime as dt
@@ -12,64 +31,68 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# --------------------------
-# 内部固定（UI非表示）
-# --------------------------
-INFL = 0.03  # インフレ率（年3% 複利）
-BASE_RATE = 250  # 基準：250円/㎡・月（国交省目安の上側で判定用）
-PRIVATE_RATIO_BUILDING = 0.75  # 延床→専有合計（代表値、入力させない）
-# 階数補正（外装・仮設系概算）
+# =====================
+# 内部固定パラメータ
+# =====================
+INFL = 0.03         # インフレ年3%（複利）
+TAX = 0.10          # 消費税10%
+OH = 0.10           # 諸経費（現管・一般管・法定福利等）＝工事費小計の10%
+PRIVATE_RATIO_BUILDING = 0.75  # 延べ床→専有合計の代表比率（表に出さない）
+
+# 外壁・屋上の面積推定（延べ床/階 × 係数）
+FACADE_COEF = 1.25  # 外壁係数（凹凸考慮の代表値）
+STEEL_RATIO = 0.10  # 鉄部塗装面積 ≒ 外壁面積の10%
+
 def floor_factor_by_floors(f:int)->float:
     if f <= 5:   return 1.00
     if f <= 10:  return 1.10
     if f <= 20:  return 1.25
     return 1.40
 
-# 工事項目（名称, 周期(年), 単価(円/㎡) or None=総額項目, グループ）
+# 工事項目（大カテゴリ, 小項目, 周期(年), 単価タイプ, 単価（円/単位））
+# 単価タイプ：'sqm'（㎡単価×推定面積） / 'lump'（一式・総額） / 'per_unit'（戸数×単価） / 'ev'（EV台数×単価）
 ITEMS = [
-    ("仮設工事（足場・昇降設備 等）",      12,  2000,  "仮設"),
-    ("外壁塗装・タイル補修・シーリング",     12,  6000,  "塗装"),
-    ("屋上・バルコニー・庇 防水改修",       12,  2800,  "防水"),
-    ("鉄部塗装（手すり・階段・フェンス等）", 12,  1000,  "塗装"),
-    ("給水設備（ポンプ・受水槽等）更新",     12,  1200,  "設備"),
-    ("給排水管 更生/更新（㎡按分）",        24,  4400,  "設備"),
-    ("分電盤・配電盤・受変電設備 更新",      24,  1500,  "電気・機械"),
-    ("インターホン更新（モニター化）",       20,  1800,  "電気・機械"),
-    ("エレベーター更新（本体）",            25,  None,   "EV"),  # 総額項目（EV台数×単価）
-    ("外構・舗装・植栽 等",                 12,   800,  "外構・その他"),
+    ("建築", "外壁塗装・タイル補修・シーリング", 12, "sqm",    6_000),
+    ("建築", "屋上・バルコニー・庇 防水改修",   12, "sqm",    2_800),
+    ("建築", "鉄部塗装（手すり・階段・フェンス等）", 12, "sqm", 1_000),
+    ("設備", "給水設備（ポンプ・受水槽等）更新", 12, "sqm",    1_200),
+    ("設備", "給排水管 更生/更新（㎡按分）",      24, "sqm",    4_400),
+    ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",    1_500),
+    ("設備", "インターホン更新（モニター化）",     20, "per_unit", 70_000),  # 戸×7万円
+    ("設備", "エレベーター更新（本体）",          25, "ev",   20_000_000),   # 台×2,000万円
+    ("設備", "外構・舗装・植栽 等",               12, "sqm",      800),
+    ("足場仮設", "足場仮設（共通）",              12, "sqm",    2_000),
 ]
-EV_UNIT_COST = 20_000_000  # 円/基
 
-# --------------------------
-# ユーティリティ
-# --------------------------
-def fmt(n):
-    try:
-        return f"{int(round(n)):,}"
-    except:
-        return ""
+# ==========
+# 関数群
+# ==========
+def fmt_man(n_yen: float) -> str:
+    """円→万円、整数＆カンマ書式"""
+    man = int(round(n_yen / 10_000))
+    return f"{man:,}"
 
-def inflated(base: float, years_from_start: int, rate: float=INFL) -> float:
-    return base * ((1.0 + rate) ** max(0, years_from_start))
+def inflated(base_yen: float, years_from_start: int) -> float:
+    return base_yen * ((1.0 + INFL) ** max(0, years_from_start))
 
 def schedule_years(built_year:int, cycle:int, start_year:int, end_year:int):
-    hits = []
+    years = []
     y = built_year + cycle
     while y <= end_year + cycle*2:
         if start_year <= y <= end_year:
-            hits.append(y)
+            years.append(y)
         y += cycle
-    return hits
+    return years
 
-# --------------------------
-# UI：入力（8項目）＋ 任意1項目（価格）
-# --------------------------
-st.set_page_config(page_title="結論ファースト：修繕積立金の妥当性・将来見込み・収益性", layout="wide")
-st.title("結論ファースト：妥当性・将来値上がり・収益性（根拠：長期修繕計画 3%）")
+# ==========
+# 入力（8項目）
+# ==========
+st.set_page_config(page_title="横テーブル（万円）｜長期修繕 概算シミュレーション", layout="wide")
+st.title("長期修繕 概算シミュレーション（横テーブル／単位：万円）")
 
 with st.sidebar:
-    st.header("入力（必須・整数）")
-    monthly_total_now = st.number_input("現在の修繕積立金（月額・マンション全体）", min_value=0, step=1000, value=1_000_000)
+    st.header("入力（整数）")
+    monthly_total_now = st.number_input("現在の修繕積立金（月額・マンション全体・円）", min_value=0, step=1000, value=1_000_000)
     my_private_area   = st.number_input("専有面積（あなたの住戸・㎡）", min_value=1, step=1, value=70)
     total_floor_area  = st.number_input("延べ床面積（㎡）", min_value=100, step=10, value=19_500)
     built_year        = st.number_input("築年（西暦）", min_value=1900, max_value=2100, step=1, value=2000)
@@ -78,109 +101,119 @@ with st.sidebar:
     ev_count          = st.number_input("EV台数（基）", min_value=0, step=1, value=4)
     rent_psqm         = st.number_input("近隣家賃相場（円/㎡・月）", min_value=0, step=100, value=4000)
 
-    st.markdown("---")
-    st.header("任意（価格があれば利回りを判定）")
-    price_optional    = st.number_input("想定購入価格（円・任意）", min_value=0, step=1_000_000, value=0)
-
-# --------------------------
-# 年度レンジ・係数
-# --------------------------
-start_year = dt.date.today().year           # 現在年から35年
+# 年レンジ
+start_year = dt.date.today().year               # 今年スタート
 horizon    = 35
 end_year   = start_year + horizon - 1
 years      = list(range(start_year, end_year + 1))
 
-floor_factor   = floor_factor_by_floors(int(floors))
-building_priv  = total_floor_area * PRIVATE_RATIO_BUILDING  # 専有合計㎡（代表値）
-share_ratio    = my_private_area / max(1.0, building_priv)  # あなた住戸の専有比率（参考用）
+# 推定面積など
+per_floor_area   = total_floor_area / max(1, floors)   # 1フロア面積
+facade_area_est  = per_floor_area * FACADE_COEF        # 外壁推定面積
+roof_area_est    = per_floor_area                      # 屋上・防水面積
+steel_area_est   = facade_area_est * STEEL_RATIO       # 鉄部塗装の面積目安
+floor_factor     = floor_factor_by_floors(int(floors)) # 仮設・外装系補正
 
-# --------------------------
-# 年次計画（マンション全体の「いつ・何を・いくら」）
-# --------------------------
-year_totals = {y: 0 for y in years}
-table = pd.DataFrame(index=[i[0] for i in ITEMS], columns=years, dtype="object")
+# ㎡単価で使う「対象面積」の割当
+def area_for_item(cat:str, name:str) -> float:
+    if "外壁塗装" in name:               return facade_area_est * floor_factor
+    if "防水" in name:                   return roof_area_est * floor_factor
+    if "鉄部塗装" in name:               return steel_area_est * floor_factor
+    if "外構・舗装・植栽" in name:        return per_floor_area * 0.5           # 簡易代表
+    if cat == "足場仮設":                 return facade_area_est * floor_factor
+    # 設備系（㎡按分とする代表）
+    return total_floor_area
 
-for name, cycle, unit_or_none, group in ITEMS:
-    scheduled = schedule_years(int(built_year), int(cycle), start_year, end_year)
+# ==========================
+# 横テーブル（万円）を生成
+# ==========================
+# 行見出し： [工事区分, 工事項目, 周期（年）] ＋ 年度列
+row_index = []
+data = {y: [] for y in years}
+
+# 1) 工事項目ごとの行
+for cat, name, cycle, utype, unit_cost in ITEMS:
+    row_index.append((cat, name, f"{cycle}年"))
+    scheduled = set(schedule_years(int(built_year), int(cycle), start_year, end_year))
     for y in years:
         if y in scheduled:
-            t = y - start_year  # 複利年数
-            if name.startswith("エレベーター"):
-                base = ev_count * EV_UNIT_COST
-            else:
-                apply_factor = floor_factor if group in ["仮設", "防水", "塗装", "外構・その他"] else 1.0
-                base = (unit_or_none or 0) * total_floor_area * apply_factor
-            amt = inflated(base, t, INFL)
-            year_totals[y] += amt
-            table.at[name, y] = fmt(amt)
+            t = y - start_year
+            if utype == "sqm":
+                base = unit_cost * area_for_item(cat, name)
+            elif utype == "per_unit":
+                base = unit_cost * units
+            elif utype == "ev":
+                base = unit_cost * ev_count
+            else:  # lump
+                base = unit_cost
+            amt = inflated(base, t)                   # 円
+            data[y].append(fmt_man(amt))              # 万円（文字列）
         else:
-            table.at[name, y] = ""
+            data[y].append("")
 
-subtotal = pd.DataFrame([[fmt(year_totals[y]) if year_totals[y] > 0 else "" for y in years]],
-                        index=["小計（円）"], columns=years, dtype="object")
-table = pd.concat([table, subtotal])
-
-# --------------------------
-# 必要単価（専有基準：円/㎡・月）
-# --------------------------
-required_psqm_per_year = []
+# 2) 工事費 小計（万円）/年（諸経費・税の前）
+row_index.append(("支出集計", "工事費小計", ""))
 for y in years:
-    annual_need  = year_totals[y]
-    monthly_need = annual_need / 12.0
-    psqm_month   = monthly_need / max(1.0, building_priv)
-    required_psqm_per_year.append(int(round(psqm_month)))
+    # 空でないセルを拾って万→円換算して合計
+    subtotal_yen = 0
+    for i, (cat,name,cyc) in enumerate(row_index[:-1]):  # 末尾は小計行自身なので除外
+        val = data[y][i]
+        if val != "":
+            subtotal_yen += int(val.replace(",","")) * 10_000
+    data[y].append(fmt_man(subtotal_yen))
 
-# 現在の徴収を専有基準に換算（円/㎡・月）
-current_psqm = int(round((monthly_total_now / max(1.0, building_priv))))
+# 3) 諸経費／消費税／A（支出合計）
+for label, kind in [("諸経費（10%）","oh"), ("消費税（10%）","tax"), ("A.支出合計","sum")]:
+    row_index.append(("支出集計", label, ""))
+    for y in years:
+        subtotal_yen = int(data[y][-1].replace(",","")) * 10_000  # 直前の工事費小計（円）
+        if kind=="oh":
+            v = subtotal_yen * OH
+        elif kind=="tax":
+            v = (subtotal_yen + subtotal_yen*OH) * TAX
+        else:
+            v = subtotal_yen + subtotal_yen*OH + (subtotal_yen + subtotal_yen*OH)*TAX
+        data[y].append(fmt_man(v))
 
-# 10年後の必要単価（円/㎡・月）
-need_in_10 = required_psqm_per_year[10] if len(required_psqm_per_year) > 10 else required_psqm_per_year[-1]
-delta_10   = need_in_10 - current_psqm
+# 4) 収入・残高（万円）
+#    期首繰越は0スタート（必要ならコード内で初期残高定数を設けて変更）
+row_index.append(("収入・残高", "期首繰越", ""))
+row_index.append(("収入・残高", "修繕積立金収入（年額）", ""))
+row_index.append(("収入・残高", "当期収入合計", ""))
+row_index.append(("収入・残高", "当期収支（収入合計－A）", ""))
+row_index.append(("収入・残高", "期末残高（次期繰越）", ""))
 
-# --------------------------
-# 収益性（表面利回り）※価格未入力ならN/A
-# --------------------------
-gross_yield = None
-if price_optional and price_optional > 0:
-    monthly_rent = int(round(rent_psqm * my_private_area))
-    annual_rent  = monthly_rent * 12
-    gross_yield  = int(round(100 * annual_rent / price_optional))
-
-# --------------------------
-# 結論ファースト（3点）
-# --------------------------
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.subheader("① 妥当性（修繕積立金）")
-    st.metric("現在の単価（円/㎡・月・専有基準）", f"{current_psqm:,}")
-    verdict = "高い（≥250）" if current_psqm >= BASE_RATE else "安い（＜250）"
-    st.write(f"判定：**{verdict}**（基準：{BASE_RATE}）")
-
-with col2:
-    st.subheader("② 今後の値上がり予想")
-    st.metric("10年後の必要単価（円/㎡・月）", f"{need_in_10:,}")
-    st.write(f"差分（10年後−現在）：**{delta_10:+,} 円/㎡・月**")
-
-with col3:
-    st.subheader("③ 収益性（表面利回り）")
-    if gross_yield is None:
-        st.write("判定：**価格未入力のためN/A**")
-        st.caption("※ 想定購入価格を入力すると 4% 基準で判定します。")
+for y_idx, y in enumerate(years):
+    # 期首繰越
+    if y_idx == 0:
+        beg_yen = 0
     else:
-        st.metric("想定・表面利回り（％）", f"{gross_yield}")
-        st.write(f"判定：**{'高い（≥4%）' if gross_yield >= 4 else '低い（＜4%）'}**（基準：4%）")
+        beg_yen = int(data[years[y_idx-1]][-1].replace(",","")) * 10_000  # 直前の期末残高（円）
+    # 年間収入（現行積立月額×12）
+    income_yen = monthly_total_now * 12
+    income_total_yen = beg_yen + income_yen
+    # 支出合計（A）
+    a_yen = int(data[y][-3].replace(",","")) * 10_000  # 「A.支出合計」は末尾から3番目に入れた
+    # 当期収支と期末残高
+    net_yen = income_total_yen - a_yen
+    end_yen = max(0, net_yen)  # マイナスでもそのまま出したい場合は max を外す
 
-st.markdown("---")
+    # 追記（順に：期首／年収入／収入合計／当期収支／期末）
+    data[y].extend([
+        fmt_man(beg_yen),
+        fmt_man(income_yen),
+        fmt_man(income_total_yen),
+        fmt_man(net_yen),
+        fmt_man(end_yen),
+    ])
 
-# --------------------------
-# 根拠：長期修繕計画（インフレ3%）
-# --------------------------
-st.subheader(f"根拠：長期修繕計画（{start_year}〜{end_year}・インフレ3%・35年）")
-st.caption("※ 雛形の体裁は変えず「いつ・何を・いくら」を年次で表示（小計＝当年の総工事費）。")
-st.dataframe(table, use_container_width=True)
+# ==========================
+# DataFrame 生成（表示用）
+# ==========================
+idx = pd.MultiIndex.from_tuples(row_index, names=["工事区分","工事項目","周期（目安）"])
+df = pd.DataFrame({y: data[y] for y in years}, index=idx)
 
-# 参考：武蔵小杉の運用事例への導入文（固定テキスト）
-st.markdown("""
-**不足対策の参考**：大規模物件では修繕積立金の一部を安全運用して不足を抑える取り組みもあります。  
-例：パークシティ武蔵小杉ミッドスカイタワーでは、積立金の運用で数億円規模の運用益実績が公表されています。  
-""")
+st.subheader(f"横テーブル（単位：万円）｜{start_year}〜{end_year}（{len(years)}年）")
+st.dataframe(df, use_container_width=True)
+
+st.caption("※ すべて概算。単価・周期・インフレ率3%は内部固定。外壁・屋上・鉄部の面積は延べ床と階数から推定。")
