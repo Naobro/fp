@@ -3,7 +3,7 @@ import os
 import re
 import tempfile
 import streamlit as st
-from utils import create_pdf_with_fonts, FONT_DIR, FONT_REGULAR, FONT_BOLD  # 日本語フォント登録＆確認用
+from utils import create_pdf_with_fonts
 
 # ▼▼ 一時確認（True/TrueならOK。確認後はこの3行を削除） ▼▼
 st.caption(f"FONT_DIR={FONT_DIR}")
