@@ -1,53 +1,93 @@
-# utils.py の該当部のみ差し替え
+# utils.py
 import os
 import platform
+from pathlib import Path
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 
+# ==============================
+# Matplotlib 日本語フォント設定
+# ==============================
 def set_matplotlib_japanese_font():
     system = platform.system()
-    if system == "Darwin":
+    if system == "Darwin":      # macOS
         plt.rcParams["font.family"] = "Hiragino Sans"
     elif system == "Windows":
         plt.rcParams["font.family"] = "MS Gothic"
-    else:
+    else:                       # Linux/Streamlit Cloud
         plt.rcParams["font.family"] = "Noto Sans CJK JP"
 
-# ==== ここから修正 ====
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 候補1: utils.py と同じパッケージ配下: /mount/src/fp/fonts
-cand1 = os.path.join(BASE_DIR, "fonts")
-# 候補2: リポジトリ直下: /mount/src/fonts
-cand2 = os.path.abspath(os.path.join(BASE_DIR, "..", "fonts"))
+# ==============================
+# FPDF2 用フォント解決（決定版）
+# ==============================
+FONT_FILENAMES = ("NotoSansJP-Regular.ttf", "NotoSansJP-Bold.ttf")
 
-if os.path.isdir(cand1):
-    FONT_DIR = cand1
-elif os.path.isdir(cand2):
-    FONT_DIR = cand2
-else:
-    # どちらにも無ければ明示的に落とす（フルパスを出して原因特定）
-    raise FileNotFoundError(f"fonts directory not found. tried: {cand1} , {cand2}")
+def _both_exist(dir_path: Path) -> bool:
+    return dir_path.is_dir() and all((dir_path / name).exists() for name in FONT_FILENAMES)
+
+def _font_dir_candidates() -> list[Path]:
+    """環境差を吸収する探索候補を列挙"""
+    here = Path(__file__).resolve()       # .../fp/utils.py
+    pkg_dir = here.parent                 # .../fp
+    repo_root = pkg_dir.parent            # .../
+    cwd = Path.cwd()
+
+    env_dir = os.environ.get("FONT_DIR")
+    candidates = [
+        pkg_dir / "fonts",                # /mount/src/fp/fonts
+        repo_root / "fonts",              # /mount/src/fonts
+        cwd / "fonts",                    # CWD/fonts（ローカル実行向け）
+        Path(env_dir) if env_dir else None,
+    ]
+    # None を除外し、重複も除去
+    uniq = []
+    for d in candidates:
+        if d and d not in uniq:
+            uniq.append(d)
+    return uniq
+
+def _detect_font_dir() -> Path:
+    """候補を総当りして、両フォントが存在するディレクトリを返す"""
+    tried = []
+    for d in _font_dir_candidates():
+        tried.append(str(d))
+        if _both_exist(d):
+            return d
+    # 見つからなければ詳細を出して明確に落とす
+    raise FileNotFoundError(
+        "NotoSansJP TTF not found in any known locations.\n"
+        + "Tried:\n- " + "\n- ".join(tried) + "\n"
+        + "Expected files:\n- " + "\n- ".join(FONT_FILENAMES) + "\n"
+        + "Hint: 配置はプロジェクト直下 'fonts/' か、パッケージ直下 'fp/fonts/' にしてください。"
+    )
+
+# 実際に使うフォントディレクトリ（存在確認済み）
+FONT_DIR = str(_detect_font_dir())
 
 def _font_path(filename: str) -> str:
-    path = os.path.join(FONT_DIR, filename)
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Font file not found: {path}")
-    return path
+    p = Path(FONT_DIR) / filename
+    if not p.exists():
+        raise FileNotFoundError(f"Font file not found: {p}")
+    return str(p)
 
 def register_fonts(pdf: FPDF) -> FPDF:
+    """NotoSansJP Regular/Bold を Unicode サブセットで登録"""
     regular_path = _font_path("NotoSansJP-Regular.ttf")
-    bold_path = _font_path("NotoSansJP-Bold.ttf")
+    bold_path    = _font_path("NotoSansJP-Bold.ttf")
     pdf.add_font("NotoSans", "", regular_path, uni=True)
-    pdf.add_font("NotoSans", "B", bold_path, uni=True)
+    pdf.add_font("NotoSans", "B", bold_path,    uni=True)
     return pdf
 
 def create_pdf_with_fonts() -> FPDF:
+    """A4mmのFPDFインスタンスにフォントを登録して返す"""
     pdf = FPDF(unit="mm", format="A4")
-    pdf = register_fonts(pdf)
+    register_fonts(pdf)
     return pdf
-# ==== 修正ここまで ====
 
+# ==============================
+# 便利ヘルパ（既存互換）
+# ==============================
 def add_title(pdf: FPDF, title: str):
     pdf.set_font("NotoSans", "B", 18)
     pdf.cell(0, 10, title, ln=True, align="C")
