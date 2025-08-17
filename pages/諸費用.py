@@ -1,13 +1,10 @@
-# pages/諸費用明細.py（先頭〜A4定義まで）
+# pages/諸費用明細.py
 import os
 import re
 import tempfile
 import streamlit as st
 from fpdf import FPDF
-from utils import create_pdf_with_fonts, FONT_DIR  # utils から取得
-
-# ←動作確認用。フォントが列挙されたらOK。確認後はこの1行を削除。
-st.caption(f"FONT_DIR = {FONT_DIR} / FILES = {os.listdir(FONT_DIR)}")
+from utils import create_pdf_with_fonts  # 日本語フォント登録済みFPDFを取得
 
 A4_W = 210
 A4_H = 297
@@ -20,24 +17,25 @@ def number_input_commas(label, value, step=1):
     except:
         v = value
     return v
+
 def round_deposit(price):
     base = price * 0.05
     return int(round(base / 500000) * 500000)
 
 def calc_stamp_tax(price):
-    if price <= 5000000:
+    if price <= 5_000_000:
         return 5000
-    elif price <= 10000000:
+    elif price <= 10_000_000:
         return 10000
-    elif price <= 50000000:
+    elif price <= 50_000_000:
         return 10000
-    elif price <= 100000000:
+    elif price <= 100_000_000:
         return 30000
-    elif price <= 500000000:
+    elif price <= 500_000_000:
         return 60000
-    elif price <= 1000000000:
+    elif price <= 1_000_000_000:
         return 160000
-    elif price <= 5000000000:
+    elif price <= 5_000_000_000:
         return 320000
     else:
         return 480000
@@ -54,38 +52,38 @@ st.title("資金計画書")
 
 customer_name = st.text_input("お客様名（例：山田太郎）", "")
 property_name = st.text_input("物件名", "")
-property_price = number_input_commas("物件価格（円）", 58000000, step=100000)
+property_price = number_input_commas("物件価格（円）", 58_000_000, step=100_000)
 default_deposit = round_deposit(property_price)
-deposit = number_input_commas("手付金（円・物件価格5%/50万円単位で四捨五入）", default_deposit, step=500000)
-kanri_month = number_input_commas("管理費・修繕積立金（月額円）", 18000, step=1000)
+deposit = number_input_commas("手付金（円・物件価格5%/50万円単位で四捨五入）", default_deposit, step=500_000)
+kanri_month = number_input_commas("管理費・修繕積立金（月額円）", 18_000, step=1_000)
 
 # ローン条件
 col1, col2, col3 = st.columns(3)
 with col1:
-    loan_amount = number_input_commas("借入金額（円・シミュ用）", property_price, step=100000)
+    loan_amount = number_input_commas("借入金額（円・シミュ用）", property_price, step=100_000)
 with col2:
     loan_rate = st.number_input("金利（年%・シミュ用）", min_value=0.0, max_value=5.0, value=0.7)
 with col3:
     loan_years = st.number_input("返済期間（年・シミュ用）", min_value=1, max_value=50, value=35)
 
 tax_rate = 0.10
-brokerage = int((property_price * 0.03 + 60000) * (1 + tax_rate))
+brokerage = int((property_price * 0.03 + 60_000) * (1 + tax_rate))
 stamp_fee = calc_stamp_tax(property_price)
-regist_fee = number_input_commas("登記費用（円・司法書士報酬＋登録免許税）", 400000, step=10000)
-tax_clear = number_input_commas("精算金（固都税・管理費等・日割り精算）", 100000, step=10000)
-display_fee = number_input_commas("表示登記（新築戸建のみ／10万円前後）", 0, step=10000)
+regist_fee = number_input_commas("登記費用（円・司法書士報酬＋登録免許税）", 400_000, step=10_000)
+tax_clear = number_input_commas("精算金（固都税・管理費等・日割り精算）", 100_000, step=10_000)
+display_fee = number_input_commas("表示登記（新築戸建のみ／10万円前後）", 0, step=10_000)
 loan_fee = int(loan_amount * 0.022)
-kinko_stamp = number_input_commas("金銭消費貸借 印紙税（通常0円）", 0, step=1000)
-fire_fee = number_input_commas("火災保険料（円・5年分概算）", 200000, step=10000)
-tekigo_fee = number_input_commas("適合証明書（フラット35の場合必須）", 0, step=10000)
+kinko_stamp = number_input_commas("金銭消費貸借 印紙税（通常0円）", 0, step=1_000)
+fire_fee = number_input_commas("火災保険料（円・5年分概算）", 200_000, step=10_000)
+tekigo_fee = number_input_commas("適合証明書（フラット35の場合必須）", 0, step=10_000)
 option_rows = []
-option_fee = number_input_commas("リフォーム・追加工事費（円）", 0, step=10000)
+option_fee = number_input_commas("リフォーム・追加工事費（円）", 0, step=10_000)
 if option_fee > 0:
     option_rows.append(["リフォーム費用", f"{option_fee:,} 円", "決済時", "任意工事・追加リフォーム等"])
-moving_fee = number_input_commas("引越し費用（円）", 150000, step=10000)
+moving_fee = number_input_commas("引越し費用（円）", 150_000, step=10_000)
 if moving_fee > 0:
     option_rows.append(["引越し費用", f"{moving_fee:,} 円", "入居時", "距離・荷物量による"])
-kaden_fee = number_input_commas("家具家電代（円）", 0, step=10000)
+kaden_fee = number_input_commas("家具家電代（円）", 0, step=10_000)
 if kaden_fee > 0:
     option_rows.append(["家具家電代", f"{kaden_fee:,} 円", "入居時", "新生活準備費用"])
 
@@ -138,8 +136,11 @@ my_mail = "Email: naoki.nishiyama@terass.com"
 my_line = "LINE：naokiwm"
 
 if st.button("PDFダウンロード"):
+    # 一時ファイル → バイト読込 → 削除（安全）
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        pdf = create_pdf_with_fonts()  # ✅ ここでフォント登録済みPDF作成
+        tmp_path = tmp.name
+    try:
+        pdf = create_pdf_with_fonts()  # ✅ 日本語フォント登録済み
         pdf.set_left_margin(13)
         pdf.set_top_margin(13)
         pdf.add_page()
@@ -224,6 +225,7 @@ if st.button("PDFダウンロード"):
         pdf.cell(0, 8, f"管理費・修繕積立金（月額）：{kanri_month:,} 円", ln=1, align='L')
         pdf.set_text_color(0, 0, 0)
 
+        # フッター
         footer_y = A4_H - 49
         pdf.set_y(footer_y)
         pdf.set_font('NotoSans', 'B', 10)
@@ -235,7 +237,14 @@ if st.button("PDFダウンロード"):
         pdf.cell(0, 6, my_mail, ln=1, align='L')
         pdf.cell(0, 6, my_line, ln=1, align='L')
 
-        pdf.output(tmp.name)
-        with open(tmp.name, "rb") as f:
-            st.download_button(label="資金計画書.pdf", data=f, file_name="資金計画書.pdf", mime="application/pdf")
-        os.unlink(tmp.name)
+        # 出力→読込→DL→削除
+        pdf.output(tmp_path)
+        with open(tmp_path, "rb") as f:
+            st.download_button(label="資金計画書.pdf", data=f.read(),
+                               file_name="資金計画書.pdf", mime="application/pdf")
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        except Exception:
+            pass
