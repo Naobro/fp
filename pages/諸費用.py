@@ -245,6 +245,15 @@ def build_pdf() -> bytes:
     pdf.set_top_margin(13)
     pdf.set_auto_page_break(False)
 
+    # …レイアウト処理（既存のまま残す）…
+
+    out = pdf.output(dest="S")  # fpdf2 は bytearray か str を返すことがある
+    if isinstance(out, str):
+        pdf_bytes = out.encode("latin-1")   # 文字列だった場合
+    else:
+        pdf_bytes = bytes(out)              # bytearray → bytes に変換
+    return pdf_bytes
+
     # 上部
     pdf.set_font("IPAexGothic", "B", 12)
     if st.session_state.get("customer_name"):
@@ -343,16 +352,14 @@ def build_pdf() -> bytes:
 st.session_state["customer_name"] = st.text_input("お客様名（例：山田太郎）", st.session_state.get("customer_name", ""))
 st.session_state["property_name"] = st.text_input("物件名", st.session_state.get("property_name", ""))
 
-# ============ 出力ボタン ============
-if st.button("📄 PDFダウンロード"):
-    try:
-        pdf_bytes = build_pdf()
-        st.download_button(
-            label="資金計画書.pdf をダウンロード",
-            data=pdf_bytes,
-            file_name="資金計画書.pdf",
-            mime="application/pdf",
-        )
-        st.success("PDFを生成しました。")
-    except Exception as e:
-        st.error(f"PDF生成エラー: {e}")
+# ============ 出力（ワンクリックDL） ============
+try:
+    pdf_bytes = build_pdf()  # build_pdf は bytes を返す実装
+    st.download_button(
+        label="📄 資金計画書.pdf をダウンロード",
+        data=pdf_bytes,
+        file_name="資金計画書.pdf",
+        mime="application/pdf",
+    )
+except Exception as e:
+    st.error(f"PDF生成エラー: {e}")
