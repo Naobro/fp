@@ -5,6 +5,54 @@ from pathlib import Path
 
 import streamlit as st
 from fpdf import FPDF
+# ==== PDF用 日本語フォント入手・解決（NotoSansJP）====
+from urllib import request as _urlreq
+import tempfile as _tmp
+
+_REG_NAME = "NotoSansJP-Regular.ttf"
+_BLD_NAME = "NotoSansJP-Bold.ttf"
+_RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Regular.ttf"
+_RAW_BLD = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Bold.ttf"
+
+def _ensure_jp_fonts() -> Path:
+    """NotoSansJP をローカル候補 or ダウンロードで用意してフォルダPathを返す"""
+    candidates = [
+        Path(__file__).resolve().parent / "fonts",
+        Path.cwd() / "fonts",
+        Path("/mount/src/fp/fonts"),
+        Path("/app/fonts"),
+    ]
+    # 既存フォントを探す
+    for d in candidates:
+        reg = d / _REG_NAME
+        bld = d / _BLD_NAME
+        if reg.exists() and bld.exists():
+            return d.resolve()
+    # 片方だけある場合はコピーで両方揃える
+    for d in candidates:
+        reg = d / _REG_NAME
+        bld = d / _BLD_NAME
+        if reg.exists():
+            d.mkdir(parents=True, exist_ok=True)
+            if not bld.exists():
+                bld.write_bytes(reg.read_bytes())
+            return d.resolve()
+        if bld.exists():
+            d.mkdir(parents=True, exist_ok=True)
+            if not reg.exists():
+                reg.write_bytes(bld.read_bytes())
+            return d.resolve()
+    # どこにも無ければ一時ディレクトリへダウンロード
+    tmpdir = Path(_tmp.mkdtemp(prefix="fonts_"))
+    _urlreq.urlretrieve(_RAW_REG, str(tmpdir / _REG_NAME))
+    try:
+        _urlreq.urlretrieve(_RAW_BLD, str(tmpdir / _BLD_NAME))
+    except Exception:
+        # 片方落ちたら同じものを複製
+        (tmpdir / _BLD_NAME).write_bytes((tmpdir / _REG_NAME).read_bytes())
+    return tmpdir.resolve()
+# ==============================================
+
 
 # --- バルコニー方位：マスター ↔ UI 変換ユーティリティ ---
 from pathlib import Path as _Path
@@ -217,81 +265,95 @@ if 'save_and_pdf' in locals() and save_and_pdf:
     st.session_state["hearing_data"] = dict(payload["hearing"])
     st.success("ヒアリング内容を保存しました。PDFを生成します。")
 
-    # フォント準備
-    import urllib.request
-    REG_NAME = "NotoSansJP-Regular.ttf"
-    BLD_NAME = "NotoSansJP-Bold.ttf"
-    RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Regular.ttf"
-    RAW_BLD = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Bold.ttf"
+    # === フォント準備（ここで呼ぶ） ===
+    font_dir = _ensure_jp_fonts()
+    reg_path = font_dir / _REG_NAME
+    bld_path = font_dir / _BLD_NAME
 
-    def ensure_fonts_dir() -> Path:
-        candidates = [Path(__file__).resolve().parent / "fonts", Path.cwd() / "fonts",
-                      Path("/mount/src/fp/fonts"), Path("/app/fonts")]
-        for d in candidates:
-            if (d / REG_NAME).exists() and (d / BLD_NAME).exists():
-                return d.resolve()
-        for d in candidates:
-            if (d / REG_NAME).exists():
-                (d / BLD_NAME).write_bytes((d / REG_NAME).read_bytes()); return d.resolve()
-        tmp = Path(tempfile.mkdtemp(prefix="fonts_"))
-        urllib.request.urlretrieve(RAW_REG, str(tmp / REG_NAME))
-        try: urllib.request.urlretrieve(RAW_BLD, str(tmp / BLD_NAME))
-        except Exception: (tmp / BLD_NAME).write_bytes((tmp / REG_NAME).read_bytes())
-        return tmp.resolve()
+    # === PDF生成 ===
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
 
-    font_dir = ensure_fonts_dir()
-    reg_path = font_dir / REG_NAME
-    bld_path = font_dir / BLD_NAME
+    # ← 重要：add_font の引数は「ファイル名ではなく“ファイルパス文字列”」でもOK
+    pdf.add_font("NotoSansJP", "", str(reg_path), uni=True)
+    pdf.add_font("NotoSansJP", "B", str(bld_path), uni=True)
 
-    save_cwd = os.getcwd()
-    os.chdir(str(font_dir))
-    try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.add_font("NotoSansJP", "", reg_path.name, uni=True)
-        pdf.add_font("NotoSansJP", "B", bld_path.name, uni=True)
+    # ページ幅（マージン控除後）を常に使うヘルパ
+    def _page_w(pdf_obj):
+        return pdf_obj.w - pdf_obj.l_margin - pdf_obj.r_margin
 
-        def title(t): pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
-        def pair(label, val):
-            pdf.set_font("NotoSansJP","B",11); pdf.multi_cell(0, 7, label)
-            pdf.set_font("NotoSansJP","",11); pdf.multi_cell(0, 7, str(val) if val not in [None, ""] else "（未入力）")
-            pdf.ln(1)
+    def title(t):
+        pdf.set_font("NotoSansJP", "B", 14)
+        pdf.set_x(pdf.l_margin)
+        pdf.cell(0, 9, t, 0, 1)
 
-        pdf.set_font("NotoSansJP", "B", 16)
-        pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
-        pdf.set_font("NotoSansJP", "", 10)
-        pdf.cell(0, 8, f"作成日時：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "R"); pdf.ln(2)
+    def pair(label, val):
+        # 横幅不足エラー対策：毎回Xを左マージンへ戻し、幅は常にページ幅を指定
+        w = _page_w(pdf)
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("NotoSansJP", "B", 11)
+        pdf.multi_cell(w, 7, label)
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("NotoSansJP", "", 11)
+        txt = str(val) if val not in [None, ""] else "（未入力）"
+        pdf.multi_cell(w, 7, txt)
+        pdf.ln(1)
 
-        title("基本情報")
-        pair("お名前", hearing["name"]); pair("現在の居住エリア・駅", hearing["now_area"])
-        pair("居住年数（年）", hearing["now_years"]); pair("種別（賃貸/持ち家）", hearing["is_owner"])
-        pair("住居費（万円/月）", hearing["housing_cost"]); pair("ご家族構成", hearing["family"])
+    # ヘッダー
+    pdf.set_font("NotoSansJP", "B", 16)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
+    pdf.set_font("NotoSansJP", "", 10)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(0, 6, f"作成日時：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "R")
+    pdf.ln(2)
 
-        title("現在の住まい（満足・不満）")
-        pair("満足点", hearing["sat_point"])
-        pair("満足度（価格/立地/広さ/築年数/スペック）",
-             f"{hearing['sat_price']}/{hearing['sat_location']}/{hearing['sat_size']}/{hearing['sat_age']}/{hearing['sat_spec']}")
-        pair("不満な点", hearing["dissat_free"])
+    # 本文
+    title("基本情報")
+    pair("お名前", hearing["name"])
+    pair("現在の居住エリア・駅", hearing["now_area"])
+    pair("居住年数（年）", hearing["now_years"])
+    pair("種別（賃貸/持ち家）", hearing["is_owner"])
+    pair("住居費（万円/月）", hearing["housing_cost"])
+    pair("ご家族構成", hearing["family"])
 
-        title("5W2H（購入計画）")
-        pair("Why", hearing["w_why"]); pair("When", hearing["w_when"]); pair("Where", hearing["w_where"]); pair("Who", hearing["w_who"])
-        pair("What", hearing["w_what"]); pair("How", hearing["w_how"]); pair("How much", hearing["w_howmuch"]); pair("補足", hearing["w_free"])
+    title("現在の住まい（満足・不満）")
+    pair("満足点", hearing["sat_point"])
+    pair("満足度（価格/立地/広さ/築年数/スペック）",
+         f"{hearing['sat_price']}/{hearing['sat_location']}/{hearing['sat_size']}/{hearing['sat_age']}/{hearing['sat_spec']}")
+    pair("不満な点", hearing["dissat_free"])
 
-        title("重要度のトレードオフ")
-        pair("価格 / 立地 / 広さ・間取り / スペック / 管理その他",
-             f"{hearing['prio_price']}/{hearing['prio_location']}/{hearing['prio_size_layout']}/{hearing['prio_spec']}/{hearing['prio_mgmt']}")
+    title("5W2H（購入計画）")
+    pair("Why", hearing["w_why"])
+    pair("When", hearing["w_when"])
+    pair("Where", hearing["w_where"])
+    pair("Who", hearing["w_who"])
+    pair("What", hearing["w_what"])
+    pair("How", hearing["w_how"])
+    pair("How much", hearing["w_howmuch"])
+    pair("補足", hearing["w_free"])
 
-        title("連絡・共有")
-        pair("希望連絡手段・時間帯", hearing["contact_pref"]); pair("資料共有", hearing["share_method"]); pair("PDF送付先", hearing["pdf_recipient"])
+    title("重要度のトレードオフ")
+    pair("価格 / 立地 / 広さ・間取り / スペック / 管理その他",
+         f"{hearing['prio_price']}/{hearing['prio_location']}/{hearing['prio_size_layout']}/{hearing['prio_spec']}/{hearing['prio_mgmt']}")
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            pdf.output(tmp_file.name)
-            pdf_path = tmp_file.name
-        with open(pdf_path, "rb") as f:
-            st.download_button("📄 PDFをダウンロード", data=f.read(), file_name="hearing_sheet.pdf", mime="application/pdf")
-    finally:
-        os.chdir(save_cwd)
+    title("連絡・共有")
+    pair("希望連絡手段・時間帯", hearing["contact_pref"])
+    pair("資料共有", hearing["share_method"])
+    pair("PDF送付先", hearing["pdf_recipient"])
 
+    # 出力
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        pdf.output(tmp_file.name)
+        pdf_bytes = Path(tmp_file.name).read_bytes()
+
+    st.download_button(
+    "📄 PDFをダウンロード",
+    data=pdf_bytes,
+    file_name="hearing_sheet.pdf",
+    mime="application/pdf",
+)
 st.divider()
 
 # ============================================

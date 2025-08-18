@@ -1,16 +1,53 @@
 # fp/pages/諸費用明細.py
-# 完全単体版（utils.py 依存なし／フォントファイル不要／PDFはHelveticaで出力）
-
+# 日本語PDF対応：IPAexフォントを公式ZIPから自動DL→展開→登録（utils不要・完全単体）
 import os
 import re
 import math
+import io
+import zipfile
 import tempfile
+from pathlib import Path
+
 import streamlit as st
-from fpdf import FPDF
+import requests
+from fpdf import FPDF, FPDF_FONT_DIR
 
 # ============ 表示設定 ============
 st.set_page_config(page_title="資金計画書（諸費用明細）", layout="centered")
 st.title("資金計画書（諸費用明細）")
+
+# ============ フォント（IPAexに全面切替） ============
+FONT_DIR = Path(FPDF_FONT_DIR)
+FONT_DIR.mkdir(parents=True, exist_ok=True)
+
+# 公式配布の直リンク（単体zip）
+IPAEX_G_ZIP = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexg00401.zip"  # ゴシック
+IPAEX_M_ZIP = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexm00401.zip"  # 明朝
+FONT_GOTHIC_PATH = FONT_DIR / "IPAexGothic.ttf"   # zip内 ipaexg.ttf を保存
+FONT_MINCHO_PATH = FONT_DIR / "IPAexMincho.ttf"   # zip内 ipaexm.ttf を保存
+
+def _download_and_extract_ttf(zip_url: str, member_suffix: str, save_path: Path) -> None:
+    resp = requests.get(zip_url, timeout=30)
+    resp.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        ttf_members = [n for n in zf.namelist() if n.lower().endswith(member_suffix)]
+        if not ttf_members:
+            raise RuntimeError(f"TTF not found in {zip_url}")
+        with zf.open(ttf_members[0]) as src, open(save_path, "wb") as dst:
+            dst.write(src.read())
+
+def _ensure_fonts() -> None:
+    if not FONT_GOTHIC_PATH.exists():
+        _download_and_extract_ttf(IPAEX_G_ZIP, "ipaexg.ttf", FONT_GOTHIC_PATH)
+    if not FONT_MINCHO_PATH.exists():
+        _download_and_extract_ttf(IPAEX_M_ZIP, "ipaexm.ttf", FONT_MINCHO_PATH)
+
+def _register_jp_fonts(pdf: FPDF) -> None:
+    _ensure_fonts()
+    pdf.add_font("IPAexGothic", "", str(FONT_GOTHIC_PATH), uni=True)
+    pdf.add_font("IPAexGothic", "B", str(FONT_GOTHIC_PATH), uni=True)  # 太字は同TTF割当（見た目太字にはならない）
+    pdf.add_font("IPAexMincho", "", str(FONT_MINCHO_PATH), uni=True)
+    pdf.add_font("IPAexMincho", "B", str(FONT_MINCHO_PATH), uni=True)
 
 # ============ ユーティリティ ============
 A4_W = 210
@@ -53,8 +90,6 @@ def monthly_payment(loan_amount: int, years: int, annual_rate: float) -> int:
     return int(loan_amount * r * (1 + r) ** n / ((1 + r) ** n - 1))
 
 # ============ 入力 ============
-
-# 物件種別
 col_a1, col_a2, col_a3 = st.columns([1,1,1])
 with col_a1:
     prop_type = st.selectbox("物件種別", ["マンション", "戸建て"], index=0)
@@ -88,12 +123,10 @@ col_r1, col_r2 = st.columns([1,1])
 with col_r1:
     regist_mode = st.radio("登記費用の計算方法", ["固定額", "物件価格比例（%）"], index=0, horizontal=True)
 
-# 種別に応じた初期値（必要に応じて後で調整してください）
 if regist_mode == "固定額":
     default_regist = 400_000 if prop_type == "マンション" else 400_000
     regist_fee = number_input_commas("登記費用（円）", default_regist, step=10_000)
 else:
-    # 例: 物件価格の0.5% を初期値に（社内実績に合わせて調整可）
     col_r2.markdown("（例：0.5% = 0.5 を入力）")
     regist_rate = st.number_input("登記費用（物件価格に対する%）", min_value=0.0, max_value=3.0, value=0.5, step=0.1)
     regist_fee = int(property_price * (regist_rate / 100.0))
@@ -185,37 +218,38 @@ my_line = "LINE：naokiwm"
 
 def build_pdf() -> bytes:
     pdf = FPDF(unit="mm", format="A4")
+    _register_jp_fonts(pdf)
     pdf.add_page()
     pdf.set_left_margin(13)
     pdf.set_top_margin(13)
     pdf.set_auto_page_break(False)
 
     # 上部
-    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_font("IPAexGothic", "B", 12)
     if st.session_state.get("customer_name"):
         pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1, align="L")
-    pdf.set_font("Helvetica", "B", 11.5)
+    pdf.set_font("IPAexGothic", "B", 11.5)
     pdf.cell(0, 7, f"物件名：{st.session_state.get('property_name','')}", ln=1, align="L")
-    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_font("IPAexGothic", "B", 13)
     pdf.cell(0, 8, f"物件価格：{fmt_jpy(property_price)}", ln=1, align="L")
-    pdf.set_font("Helvetica", "", 11)
+    pdf.set_font("IPAexGothic", "", 11)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%前後／契約時振込・物件価格に充当）", ln=1, align="L")
     pdf.ln(1)
 
     # 明細表
     headers = ["項目", "金額", "支払時期", "説明"]
     col_w = [46, 34, 33, 77]
-    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_font("IPAexGothic", "B", 10)
     pdf.set_fill_color(220, 230, 250)
     for i, h in enumerate(headers):
         pdf.cell(col_w[i], 7, h, 1, 0, "C", 1)
     pdf.ln(7)
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("IPAexGothic", "", 10)
     for row in cost_rows:
         if "◆" in row[0]:
-            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_font("IPAexGothic", "B", 10)
             pdf.cell(sum(col_w), 7, row[0], 1, 1, "L", 0)
-            pdf.set_font("Helvetica", "", 10)
+            pdf.set_font("IPAexGothic", "", 10)
         else:
             pdf.cell(col_w[0], 7, row[0], 1, 0, "L")
             pdf.cell(col_w[1], 7, row[1], 1, 0, "R")
@@ -224,7 +258,7 @@ def build_pdf() -> bytes:
     pdf.ln(1)
 
     # 注意書き
-    pdf.set_font("Helvetica", "", 9.5)
+    pdf.set_font("IPAexGothic", "", 9.5)
     pdf.set_text_color(80, 80, 80)
     bikou_clean = re.sub(r"。\n", "\n", bikou).strip()
     pdf.multi_cell(0, 6, bikou_clean)
@@ -234,7 +268,7 @@ def build_pdf() -> bytes:
     # 合計
     pdf.set_fill_color(220, 240, 255)
     sum_cols = [45, 50, 55, 40]
-    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_font("IPAexGothic", "B", 12)
     pdf.cell(sum_cols[0], 9, "諸費用合計", 1, 0, "C", 1)
     pdf.cell(sum_cols[1], 9, fmt_jpy(total_expenses), 1, 0, "R", 1)
     pdf.cell(sum_cols[2], 9, "総合計（物件＋諸費用）", 1, 0, "C", 1)
@@ -242,46 +276,47 @@ def build_pdf() -> bytes:
     pdf.ln(3)
 
     # 支払例
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_font("IPAexGothic", "B", 11)
     pdf.cell(0, 8, f"（支払例）※金利{loan_rate:.2f}％／{loan_years}年返済の場合", ln=1, align="L")
     headers2 = ["借入パターン", "借入金額", "月々返済額", "総額（管理費含)"]
     col2_w = [90, 30, 35, 35]
-    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_font("IPAexGothic", "B", 10)
     pdf.set_fill_color(220, 240, 255)
     for i, h in enumerate(headers2):
         pdf.cell(col2_w[i], 7, h, 1, 0, "C", 1)
     pdf.ln(7)
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("IPAexGothic", "", 10)
     pdf.cell(col2_w[0], 8, "①物件価格＋諸費用フルローン", 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(property_price + total_expenses), 1, 0, "R")
     pdf.cell(col2_w[2], 8, fmt_jpy(monthly1), 1, 0, "R")
-    pdf.set_font("Helvetica", "", 9.5)
+    pdf.set_font("IPAexGothic", "", 9.5)
     pdf.cell(col2_w[3], 8, fmt_jpy(monthly1 + kanri_month), 1, 1, "R")
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("IPAexGothic", "", 10)
     pdf.cell(col2_w[0], 8, "②物件価格のみ借入", 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(property_price), 1, 0, "R")
     pdf.cell(col2_w[2], 8, fmt_jpy(monthly2), 1, 0, "R")
-    pdf.set_font("Helvetica", "", 9.5)
+    pdf.set_font("IPAexGothic", "", 9.5)
     pdf.cell(col2_w[3], 8, fmt_jpy(monthly2 + kanri_month), 1, 1, "R")
     pdf.ln(2)
 
     # 追加表示：契約時必要資金
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_font("IPAexGothic", "B", 11)
     pdf.cell(0, 7, f"契約時必要資金（手付金＋印紙代＋仲介半金）：{fmt_jpy(need_at_contract)}", ln=1, align="L")
 
     # フッター
     footer_y = A4_H - 49
     pdf.set_y(footer_y)
-    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_font("IPAexGothic", "B", 10)
     pdf.cell(0, 6, my_name, ln=1, align="L")
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("IPAexGothic", "", 9)
     pdf.cell(0, 6, my_company, ln=1, align="L")
     pdf.cell(0, 6, my_address, ln=1, align="L")
     pdf.cell(0, 6, my_tel, ln=1, align="L")
     pdf.cell(0, 6, my_mail, ln=1, align="L")
     pdf.cell(0, 6, my_line, ln=1, align="L")
 
-    return pdf.output(dest="S").encode("latin-1", errors="ignore")
+    # fpdf2は dest="S" で bytes を返す（unicode対応）
+    return pdf.output(dest="S")
 
 # 入力（顧客名・物件名）はセッションに控える
 st.session_state["customer_name"] = st.text_input("お客様名（例：山田太郎）", st.session_state.get("customer_name", ""))

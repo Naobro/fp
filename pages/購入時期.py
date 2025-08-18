@@ -1,49 +1,72 @@
 # fp/pages/購入時期.py
-import math
+# 404で落ちない日本語PDF：IPAexフォントを公式ZIPから自動DL→展開→登録
+import io
 import os
-import requests
-from pathlib import Path
+import zipfile
 import tempfile
+from pathlib import Path
+
+import requests
 import streamlit as st
 from fpdf import FPDF, FPDF_FONT_DIR
 
 # =========================
-# フォント（必要に応じてダウンロード）
+# フォント（IPAexに全面切替／自動DL＆展開）
 # =========================
 # FPDFのデフォルトフォントディレクトリを使用
 FONT_DIR = Path(FPDF_FONT_DIR)
-FONT_REG_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/NotoSansJP-Regular.ttf"
-FONT_BOLD_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/NotoSansJP-Bold.ttf"
-FONT_REG_PATH = FONT_DIR / "NotoSansJP-Regular.ttf"
-FONT_BOLD_PATH = FONT_DIR / "NotoSansJP-Bold.ttf"
+FONT_DIR.mkdir(parents=True, exist_ok=True)
+
+# ここを上書き
+IPAEX_G_ZIP = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexg00401.zip"  # ゴシック
+IPAEX_M_ZIP = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexm00401.zip"  # 明朝
+
+# 保存する実体ファイル名（拡張子は .ttf）
+FONT_GOTHIC_PATH = FONT_DIR / "IPAexGothic.ttf"   # 例: ipaexg.ttf をこの名前で保存
+FONT_MINCHO_PATH = FONT_DIR / "IPAexMincho.ttf"   # 例: ipaexm.ttf をこの名前で保存
+
+
+def _download_and_extract_ttf(zip_url: str, member_suffix: str, save_path: Path):
+    """
+    zip_url からzipを取得→中の *.ttf を抽出して save_path に保存
+    member_suffix 例: 'ipaexg.ttf', 'ipaexm.ttf'
+    """
+    resp = requests.get(zip_url, timeout=30)
+    resp.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        ttf_members = [n for n in zf.namelist() if n.lower().endswith(member_suffix)]
+        if not ttf_members:
+            raise RuntimeError(f"TTF not found in {zip_url}")
+        with zf.open(ttf_members[0]) as src, open(save_path, "wb") as dst:
+            dst.write(src.read())
+
 
 def _ensure_fonts():
-    if not FONT_REG_PATH.exists():
-        try:
-            st.info("日本語フォントをダウンロード中...")
-            response = requests.get(FONT_REG_URL)
-            response.raise_for_status()
-            with open(FONT_REG_PATH, 'wb') as f:
-                f.write(response.content)
-            st.success("フォントのダウンロードが完了しました。")
-        except requests.exceptions.RequestException as e:
-            st.error(f"フォントのダウンロードに失敗しました: {e}")
-            raise
-    
-    if not FONT_BOLD_PATH.exists():
-        try:
-            st.info("日本語フォントをダウンロード中...")
-            response = requests.get(FONT_BOLD_URL)
-            response.raise_for_status()
-            with open(FONT_BOLD_PATH, 'wb') as f:
-                f.write(response.content)
-            st.success("フォントのダウンロードが完了しました。")
-        except requests.exceptions.RequestException as e:
-            st.error(f"フォントのダウンロードに失敗しました: {e}")
-            raise
+    """
+    IPAexゴシック/明朝 をローカルに用意。なければ自動DL。
+    ※ FPDF の 'B' スタイル用は同一TTFを登録（見た目は太字化されないがエラーは出ない）
+    """
+    if not FONT_GOTHIC_PATH.exists():
+        _download_and_extract_ttf(IPAEX_G_ZIP, "ipaexg.ttf", FONT_GOTHIC_PATH)
+    if not FONT_MINCHO_PATH.exists():
+        _download_and_extract_ttf(IPAEX_M_ZIP, "ipaexm.ttf", FONT_MINCHO_PATH)
+
+
+def _register_jp_fonts(pdf: FPDF):
+    """
+    FPDFインスタンスに日本語フォントを登録。
+    使用例: pdf.set_font("IPAexGothic", size=12)
+    """
+    _ensure_fonts()
+    # ゴシック
+    pdf.add_font("IPAexGothic", "", str(FONT_GOTHIC_PATH), uni=True)
+    pdf.add_font("IPAexGothic", "B", str(FONT_GOTHIC_PATH), uni=True)  # Bも同一TTFを割当
+    # 明朝（未使用でも登録しておくと切替可能）
+    pdf.add_font("IPAexMincho", "", str(FONT_MINCHO_PATH), uni=True)
+    pdf.add_font("IPAexMincho", "B", str(FONT_MINCHO_PATH), uni=True)
 
 # =========================
-# ローン計算ユーティリティ
+# ローン計算ユーティリティ（万円ベース）
 # =========================
 def monthly_payment(principal_man: float, years: int, annual_rate_pct: float) -> float:
     """元利均等: 万円単位で返す"""
@@ -56,9 +79,11 @@ def monthly_payment(principal_man: float, years: int, annual_rate_pct: float) ->
         return P / n
     return P * r * (1 + r) ** n / ((1 + r) ** n - 1)
 
+
 def total_payment(principal_man: float, years: int, annual_rate_pct: float) -> float:
     m = monthly_payment(principal_man, years, annual_rate_pct)
     return m * years * 12
+
 
 def remaining_balance_at_k(principal_man: float, years: int, annual_rate_pct: float, k_months: int) -> float:
     """kヶ月返済後の残高（万円）"""
@@ -74,10 +99,12 @@ def remaining_balance_at_k(principal_man: float, years: int, annual_rate_pct: fl
     factor = (1 + r) ** n
     return P * ((factor - (1 + r) ** k) / (factor - 1))
 
+
 # 価格の将来値（複利）
 def future_price_man(price_now_man: float, growth_pct_per_year: float, years_wait: int) -> float:
     g = growth_pct_per_year / 100.0
     return price_now_man * ((1 + g) ** years_wait)
+
 
 # =========================
 # Streamlit UI
@@ -171,29 +198,33 @@ st.markdown("---")
 # PDF 出力
 # =========================
 def build_pdf_bytes() -> bytes:
+    """
+    既存UIの結果値をPDF化（日本語フォントはIPAex）
+    """
     _ensure_fonts()
     pdf = FPDF(unit="mm", format="A4")
-    pdf.add_font("NotoSans", "", str(FONT_REG_PATH), uni=True)
-    pdf.add_font("NotoSans", "B", str(FONT_BOLD_PATH), uni=True)
+    _register_jp_fonts(pdf)
     pdf.set_auto_page_break(True, margin=15)
     pdf.add_page()
 
-    pdf.set_font("NotoSans", "B", 16)
+    # タイトル
+    pdf.set_font("IPAexGothic", "B", 16)
     pdf.cell(0, 10, "購入時期シミュレーション（今 vs 将来）", ln=1)
 
-    pdf.set_font("NotoSans", "", 11)
+    # 前提
+    pdf.set_font("IPAexGothic", "", 11)
     pdf.cell(0, 8, f"前提：物件価格（現在） {price_now_man:,.0f} 万円 / 上昇率 {growth_pct:.2f}% / 待機 {wait_years} 年", ln=1)
     pdf.ln(2)
 
     # 表
     def row(label, now_val, fut_val):
-        pdf.set_font("NotoSans", "B", 11)
+        pdf.set_font("IPAexGothic", "B", 11)
         pdf.cell(70, 8, label, 1, 0, "L")
-        pdf.set_font("NotoSans", "", 11)
+        pdf.set_font("IPAexGothic", "", 11)
         pdf.cell(60, 8, now_val, 1, 0, "R")
         pdf.cell(60, 8, fut_val, 1, 1, "R")
 
-    pdf.set_font("NotoSans", "B", 12)
+    pdf.set_font("IPAexGothic", "B", 12)
     pdf.cell(70, 8, "", 1, 0)
     pdf.cell(60, 8, "今、購入", 1, 0, "C")
     pdf.cell(60, 8, "将来、購入", 1, 1, "C")
@@ -206,7 +237,7 @@ def build_pdf_bytes() -> bytes:
     row("60歳時の残債", f"{remain_now_man:,.0f} 万円", f"{remain_future_man:,.0f} 万円")
 
     pdf.ln(4)
-    pdf.set_font("NotoSans", "B", 12)
+    pdf.set_font("IPAexGothic", "B", 12)
     if diff_man > 0:
         msg = f"今、購入する方が {diff_man:,.0f} 万円 有利（1日あたり約 {loss_per_day_yen:,.0f} 円）"
     else:
@@ -220,6 +251,7 @@ def build_pdf_bytes() -> bytes:
         tmp.seek(0)
         data = tmp.read()
     return data
+
 
 if st.button("📄 PDFを作成（日本語フォント内蔵）"):
     try:
