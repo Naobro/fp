@@ -240,33 +240,29 @@ my_line = "LINE：naokiwm"
 def build_pdf() -> bytes:
     pdf = FPDF(unit="mm", format="A4")
     _register_jp_fonts(pdf)
-    pdf.add_page()
     pdf.set_left_margin(13)
     pdf.set_top_margin(13)
     pdf.set_auto_page_break(False)
+    pdf.add_page()
 
-    # …レイアウト処理（既存のまま残す）…
-
-    out = pdf.output(dest="S")  # fpdf2 は bytearray か str を返すことがある
-    if isinstance(out, str):
-        pdf_bytes = out.encode("latin-1")   # 文字列だった場合
-    else:
-        pdf_bytes = bytes(out)              # bytearray → bytes に変換
-    return pdf_bytes
-
-    # 上部
+    # ===== ここから本文を描画 =====
+    # 上部（タイトル・基本情報）
     pdf.set_font("IPAexGothic", "B", 12)
-    if st.session_state.get("customer_name"):
-        pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1, align="L")
+    cust = st.session_state.get("customer_name", "")
+    if cust:
+        pdf.cell(0, 8, f"{cust} 様", ln=1, align="L")
+
     pdf.set_font("IPAexGothic", "B", 11.5)
     pdf.cell(0, 7, f"物件名：{st.session_state.get('property_name','')}", ln=1, align="L")
+
     pdf.set_font("IPAexGothic", "B", 13)
     pdf.cell(0, 8, f"物件価格：{fmt_jpy(property_price)}", ln=1, align="L")
+
     pdf.set_font("IPAexGothic", "", 11)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%前後／契約時振込・物件価格に充当）", ln=1, align="L")
     pdf.ln(1)
 
-    # 明細表
+    # 明細テーブル
     headers = ["項目", "金額", "支払時期", "説明"]
     col_w = [46, 34, 33, 77]
     pdf.set_font("IPAexGothic", "B", 10)
@@ -274,17 +270,20 @@ def build_pdf() -> bytes:
     for i, h in enumerate(headers):
         pdf.cell(col_w[i], 7, h, 1, 0, "C", 1)
     pdf.ln(7)
+
     pdf.set_font("IPAexGothic", "", 10)
     for row in cost_rows:
         if "◆" in row[0]:
+            # セクション見出し
             pdf.set_font("IPAexGothic", "B", 10)
-            pdf.cell(sum(col_w), 7, row[0], 1, 1, "L", 0)
+            pdf.cell(sum(col_w), 7, row[0], 1, 1, "L")
             pdf.set_font("IPAexGothic", "", 10)
         else:
             pdf.cell(col_w[0], 7, row[0], 1, 0, "L")
             pdf.cell(col_w[1], 7, row[1], 1, 0, "R")
             pdf.cell(col_w[2], 7, row[2], 1, 0, "C")
             pdf.cell(col_w[3], 7, row[3], 1, 1, "L")
+
     pdf.ln(1)
 
     # 注意書き
@@ -295,7 +294,7 @@ def build_pdf() -> bytes:
     pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
 
-    # 合計
+    # 合計（諸費用・総合計）
     pdf.set_fill_color(220, 240, 255)
     sum_cols = [45, 50, 55, 40]
     pdf.set_font("IPAexGothic", "B", 12)
@@ -308,6 +307,7 @@ def build_pdf() -> bytes:
     # 支払例
     pdf.set_font("IPAexGothic", "B", 11)
     pdf.cell(0, 8, f"（支払例）※金利{loan_rate:.2f}％／{loan_years}年返済の場合", ln=1, align="L")
+
     headers2 = ["借入パターン", "借入金額", "月々返済額", "総額（管理費含)"]
     col2_w = [90, 30, 35, 35]
     pdf.set_font("IPAexGothic", "B", 10)
@@ -315,12 +315,14 @@ def build_pdf() -> bytes:
     for i, h in enumerate(headers2):
         pdf.cell(col2_w[i], 7, h, 1, 0, "C", 1)
     pdf.ln(7)
+
     pdf.set_font("IPAexGothic", "", 10)
     pdf.cell(col2_w[0], 8, "①物件価格＋諸費用フルローン", 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(property_price + total_expenses), 1, 0, "R")
     pdf.cell(col2_w[2], 8, fmt_jpy(monthly1), 1, 0, "R")
     pdf.set_font("IPAexGothic", "", 9.5)
     pdf.cell(col2_w[3], 8, fmt_jpy(monthly1 + kanri_month), 1, 1, "R")
+
     pdf.set_font("IPAexGothic", "", 10)
     pdf.cell(col2_w[0], 8, "②物件価格のみ借入", 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(property_price), 1, 0, "R")
@@ -333,20 +335,22 @@ def build_pdf() -> bytes:
     pdf.set_font("IPAexGothic", "B", 11)
     pdf.cell(0, 7, f"契約時必要資金（手付金＋印紙代＋仲介半金）：{fmt_jpy(need_at_contract)}", ln=1, align="L")
 
-    # フッター
-    footer_y = A4_H - 49
+    # フッター（連絡先）
+    footer_y = 297 - 49  # A4の高さ - フッター領域
     pdf.set_y(footer_y)
     pdf.set_font("IPAexGothic", "B", 10)
-    pdf.cell(0, 6, my_name, ln=1, align="L")
+    pdf.cell(0, 6, "西山　直樹 / Naoki Nishiyama", ln=1, align="L")
     pdf.set_font("IPAexGothic", "", 9)
-    pdf.cell(0, 6, my_company, ln=1, align="L")
-    pdf.cell(0, 6, my_address, ln=1, align="L")
-    pdf.cell(0, 6, my_tel, ln=1, align="L")
-    pdf.cell(0, 6, my_mail, ln=1, align="L")
-    pdf.cell(0, 6, my_line, ln=1, align="L")
+    pdf.cell(0, 6, "TERASS, Inc.", ln=1, align="L")
+    pdf.cell(0, 6, "〒105-0001 東京都港区虎ノ門二丁目2番1号　住友不動産虎ノ門タワー 13階", ln=1, align="L")
+    pdf.cell(0, 6, "TEL: 090-4399-2480 / FAX: 03-6369-3864", ln=1, align="L")
+    pdf.cell(0, 6, "Email: naoki.nishiyama@terass.com", ln=1, align="L")
+    pdf.cell(0, 6, "LINE：naokiwm", ln=1, align="L")
 
-    # fpdf2は dest="S" で bytes を返す（unicode対応）
-    return pdf.output(dest="S")
+    # ===== ここまで本文。bytes で返す =====
+    out = pdf.output(dest="S")
+    pdf_bytes = out.encode("latin-1") if isinstance(out, str) else bytes(out)
+    return pdf_bytes
 
 # 入力（顧客名・物件名）はセッションに控える
 st.session_state["customer_name"] = st.text_input("お客様名（例：山田太郎）", st.session_state.get("customer_name", ""))
