@@ -1,156 +1,215 @@
 # fp/pages/購入時期.py
 import math
+from pathlib import Path
+import tempfile
 import streamlit as st
+from fpdf import FPDF
 
 # =========================
-# ページ設定
+# フォント（同梱 TTF を絶対パスで）
 # =========================
-st.set_page_config(page_title="購入時期シミュレーション", layout="wide")
-st.title("🏠 購入時期シミュレーション（今 vs 5年後）")
-st.caption("※ すべて金額は『万円』単位で入力します。上限・下限はありません。")
+FP_DIR      = Path(__file__).resolve().parents[1]          # /mount/src/fp
+FONT_DIR    = FP_DIR / "fonts"                              # /mount/src/fp/fonts
+FONT_REG    = FONT_DIR / "NotoSansJP-Regular.ttf"
+FONT_BOLD   = FONT_DIR / "NotoSansJP-Bold.ttf"
+
+def _assert_fonts():
+    missing = [str(p) for p in (FONT_REG, FONT_BOLD) if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "PDF用の日本語フォントが見つかりません。\n"
+            + "\n".join(f"- {m}" for m in missing)
+            + "\n想定: fp/fonts/NotoSansJP-Regular.ttf, NotoSansJP-Bold.ttf"
+        )
 
 # =========================
-# ユーティリティ
+# ローン計算ユーティリティ
 # =========================
-def monthly_payment(principal_man: float, years: int, annual_rate_percent: float) -> float:
-    """
-    元利均等返済の毎月返済額（万円）を返す
-    principal_man: 借入額（万円）
-    years: 返済年数（年）
-    annual_rate_percent: 年利（%）
-    """
+def monthly_payment(principal_man: float, years: int, annual_rate_pct: float) -> float:
+    """元利均等: 万円単位で返す"""
     n = years * 12
-    r = (annual_rate_percent / 100.0) / 12.0
     if n <= 0:
         return 0.0
+    r = (annual_rate_pct / 100.0) / 12.0
+    P = principal_man
     if r == 0:
-        return principal_man / n
-    return principal_man * r * (1 + r) ** n / ((1 + r) ** n - 1)
+        return P / n
+    return P * r * (1 + r) ** n / ((1 + r) ** n - 1)
 
-def cumulative_rent_5y(start_rent_man: float, yoy_increase_percent: float) -> float:
-    """
-    5年間の家賃累計（万円）を返す。
-    start_rent_man: 1年目の月額家賃（万円）
-    yoy_increase_percent: 年ごとの家賃上昇率（%）
-    """
-    total = 0.0
-    monthly = start_rent_man
-    for year in range(5):
-        total += monthly * 12
-        monthly *= (1 + yoy_increase_percent / 100.0)
-    return total
+def total_payment(principal_man: float, years: int, annual_rate_pct: float) -> float:
+    m = monthly_payment(principal_man, years, annual_rate_pct)
+    return m * years * 12
 
-# =========================
-# 入力フォーム（上限・下限なし、万円単位）
-# =========================
-with st.sidebar:
-    st.subheader("入力（万円・%）")
-    now_price = st.number_input("現在の物件価格（万円）", value=6000, step=100)
-    future_price = st.number_input("5年後の物件価格（万円）", value=7000, step=100)
+def remaining_balance_at_k(principal_man: float, years: int, annual_rate_pct: float, k_months: int) -> float:
+    """kヶ月返済後の残高（万円）"""
+    n = years * 12
+    if n <= 0:
+        return 0.0
+    k = max(0, min(k_months, n))
+    r = (annual_rate_pct / 100.0) / 12.0
+    P = principal_man
+    if r == 0:
+        # ゼロ金利は単純按分
+        return P * (1 - k / n)
+    factor = (1 + r) ** n
+    return P * ((factor - (1 + r) ** k) / (factor - 1))
 
-    now_down = st.number_input("頭金（今・万円）", value=500, step=50)
-    future_down = st.number_input("頭金（5年後・万円）", value=1000, step=50)
-
-    now_rate = st.number_input("金利（年%・今）", value=0.7, step=0.05, format="%.2f")
-    future_rate = st.number_input("金利（年%・5年後）", value=1.20, step=0.05, format="%.2f")
-
-    years = st.number_input("返済年数（年）", value=35, step=1)
-
-    rent_month_man = st.number_input("現在の月額家賃（万円）", value=12.0, step=0.5, format="%.1f")
-    rent_yoy = st.number_input("家賃の年上昇率（%）", value=2.0, step=0.5, format="%.1f")
+# 価格の将来値（複利）
+def future_price_man(price_now_man: float, growth_pct_per_year: float, years_wait: int) -> float:
+    g = growth_pct_per_year / 100.0
+    return price_now_man * ((1 + g) ** years_wait)
 
 # =========================
-# 計算（今買う場合）
+# Streamlit UI
 # =========================
-now_loan = max(now_price - now_down, 0)                 # 借入額（万円）
-now_monthly = monthly_payment(now_loan, int(years), float(now_rate))
+st.set_page_config(page_title="購入時期の比較シミュレーション", layout="wide")
+st.title("🏠 購入時期シミュレーション（今 vs 何年後）")
+
+colL, colR = st.columns(2)
+
+with colL:
+    st.subheader("今、購入する場合")
+    age_now = st.number_input("現在の年齢（歳）", value=32, step=1)
+    price_now_man = st.number_input("購入物件価格（万円）", value=3000, step=10)
+    cash_now_man = st.number_input("現在の自己資金（万円）", value=300, step=10)
+    years_now = st.number_input("ローン返済期間（年）", value=35, step=1)
+    rate_now = st.number_input("ローン金利（年利 %）", value=1.0, format="%.3f", step=0.05)
+
+with colR:
+    st.subheader("将来、購入する場合")
+    wait_years = st.number_input("何年後に購入？（年）", value=3, step=1)
+    monthly_save_man = st.number_input("その間の毎月積立額（万円／月）", value=3.0, format="%.1f", step=0.1)
+    growth_pct = st.number_input("物件価格上昇率（年率 %）", value=0.0, format="%.2f", step=0.1)
+    rate_future = st.number_input("将来購入時のローン金利（年利 %）", value=2.0, format="%.3f", step=0.05)
+    years_future = st.number_input("将来購入時の返済期間（年）", value=35, step=1)
+    rent_until_man = st.number_input("購入までの毎月の家賃（万円／月）", value=8.0, format="%.1f", step=0.1)
 
 # =========================
-# 計算（5年後に買う場合）
+# 計算（すべて万円単位）
 # =========================
-future_loan = max(future_price - future_down, 0)        # 借入額（万円）
-future_monthly = monthly_payment(future_loan, int(years), float(future_rate))
+# 今
+down_now_man = max(0.0, min(cash_now_man, price_now_man))
+loan_now_man = max(0.0, price_now_man - down_now_man)
+loan_total_now_man = total_payment(loan_now_man, int(years_now), float(rate_now))
+rent_now_man = 0.0
+total_cost_now_man = down_now_man + loan_total_now_man + rent_now_man
 
-# 待機期間の家賃累計（5年分）
-rent_5y_total = cumulative_rent_5y(rent_month_man, rent_yoy)
+# 将来
+accum_save_man = monthly_save_man * 12 * wait_years
+down_future_man = cash_now_man + accum_save_man
+price_future_man = future_price_man(price_now_man, growth_pct, int(wait_years))
+loan_future_man = max(0.0, price_future_man - down_future_man)
+loan_total_future_man = total_payment(loan_future_man, int(years_future), float(rate_future))
+rent_total_future_man = rent_until_man * 12 * wait_years
+total_cost_future_man = down_future_man + loan_total_future_man + rent_total_future_man
+
+# 60歳時のローン残債
+months_to_60_now = max(0, int((60 - age_now) * 12))
+months_to_60_future = max(0, int((60 - (age_now + wait_years)) * 12))
+remain_now_man = remaining_balance_at_k(loan_now_man, int(years_now), float(rate_now), months_to_60_now)
+remain_future_man = remaining_balance_at_k(loan_future_man, int(years_future), float(rate_future), months_to_60_future)
+
+# 差分・1日あたり
+diff_man = total_cost_future_man - total_cost_now_man
+days = max(1, int(wait_years * 365))
+loss_per_day_yen = diff_man * 10000 / days  # 円/日
 
 # =========================
 # 表示
 # =========================
-colA, colB, colC = st.columns([1,1,1])
+st.markdown("---")
+st.subheader("結果サマリー（万円）")
 
-with colA:
-    st.markdown("### 今すぐ購入")
-    st.metric("物件価格", f"{now_price:,.0f} 万円")
-    st.metric("頭金", f"{now_down:,.0f} 万円")
-    st.metric("借入額", f"{now_loan:,.0f} 万円")
-    st.metric("金利（年）", f"{now_rate:.2f} %")
-    st.metric("毎月返済額（概算）", f"{now_monthly:,.1f} 万円/月")
+c1, c2, c3 = st.columns([1.2, 1, 1])
+with c1:
+    st.markdown("#### 今、購入する場合")
+    st.metric("購入時自己資金", f"{down_now_man:,.0f} 万円")
+    st.caption("うち積立額 ー 万円")
+    st.metric("ローン返済額（総額）", f"{loan_total_now_man:,.0f} 万円")
+    st.metric("家賃支払い額", f"ー 万円")
+    st.metric("生涯住居費総額（合計）", f"{total_cost_now_man:,.0f} 万円")
+    st.metric("60歳時のローン残債額", f"{remain_now_man:,.0f} 万円")
 
-with colB:
-    st.markdown("### 5年後に購入")
-    st.metric("物件価格（5年後）", f"{future_price:,.0f} 万円")
-    st.metric("頭金（5年後）", f"{future_down:,.0f} 万円")
-    st.metric("借入額（5年後）", f"{future_loan:,.0f} 万円")
-    st.metric("金利（年・5年後）", f"{future_rate:.2f} %")
-    st.metric("毎月返済額（概算・5年後）", f"{future_monthly:,.1f} 万円/月")
+with c2:
+    st.markdown("#### 将来、購入する場合")
+    st.metric("購入時自己資金", f"{down_future_man:,.0f} 万円")
+    st.caption(f"うち積立額 {accum_save_man:,.0f} 万円")
+    st.metric("ローン返済額（総額）", f"{loan_total_future_man:,.0f} 万円")
+    st.metric("家賃支払い額（購入まで）", f"{rent_total_future_man:,.0f} 万円")
+    st.metric("生涯住居費総額（合計）", f"{total_cost_future_man:,.0f} 万円")
+    st.metric("60歳時のローン残債額", f"{remain_future_man:,.0f} 万円")
 
-with colC:
-    st.markdown("### 待機コスト（5年間）")
-    st.metric("家賃累計（5年）", f"{rent_5y_total:,.0f} 万円")
-    # 5年後の毎月返済 - 今の毎月返済
-    monthly_diff = future_monthly - now_monthly
-    label = "毎月返済の差（5年後 − 今）"
-    st.metric(label, f"{monthly_diff:+.1f} 万円/月")
+with c3:
+    st.markdown("#### 差分")
+    cheaper = "今、購入する方が" if diff_man > 0 else "将来、購入する方が"
+    st.metric("どちらが有利？", f"{cheaper} {abs(diff_man):,.0f} 万円有利")
+    st.caption(f"1日あたりの差額（概算）: {loss_per_day_yen:,.0f} 円/日")
 
-st.divider()
-
-# =========================
-# ざっくり結論
-# =========================
-st.markdown("### ざっくり結論")
-bullets = []
-
-# 月々がどれだけ違うか
-if monthly_diff > 0:
-    bullets.append(f"5年後の方が **毎月 {monthly_diff:.1f} 万円** 高くなる見込みです。")
-elif monthly_diff < 0:
-    bullets.append(f"5年後の方が **毎月 {abs(monthly_diff):.1f} 万円** 低くなる見込みです。")
-else:
-    bullets.append("月々返済は今も5年後も **ほぼ同じ** 見込みです。")
-
-# 家賃累計の重さ
-bullets.append(f"5年間待つ場合、家賃だけで **約 {rent_5y_total:,.0f} 万円** の支出となります。")
-
-# 借入額の違い
-loan_diff = future_loan - now_loan
-if loan_diff > 0:
-    bullets.append(f"借入額は5年後の方が **{loan_diff:,.0f} 万円** 多くなる見込みです。")
-elif loan_diff < 0:
-    bullets.append(f"借入額は5年後の方が **{abs(loan_diff):,.0f} 万円** 少なくなる見込みです。")
-
-# 最後のまとめ（簡易）
-if (monthly_diff >= 0 and rent_5y_total > 0 and future_loan >= now_loan):
-    summary = "👉 **総合的には“今買う”ほうが有利**になりやすい条件です。"
-elif (monthly_diff <= 0 and future_loan <= now_loan):
-    summary = "👉 **総合的には“5年後に買う”選択も検討価値あり**の条件です。"
-else:
-    summary = "👉 条件次第で結論が変わります。頭金計画や金利見通しを加味して検討しましょう。"
-
-# 表示
-for b in bullets:
-    st.write("• " + b)
-st.success(summary)
+st.markdown("---")
 
 # =========================
-# メモ
+# PDF 出力
 # =========================
-with st.expander("計算の前提（クリックで表示）"):
-    st.write(
-        """
-- すべて **万円** 表記です（例：6,000万円 → 6000）。
-- ローン返済は **元利均等返済** の概算です。諸費用・保険・管理費等は含めていません。
-- 「5年後」シナリオは **家賃支出（5年分）** を別枠で表示しています。
-- 実際の与信条件・手数料・保証料等で変動します。最終判断前に金融機関試算をご確認ください。
-        """
-    )
+def build_pdf_bytes() -> bytes:
+    _assert_fonts()
+    pdf = FPDF(unit="mm", format="A4")
+    pdf.add_font("NotoSans", "", str(FONT_REG), uni=True)
+    pdf.add_font("NotoSans", "B", str(FONT_BOLD), uni=True)
+    pdf.set_auto_page_break(True, margin=15)
+    pdf.add_page()
+
+    pdf.set_font("NotoSans", "B", 16)
+    pdf.cell(0, 10, "購入時期シミュレーション（今 vs 将来）", ln=1)
+
+    pdf.set_font("NotoSans", "", 11)
+    pdf.cell(0, 8, f"前提：物件価格（現在） {price_now_man:,.0f} 万円 / 上昇率 {growth_pct:.2f}% / 待機 {wait_years} 年", ln=1)
+    pdf.ln(2)
+
+    # 表
+    def row(label, now_val, fut_val):
+        pdf.set_font("NotoSans", "B", 11)
+        pdf.cell(70, 8, label, 1, 0, "L")
+        pdf.set_font("NotoSans", "", 11)
+        pdf.cell(60, 8, now_val, 1, 0, "R")
+        pdf.cell(60, 8, fut_val, 1, 1, "R")
+
+    pdf.set_font("NotoSans", "B", 12)
+    pdf.cell(70, 8, "", 1, 0)
+    pdf.cell(60, 8, "今、購入", 1, 0, "C")
+    pdf.cell(60, 8, "将来、購入", 1, 1, "C")
+
+    row("購入時自己資金", f"{down_now_man:,.0f} 万円", f"{down_future_man:,.0f} 万円")
+    row("（うち積立）", "ー 万円", f"{accum_save_man:,.0f} 万円")
+    row("ローン返済額（総額）", f"{loan_total_now_man:,.0f} 万円", f"{loan_total_future_man:,.0f} 万円")
+    row("家賃支払い額", "ー 万円", f"{rent_total_future_man:,.0f} 万円")
+    row("生涯住居費総額", f"{total_cost_now_man:,.0f} 万円", f"{total_cost_future_man:,.0f} 万円")
+    row("60歳時の残債", f"{remain_now_man:,.0f} 万円", f"{remain_future_man:,.0f} 万円")
+
+    pdf.ln(4)
+    pdf.set_font("NotoSans", "B", 12)
+    if diff_man > 0:
+        msg = f"今、購入する方が {diff_man:,.0f} 万円 有利（1日あたり約 {loss_per_day_yen:,.0f} 円）"
+    else:
+        msg = f"将来、購入する方が {abs(diff_man):,.0f} 万円 有利（1日あたり約 {abs(loss_per_day_yen):,.0f} 円）"
+    pdf.multi_cell(0, 8, msg)
+
+    # 一旦ファイルに出してから読む（エンコード問題回避）
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        pdf.output(tmp.name)
+        tmp.flush()
+        tmp.seek(0)
+        data = tmp.read()
+    return data
+
+if st.button("📄 PDFを作成（日本語フォント内蔵）"):
+    try:
+        pdf_bytes = build_pdf_bytes()
+        st.download_button(
+            "📥 PDFダウンロード",
+            data=pdf_bytes,
+            file_name="購入時期シミュレーション.pdf",
+            mime="application/pdf",
+        )
+        st.success("PDFを生成しました。")
+    except Exception as e:
+        st.error(f"PDF生成エラー: {e}")
