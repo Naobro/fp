@@ -1,26 +1,47 @@
 # fp/pages/購入時期.py
 import math
+import os
+import requests
 from pathlib import Path
 import tempfile
 import streamlit as st
 from fpdf import FPDF
+from fpdf.fonts import FPDF_FONT_DIR
 
 # =========================
-# フォント（同梱 TTF を絶対パスで）
+# フォント（必要に応じてダウンロード）
 # =========================
-FP_DIR      = Path(__file__).resolve().parents[1]          # /mount/src/fp
-FONT_DIR    = FP_DIR / "fonts"                              # /mount/src/fp/fonts
-FONT_REG    = FONT_DIR / "NotoSansJP-Regular.ttf"
-FONT_BOLD   = FONT_DIR / "NotoSansJP-Bold.ttf"
+# FPDFのデフォルトフォントディレクトリを使用
+FONT_DIR = Path(FPDF_FONT_DIR)
+FONT_REG_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/NotoSansJP-Regular.ttf"
+FONT_BOLD_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/NotoSansJP-Bold.ttf"
+FONT_REG_PATH = FONT_DIR / "NotoSansJP-Regular.ttf"
+FONT_BOLD_PATH = FONT_DIR / "NotoSansJP-Bold.ttf"
 
-def _assert_fonts():
-    missing = [str(p) for p in (FONT_REG, FONT_BOLD) if not p.exists()]
-    if missing:
-        raise FileNotFoundError(
-            "PDF用の日本語フォントが見つかりません。\n"
-            + "\n".join(f"- {m}" for m in missing)
-            + "\n想定: fp/fonts/NotoSansJP-Regular.ttf, NotoSansJP-Bold.ttf"
-        )
+def _ensure_fonts():
+    if not FONT_REG_PATH.exists():
+        try:
+            st.info("日本語フォントをダウンロード中...")
+            response = requests.get(FONT_REG_URL)
+            response.raise_for_status()
+            with open(FONT_REG_PATH, 'wb') as f:
+                f.write(response.content)
+            st.success("フォントのダウンロードが完了しました。")
+        except requests.exceptions.RequestException as e:
+            st.error(f"フォントのダウンロードに失敗しました: {e}")
+            raise
+    
+    if not FONT_BOLD_PATH.exists():
+        try:
+            st.info("日本語フォントをダウンロード中...")
+            response = requests.get(FONT_BOLD_URL)
+            response.raise_for_status()
+            with open(FONT_BOLD_PATH, 'wb') as f:
+                f.write(response.content)
+            st.success("フォントのダウンロードが完了しました。")
+        except requests.exceptions.RequestException as e:
+            st.error(f"フォントのダウンロードに失敗しました: {e}")
+            raise
 
 # =========================
 # ローン計算ユーティリティ
@@ -151,10 +172,10 @@ st.markdown("---")
 # PDF 出力
 # =========================
 def build_pdf_bytes() -> bytes:
-    _assert_fonts()
+    _ensure_fonts()
     pdf = FPDF(unit="mm", format="A4")
-    pdf.add_font("NotoSans", "", str(FONT_REG), uni=True)
-    pdf.add_font("NotoSans", "B", str(FONT_BOLD), uni=True)
+    pdf.add_font("NotoSans", "", str(FONT_REG_PATH), uni=True)
+    pdf.add_font("NotoSans", "B", str(FONT_BOLD_PATH), uni=True)
     pdf.set_auto_page_break(True, margin=15)
     pdf.add_page()
 
