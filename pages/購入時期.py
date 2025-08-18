@@ -5,8 +5,7 @@ import requests
 from pathlib import Path
 import tempfile
 import streamlit as st
-from fpdf import FPDF
-from fpdf.fonts import FPDF_FONT_DIR
+from fpdf import FPDF, FPDF_FONT_DIR
 
 # =========================
 # フォント（必要に応じてダウンロード）
