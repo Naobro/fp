@@ -10,15 +10,37 @@ from pathlib import Path
 
 import streamlit as st
 import requests
-from fpdf import FPDF, FPDF_FONT_DIR
+from fpdf import FPDF  # ← FPDF_FONT_DIR は使いません
+
 
 # ============ 表示設定 ============
 st.set_page_config(page_title="資金計画書（諸費用明細）", layout="centered")
 st.title("資金計画書（諸費用明細）")
 
 # ============ フォント（IPAexに全面切替） ============
-FONT_DIR = Path(FPDF_FONT_DIR)
-FONT_DIR.mkdir(parents=True, exist_ok=True)
+import tempfile as _tmp
+
+def _pick_font_dir() -> Path:
+    """確実に書き込めるフォント置き場を選ぶ（順に試す）"""
+    candidates = [
+        Path.cwd() / "fonts_runtime",
+        Path(_tmp.gettempdir()) / "fonts_runtime",
+        Path.home() / ".cache" / "fonts_runtime",
+    ]
+    for d in candidates:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            # 書き込みテスト
+            t = d / ".wtest"
+            t.write_text("ok", encoding="utf-8")
+            t.unlink()
+            return d
+        except Exception:
+            continue
+    # どれもダメなら一時ディレクトリを新規作成
+    return Path(_tmp.mkdtemp(prefix="fonts_runtime_"))
+
+FONT_DIR = _pick_font_dir()
 
 # 公式配布の直リンク（単体zip）
 IPAEX_G_ZIP = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexg00401.zip"  # ゴシック
@@ -45,10 +67,9 @@ def _ensure_fonts() -> None:
 def _register_jp_fonts(pdf: FPDF) -> None:
     _ensure_fonts()
     pdf.add_font("IPAexGothic", "", str(FONT_GOTHIC_PATH), uni=True)
-    pdf.add_font("IPAexGothic", "B", str(FONT_GOTHIC_PATH), uni=True)  # 太字は同TTF割当（見た目太字にはならない）
+    pdf.add_font("IPAexGothic", "B", str(FONT_GOTHIC_PATH), uni=True)  # 太字も同TTF
     pdf.add_font("IPAexMincho", "", str(FONT_MINCHO_PATH), uni=True)
     pdf.add_font("IPAexMincho", "B", str(FONT_MINCHO_PATH), uni=True)
-
 # ============ ユーティリティ ============
 A4_W = 210
 A4_H = 297
