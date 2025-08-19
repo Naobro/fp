@@ -9,17 +9,21 @@ from fpdf import FPDF
 from urllib import request as _urlreq
 import tempfile as _tmp
 
-# ======================
-# クライアントごとにセッションを分離
-# ======================
-query_params = st.experimental_get_query_params()
-client_id = query_params.get("client", ["default"])[0]
+# --- URLクエリ（?client=...）を新APIで取得 ---
+# 値が無ければ "default"
+client_id = st.query_params.get("client") or "default"
 
-if client_id not in st.session_state:
-    st.session_state[client_id] = {}
+# （任意）URLにclientが無いときは付けておくと共有時に便利
+if "client" not in st.query_params:
+    st.query_params["client"] = client_id
 
-client_state = st.session_state[client_id]
-# ======================
+# --- クライアントごとの状態をセッションに分離 ---
+# 直接ID名を使うと他ページと衝突しやすいので名前空間を付ける
+_state_key = f"client:{client_id}"
+if _state_key not in st.session_state:
+    st.session_state[_state_key] = {}
+
+client_state = st.session_state[_state_key]
 
 _REG_NAME = "NotoSansJP-Regular.ttf"
 _BLD_NAME = "NotoSansJP-Bold.ttf"
