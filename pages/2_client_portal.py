@@ -17,26 +17,21 @@ import json as _json
 # =========================================================
 st.set_page_config(page_title="理想の住まいへのロードマップ", layout="wide")
 
-# =========================================================
+# ==== BLOCK A: クライアントID確定 & セッション分離 ====
 # ② URLクエリから client_id 取得（新API）
-#    ない場合は "default" を割り当て、URLにも反映
-# =========================================================
 client_id = st.query_params.get("client") or "default"
 if "client" not in st.query_params:
     st.query_params["client"] = client_id
 
-# =========================================================
-# ③ クライアント切替時にセッションを完全リセット
-# =========================================================
+# ③ クライアント切替時はセッション全消去（混線防止）
 if st.session_state.get("_active_client") != client_id:
     st.session_state.clear()
     st.session_state["_active_client"] = client_id
 
-# =========================================================
-# ④ セッションキーをクライアント単位で名前空間化するヘルパ
-# =========================================================
+# ④ セッションキー用の名前空間ヘルパ
 def ns(key: str) -> str:
     return f"{client_id}::{key}"
+# ==== BLOCK A ここまで ====
 
 # =========================================================
 # ⑤ PDF用フォント（NotoSansJP）を用意
@@ -801,7 +796,7 @@ with st.expander("スペック（専有部分）", expanded=False):
         wish_select({"h_floorheat":"床暖房","h_aircon_built":"エアコン（備付）"}[k], k)
     st.caption("【窓・建具】")
     for k in ["w_multi","w_low_e","w_double_sash","w_premium_doors"]:
-        wish_select({"w_multi":"複層ガラス","w_low_e":"Low-Eガラス","w_double_sッシ":"二重サッシ",
+        wish_select({"w_multi":"複層ガラス","w_low_e":"Low-Eガラス","w_double_sash":"二重サッシ",
                      "w_premium_doors":"建具ハイグレード（鏡面等）"}[k], k)
     st.caption("【収納】")
     for k in ["s_allrooms","s_wic","s_sic","s_pantry","s_linen"]:
