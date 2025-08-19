@@ -1,6 +1,6 @@
 # fp/pages/2_client_portal.py
 # -*- coding: utf-8 -*-
-import os, json, tempfile
+import os, json, tempfile, secrets, string
 from datetime import datetime
 from pathlib import Path
 
@@ -17,66 +17,58 @@ import json as _json
 # =========================================================
 st.set_page_config(page_title="理想の住まいへのロードマップ", layout="wide")
 
-# ==== BLOCK A: クエリ互換レイヤー & クライアントID確定（新旧APIフォールバック） ====
-
-# 旧API互換（Cloud等で st.query_params が空/未対応でも動くように）
-def _qp_get() -> dict:
+# =========================================================
+# 0) 新旧クエリAPI 互換ヘルパ + client自動発行
+# =========================================================
+def _get_query_param(name: str, default=None):
+    """st.query_params と experimental_* の両対応で取得"""
     try:
-        return dict(st.query_params)  # 新API
+        # 新API
+        v = st.query_params.get(name, default)
+        # streamlit の実装差で list のことがあるため補正
+        if isinstance(v, list):
+            return v[0] if v else default
+        return v if v not in [None, ""] else default
     except Exception:
-        pass
+        # 旧API
+        qp = st.experimental_get_query_params()
+        v = qp.get(name, [default])
+        return v[0] if isinstance(v, list) else v
+
+def _set_query_param(name: str, value):
+    """st.query_params と experimental_* の両対応で設定"""
     try:
-        return st.experimental_get_query_params()  # 旧API
+        st.query_params[name] = value
     except Exception:
-        return {}
+        now = st.experimental_get_query_params()
+        # value を list ではなく値で入れてOK
+        now[name] = value
+        st.experimental_set_query_params(**now)
 
-def _qp_set(d: dict):
-    try:
-        st.query_params.update(d)     # 新API
-        return
-    except Exception:
-        pass
-    try:
-        st.experimental_set_query_params(**d)  # 旧API
-    except Exception:
-        pass
+def _gen_client_id(n: int = 6) -> str:
+    alphabet = string.ascii_lowercase + string.digits
+    return "c-" + "".join(secrets.choice(alphabet) for _ in range(n))
 
-_q = _qp_get()
+# =========================================================
+# 1) クライアントID確定 & セッション分離
+# =========================================================
+client_id = _get_query_param("client", None)
 
-# list の可能性を吸収して安全に取り出す
-def _first(v, default=None):
-    if isinstance(v, list):
-        return v[0] if v else default
-    return v if v not in [None, ""] else default
+# ① URLにclientが無い → 自動発行してURLに反映
+if not client_id:
+    client_id = _gen_client_id()
+    _set_query_param("client", client_id)
 
-# ① URL から client を読む（新旧どちらでも）
-client_id = _first(_q.get("client"), "default")
-
-# ② URLに client が無ければ、決めた値を書き戻す
-if "client" not in _q:
-    _qp_set({"client": client_id})
-    _q = _qp_get()
-    client_id = _first(_q.get("client"), client_id)
-
-# ③ クライアント切替時はセッションを切替（同一タブでの切替対策）
+# ② クライアント切替時はセッション全消去（混線防止）
+#    （同じブラウザ・同じタブで別IDを開いたとき、前の入力が残らないようにする）
 if st.session_state.get("_active_client") != client_id:
     st.session_state.clear()
     st.session_state["_active_client"] = client_id
 
-# ④ セッションキー用の名前空間ヘルパ（←これが無いと NameError になります）
+# ③ セッションキー用の名前空間ヘルパ
 def ns(key: str) -> str:
     return f"{client_id}::{key}"
 
-# ⑤ client_id 未指定なら自動生成してURLに反映
-if client_id == "default":
-    import uuid
-    new_id = f"c-{uuid.uuid4().hex[:6]}"   # 例: c-a1b2c3
-    _qp_set({"client": new_id})
-    client_id = new_id
-    st.session_state.clear()
-    st.session_state["_active_client"] = client_id
-    st.info(f"新しい client_id を自動発行しました: {client_id}")
-# ==== BLOCK A ここまで ====
 # =========================================================
 # ⑤ PDF用フォント（NotoSansJP）を用意
 # =========================================================
@@ -122,7 +114,6 @@ def _ensure_jp_fonts() -> Path:
         # 片方落ちたら同じものを複製
         (tmpdir / _BLD_NAME).write_bytes((tmpdir / _REG_NAME).read_bytes())
     return tmpdir.resolve()
-# ==============================================
 
 # --- バルコニー方位：マスター ↔ UI 変換ユーティリティ ---
 def _load_master_balcony_pairs():
@@ -151,7 +142,7 @@ def _disp_to_code(disp: str) -> str:
     return "S"  # 既定値（南）
 
 # =========================
-# データ入出力ユーティリティ（置き換え版）
+# データ入出力ユーティリティ
 # =========================
 DATA_DIR = Path("data/clients")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -224,14 +215,45 @@ def reset_client(cid: str, use_master: bool = False) -> dict:
     save_client(cid, blank)
     return blank
 
-# 偏差値換算（平均3.0→50、1.0→30、5.0→70）
-def to_hensachi(avg_1to5: float) -> float:
-    return round(50 + (avg_1to5 - 3.0) * 10, 1)
+# ========= サニタイズ（admin作成の None 対策） =========
+def _coerce_int(val, default):
+    return int(val) if isinstance(val, (int, float)) else default
+
+def _coerce_float(val, default):
+    try:
+        return float(val) if isinstance(val, (int, float, str)) and str(val).strip() != "" else default
+    except Exception:
+        return default
 
 # =========================
 # 本体：クライアントデータロード
 # =========================
 payload = load_or_init_client(client_id)
+
+# --- Baseline が admin 側から None のまま来ても落ちないよう補正 ---
+if "baseline" in payload and isinstance(payload["baseline"], dict):
+    btmp = payload["baseline"]
+    payload["baseline"] = {
+        "housing_cost_m": _coerce_int(btmp.get("housing_cost_m"), 10),
+        "walk_min":       _coerce_int(btmp.get("walk_min"), 10),
+        "area_m2":        _coerce_int(btmp.get("area_m2"), 60),
+        "floor":          _coerce_int(btmp.get("floor"), 3),
+        "balcony_aspect": btmp.get("balcony_aspect") or "S",
+        "view":           btmp.get("view") or "未設定",
+        "husband_commute_min": _coerce_int(btmp.get("husband_commute_min"), 30),
+        "wife_commute_min":    _coerce_int(btmp.get("wife_commute_min"), 40),
+    }
+else:
+    payload["baseline"] = {
+        "housing_cost_m": 10,
+        "walk_min": 10,
+        "area_m2": 60,
+        "floor": 3,
+        "balcony_aspect": "S",
+        "view": "未設定",
+        "husband_commute_min": 30,
+        "wife_commute_min": 40,
+    }
 
 st.title("理想の住まいへのロードマップ")
 header_name = payload.get("meta",{}).get("name") or "お客様"
@@ -245,7 +267,7 @@ with c_right:
     if st.button("このIDで切替", key="__client_switch_btn"):
         _new_id = (_new_id or "").strip()
         if _new_id and _new_id != client_id:
-            st.query_params["client"] = _new_id
+            _set_query_param("client", _new_id)
             st.session_state.clear()
             st.session_state["_active_client"] = _new_id
             st.rerun()
@@ -330,10 +352,10 @@ with st.form("hearing_form", clear_on_submit=False):
         hearing["name"]      = st.text_input("お名前", value=hearing["name"], key=ns("h_name"))
         hearing["now_area"]  = st.text_input("現在の居住エリア・駅", value=hearing["now_area"], key=ns("h_now_area"))
     with c2:
-        hearing["now_years"] = st.number_input("居住年数（年）", 0, 100, int(hearing["now_years"]), key=ns("h_now_years"))
+        hearing["now_years"] = st.number_input("居住年数（年）", 0, 100, _coerce_int(hearing["now_years"], 0), key=ns("h_now_years"))
         hearing["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if hearing["is_owner"]=="賃貸" else 1, key=ns("h_is_owner"))
     with c3:
-        hearing["housing_cost"] = st.number_input("住居費（万円/月）", 0, 200, int(hearing["housing_cost"]), key=ns("h_housing_cost"))
+        hearing["housing_cost"] = st.number_input("住居費（万円/月）", 0, 200, _coerce_int(hearing["housing_cost"], 0), key=ns("h_housing_cost"))
     hearing["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=hearing["family"], key=ns("h_family"))
 
     st.divider()
@@ -341,21 +363,21 @@ with st.form("hearing_form", clear_on_submit=False):
     st.markdown("#### 家計・勤務")
     ca, cb, cc = st.columns(3)
     with ca:
-        hearing["self_fund_man"] = st.number_input("自己資金（万円）", min_value=0, value=int(hearing.get("self_fund_man",0)), step=50, key=ns("h_self_fund_man"))
+        hearing["self_fund_man"] = st.number_input("自己資金（万円）", min_value=0, value=_coerce_int(hearing.get("self_fund_man",0), 0), step=50, key=ns("h_self_fund_man"))
         hearing["other_debt"]    = st.text_input("他社借入（任意・金額/残債など）", value=hearing.get("other_debt",""), key=ns("h_other_debt"))
     with cb:
         st.caption("ご主人様")
         hearing["husband_company"]       = st.text_input("勤続先（会社名など）", value=hearing.get("husband_company",""), key=ns("h_hus_company"))
-        hearing["husband_service_years"] = st.number_input("勤続年数（年）", min_value=0, max_value=80, value=int(hearing.get("husband_service_years",0)), key=ns("h_hus_years"))
+        hearing["husband_service_years"] = st.number_input("勤続年数（年）", min_value=0, max_value=80, value=_coerce_int(hearing.get("husband_service_years",0),0), key=ns("h_hus_years"))
         hearing["husband_workplace"]     = st.text_input("勤務地（最寄りエリア）", value=hearing.get("husband_workplace",""), key=ns("h_hus_workplace"))
-        hearing["husband_income"]        = st.number_input("年収（万円）", min_value=0, value=int(hearing.get("husband_income",0)), step=50, key=ns("h_hus_income"))
+        hearing["husband_income"]        = st.number_input("年収（万円）", min_value=0, value=_coerce_int(hearing.get("husband_income",0),0), step=50, key=ns("h_hus_income"))
         hearing["husband_holidays"]      = st.text_input("休日（例：土日祝／シフト制）", value=hearing.get("husband_holidays",""), key=ns("h_hus_holidays"))
     with cc:
         st.caption("奥様")
         hearing["wife_company"]       = st.text_input("勤続先（会社名など）", value=hearing.get("wife_company",""), key=ns("h_wife_company"))
-        hearing["wife_service_years"] = st.number_input("勤続年数（年）", min_value=0, max_value=80, value=int(hearing.get("wife_service_years",0)), key=ns("h_wife_years"))
+        hearing["wife_service_years"] = st.number_input("勤続年数（年）", min_value=0, max_value=80, value=_coerce_int(hearing.get("wife_service_years",0),0), key=ns("h_wife_years"))
         hearing["wife_workplace"]     = st.text_input("勤務地（最寄りエリア）", value=hearing.get("wife_workplace",""), key=ns("h_wife_workplace"))
-        hearing["wife_income"]        = st.number_input("年収（万円）", min_value=0, value=int(hearing.get("wife_income",0)), step=50, key=ns("h_wife_income"))
+        hearing["wife_income"]        = st.number_input("年収（万円）", min_value=0, value=_coerce_int(hearing.get("wife_income",0),0), step=50, key=ns("h_wife_income"))
         hearing["wife_holidays"]      = st.text_input("休日（例：土日祝／シフト制）", value=hearing.get("wife_holidays",""), key=ns("h_wife_holidays"))
 
     st.divider()
@@ -363,11 +385,11 @@ with st.form("hearing_form", clear_on_submit=False):
     st.markdown("#### 現在の住まい（満足・不満）")
     hearing["sat_point"] = st.text_area("現在の住宅の満足点（自由入力）", value=hearing["sat_point"], key=ns("h_sat_point"))
     sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-    with sc1: hearing["sat_price"]    = st.slider("満足度：価格", 1, 5, int(hearing["sat_price"]), key=ns("h_sat_price"))
-    with sc2: hearing["sat_location"] = st.slider("満足度：立地", 1, 5, int(hearing["sat_location"]), key=ns("h_sat_location"))
-    with sc3: hearing["sat_size"]     = st.slider("満足度：広さ", 1, 5, int(hearing["sat_size"]), key=ns("h_sat_size"))
-    with sc4: hearing["sat_age"]      = st.slider("満足度：築年数", 1, 5, int(hearing["sat_age"]), key=ns("h_sat_age"))
-    with sc5: hearing["sat_spec"]     = st.slider("満足度：スペック", 1, 5, int(hearing["sat_spec"]), key=ns("h_sat_spec"))
+    with sc1: hearing["sat_price"]    = st.slider("満足度：価格", 1, 5, _coerce_int(hearing["sat_price"],3), key=ns("h_sat_price"))
+    with sc2: hearing["sat_location"] = st.slider("満足度：立地", 1, 5, _coerce_int(hearing["sat_location"],3), key=ns("h_sat_location"))
+    with sc3: hearing["sat_size"]     = st.slider("満足度：広さ", 1, 5, _coerce_int(hearing["sat_size"],3), key=ns("h_sat_size"))
+    with sc4: hearing["sat_age"]      = st.slider("満足度：築年数", 1, 5, _coerce_int(hearing["sat_age"],3), key=ns("h_sat_age"))
+    with sc5: hearing["sat_spec"]     = st.slider("満足度：スペック", 1, 5, _coerce_int(hearing["sat_spec"],3), key=ns("h_sat_spec"))
     sat_total = int(hearing["sat_price"]) + int(hearing["sat_location"]) + int(hearing["sat_size"]) + int(hearing["sat_age"]) + int(hearing["sat_spec"])
     st.caption(f"満足度スコア合計：**{sat_total} / 25**")
     hearing["dissat_free"] = st.text_area("不満な点（自由入力）", value=hearing["dissat_free"], key=ns("h_dissat_free"))
@@ -506,27 +528,16 @@ st.divider()
 # ============================================
 st.header("② 現状把握（現在の住宅の基礎情報）")
 
-if "baseline" not in payload:
-    payload["baseline"] = {
-        "housing_cost_m": 10,
-        "walk_min": 10,
-        "area_m2": 60,
-        "floor": 3,
-        "balcony_aspect": "S",         # N/NE/E/SE/S/SW/W/NW
-        "view": "未設定",
-        "husband_commute_min": 30,
-        "wife_commute_min": 40,
-    }
 b = payload["baseline"]
 
 with st.form("baseline_form"):
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        b["housing_cost_m"] = st.number_input("住居費（万円/月）", 0, 200, int(b.get("housing_cost_m",10)), key=ns("b_housing_cost_m"))
-        b["walk_min"] = st.number_input("最寄駅 徒歩（分）", 0, 60, int(b.get("walk_min",10)), key=ns("b_walk_min"))
+        b["housing_cost_m"] = st.number_input("住居費（万円/月）", 0, 200, _coerce_int(b.get("housing_cost_m",10),10), key=ns("b_housing_cost_m"))
+        b["walk_min"] = st.number_input("最寄駅 徒歩（分）", 0, 60, _coerce_int(b.get("walk_min",10),10), key=ns("b_walk_min"))
     with c2:
-        b["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, int(b.get("area_m2",60)), key=ns("b_area_m2"))
-        b["floor"] = st.number_input("所在階（数値）", 0, 70, int(b.get("floor",3)), key=ns("b_floor"))
+        b["area_m2"] = st.number_input("専有面積（㎡）", 0, 300, _coerce_int(b.get("area_m2",60),60), key=ns("b_area_m2"))
+        b["floor"] = st.number_input("所在階（数値）", 0, 70, _coerce_int(b.get("floor",3),3), key=ns("b_floor"))
     with c3:
         opts = [d for d,_ in _load_master_balcony_pairs()]
         cur_disp = _code_to_disp(b.get("balcony_aspect","S"))
@@ -581,9 +592,9 @@ cur = payload["current_home"]
 with st.expander("立地・環境", expanded=True):
     c1,c2,c3 = st.columns(3)
     with c1:
-        cur["walk_min"] = st.number_input("最寄駅までの徒歩分数", 0, 60, int(cur["walk_min"]), key=ns("cur_walk_min"))
-        cur["multi_lines"] = st.number_input("複数路線利用の可否（本数）", 0, 10, int(cur["multi_lines"]), key=ns("cur_multi_lines"))
-        cur["access_min"] = st.number_input("職場までのアクセス時間（分）", 0, 180, int(cur["access_min"]), key=ns("cur_access_min"))
+        cur["walk_min"] = st.number_input("最寄駅までの徒歩分数", 0, 60, _coerce_int(cur["walk_min"],10), key=ns("cur_walk_min"))
+        cur["multi_lines"] = st.number_input("複数路線利用の可否（本数）", 0, 10, _coerce_int(cur["multi_lines"],1), key=ns("cur_multi_lines"))
+        cur["access_min"] = st.number_input("職場までのアクセス時間（分）", 0, 180, _coerce_int(cur["access_min"],30), key=ns("cur_access_min"))
     with c2:
         cur["shop_level"] = st.selectbox("商業施設の充実度", ["充実","普通","乏しい"], index=["充実","普通","乏しい"].index(cur["shop_level"]), key=ns("cur_shop"))
         cur["edu_level"]  = st.selectbox("教育環境", ["良い","普通","弱い"], index=["良い","普通","弱い"].index(cur["edu_level"]), key=ns("cur_edu"))
@@ -597,8 +608,8 @@ with st.expander("立地・環境", expanded=True):
 with st.expander("広さ・間取り", expanded=True):
     c1,c2,c3 = st.columns(3)
     with c1:
-        cur["area_m2"] = st.number_input("専有面積（㎡）", 0.0, 300.0, float(cur["area_m2"]), key=ns("cur_area_m2"))
-        cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0.0, 50.0, float(cur["living_jyo"]), key=ns("cur_living_jyo"))
+        cur["area_m2"] = st.number_input("専有面積（㎡）", 0.0, 300.0, _coerce_float(cur["area_m2"],60.0), key=ns("cur_area_m2"))
+        cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0.0, 50.0, _coerce_float(cur["living_jyo"],12.0), key=ns("cur_living_jyo"))
         cur["layout_type"] = st.selectbox(
             "間取りタイプ",
             ["田の字","ワイドスパン","センターイン","その他"],
@@ -631,7 +642,7 @@ with st.expander("広さ・間取り", expanded=True):
     with c3:
         cur["balcony_depth_m"] = st.number_input(
             "バルコニー奥行（m）",
-            0.0, 5.0, float(cur.get("balcony_depth_m",1.5)),
+            0.0, 5.0, _coerce_float(cur.get("balcony_depth_m",1.5),1.5),
             step=0.1, key=ns("cur_balcony_depth_m")
         )
         cur["sun_wind_level"] = st.selectbox(
@@ -702,7 +713,7 @@ with st.expander("管理・共用部", expanded=False):
         cur["c_security"] = st.checkbox("オートロック等セキュリティ", value=cur["c_security"], key=ns("cur_c_security"))
         cur["c_design_level"] = st.selectbox("外観・エントランスのデザイン", ["良い","普通","弱い"], index=["良い","普通","弱い"].index(cur["c_design_level"]), key=ns("cur_c_design_level"))
     with m4:
-        cur["c_ev_count"] = st.number_input("エレベーター台数（基数）", 0, 20, int(cur["c_ev_count"]), key=ns("cur_c_ev_count"))
+        cur["c_ev_count"] = st.number_input("エレベーター台数（基数）", 0, 20, _coerce_int(cur["c_ev_count"],0), key=ns("cur_c_ev_count"))
         cur["c_pet_ok"] = st.checkbox("ペット飼育可", value=cur["c_pet_ok"], key=ns("cur_c_pet_ok"))
 
 if st.button("💾 ③ 現状スコアリングを上書き保存", key=ns("save_curhome")):
@@ -736,9 +747,9 @@ bp = payload["basic_prefs"]
 with st.form("basic_prefs_form", clear_on_submit=False):
     c1,c2,c3 = st.columns(3)
     with c1:
-        bp["budget_man"] = st.number_input("予算（万円）", min_value=0, value=int(bp.get("budget_man") or 0), step=100, key=ns("bp_budget"))
-        bp["age_limit_year"] = st.number_input("築年数（〜年まで）", min_value=0, value=int(bp.get("age_limit_year") or 0), step=1, key=ns("bp_age_limit"))
-        bp["dist_limit_min"] = st.number_input("駅までの距離（〜分）", min_value=0, value=int(bp.get("dist_limit_min") or 0), step=1, key=ns("bp_dist_limit"))
+        bp["budget_man"] = st.number_input("予算（万円）", min_value=0, value=_coerce_int(bp.get("budget_man") or 0, 0), step=100, key=ns("bp_budget"))
+        bp["age_limit_year"] = st.number_input("築年数（〜年まで）", min_value=0, value=_coerce_int(bp.get("age_limit_year") or 0, 0), step=1, key=ns("bp_age_limit"))
+        bp["dist_limit_min"] = st.number_input("駅までの距離（〜分）", min_value=0, value=_coerce_int(bp.get("dist_limit_min") or 0, 0), step=1, key=ns("bp_dist_limit"))
     with c2:
         bp["bus_ok"] = st.selectbox("バス便 可否", ["可","不可","不問"], index={"可":0,"不可":1,"不問":2}.get(bp.get("bus_ok","不問"),2), key=ns("bp_bus_ok"))
         bp["parking_must"] = st.checkbox("駐車場 必須", value=bool(bp.get("parking_must", False)), key=ns("bp_parking"))
