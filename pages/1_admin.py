@@ -8,7 +8,7 @@ from datetime import datetime
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
 
 # 共有URL（本番URLを secrets で上書き可）
-BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/")
+BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/client_portal")
 
 # データ保存先
 DATA_DIR = Path("data/clients")
@@ -49,8 +49,8 @@ def load_all_clients():
     return clients
 
 def share_url_for(cid: str) -> str:
-    return f"{BASE_URL}?client={cid}"
-
+    base = BASE_URL.rstrip("/")
+    return f"{base}?client={cid}"
 # -------------------------------
 # 新規発行（PINなし）
 # -------------------------------

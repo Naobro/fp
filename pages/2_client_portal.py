@@ -67,13 +67,15 @@ if st.session_state.get("_active_client") != client_id:
 def ns(key: str) -> str:
     return f"{client_id}::{key}"
 
-# ⑤ ガード：client 未指定時の自動救済
+# ⑤ client_id 未指定なら自動生成してURLに反映
 if client_id == "default":
-    st.info("client_id が未指定なので、仮ID 'dev' を一時適用します。URLに ?client=◯◯ を付ければ固定できます。")
-    client_id = "dev"
-    _qp_set({"client": client_id})
+    import uuid
+    new_id = f"c-{uuid.uuid4().hex[:6]}"   # 例: c-a1b2c3
+    _qp_set({"client": new_id})
+    client_id = new_id
     st.session_state.clear()
     st.session_state["_active_client"] = client_id
+    st.info(f"新しい client_id を自動発行しました: {client_id}")
 # ==== BLOCK A ここまで ====
 # =========================================================
 # ⑤ PDF用フォント（NotoSansJP）を用意
