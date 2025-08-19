@@ -9,6 +9,18 @@ from fpdf import FPDF
 from urllib import request as _urlreq
 import tempfile as _tmp
 
+# ======================
+# クライアントごとにセッションを分離
+# ======================
+query_params = st.experimental_get_query_params()
+client_id = query_params.get("client", ["default"])[0]
+
+if client_id not in st.session_state:
+    st.session_state[client_id] = {}
+
+client_state = st.session_state[client_id]
+# ======================
+
 _REG_NAME = "NotoSansJP-Regular.ttf"
 _BLD_NAME = "NotoSansJP-Bold.ttf"
 _RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Regular.ttf"
