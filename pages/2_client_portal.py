@@ -17,31 +17,67 @@ import json as _json
 # =========================================================
 st.set_page_config(page_title="理想の住まいへのロードマップ", layout="wide")
 
-# ==== BLOCK A: クライアントID確定 & セッション分離 ====
-# ② URLクエリから client_id 取得（新API）
-client_id = st.query_params.get("client") or "default"
-if "client" not in st.query_params:
-    st.query_params["client"] = client_id
+# ==== BLOCK A: クエリ互換レイヤー & クライアントID確定（新旧APIフォールバック） ====
 
-# ③ クライアント切替時はセッション全消去（混線防止）
+# 旧API互換（Cloud等で st.query_params が空/未対応でも動くように）
+def _qp_get() -> dict:
+    # 戻り値は必ず dict（value は str or list）
+    try:
+        q = dict(st.query_params)  # 新API（0. Streamlit 1.33+）
+        return q
+    except Exception:
+        pass
+    try:
+        # 旧API（experimental）。値は list になる
+        return st.experimental_get_query_params()  # type: ignore[attr-defined]
+    except Exception:
+        return {}
+
+def _qp_set(d: dict):
+    # d は {"client": "c-xxxx"} のような dict（値は str を推奨）
+    try:
+        # 新API
+        st.query_params.update(d)
+        return
+    except Exception:
+        pass
+    try:
+        # 旧API
+        st.experimental_set_query_params(**d)  # type: ignore[attr-defined]
+    except Exception:
+        # どうしても無理なら諦める（UIは動く）
+        pass
+
+_q = _qp_get()
+
+# list の可能性を吸収して安全に取り出す
+def _first(v, default=None):
+    if isinstance(v, list):
+        return v[0] if v else default
+    return v if v not in [None, ""] else default
+
+client_id = _first(_q.get("client"), "default")
+
+# URLに client が無ければ、いま決めた client_id をURLへ反映（新旧どちらでも）
+if "client" not in _q:
+    _qp_set({"client": client_id})
+    # set 後にもう一度読み直して整合
+    _q = _qp_get()
+    client_id = _first(_q.get("client"), client_id)
+
+# クライアント切替時はセッションを切り替え（同一タブでの切替時のみ意味がある）
 if st.session_state.get("_active_client") != client_id:
     st.session_state.clear()
     st.session_state["_active_client"] = client_id
 
-# ④ セッションキー用の名前空間ヘルパ
-def ns(key: str) -> str:
-    return f"{client_id}::{key}"
-# ==== BLOCK A ここまで ====
-
-# ==== ガード：client=... なしの誤保存防止（改良版：自動救済）====
+# ==== ガード：client=... が無い/読めないときの自動救済 ====
 if client_id == "default":
     st.info("client_id が未指定なので、仮ID 'dev' を一時適用します。URLに ?client=◯◯ を付ければ固定できます。")
     client_id = "dev"
-    st.query_params["client"] = client_id
+    _qp_set({"client": client_id})
     st.session_state.clear()
     st.session_state["_active_client"] = client_id
-# ==============================================
-
+# ==== BLOCK A ここまで ====
 # =========================================================
 # ⑤ PDF用フォント（NotoSansJP）を用意
 # =========================================================
