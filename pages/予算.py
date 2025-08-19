@@ -2,9 +2,45 @@ import streamlit as st
 import pandas as pd
 import numpy_financial as npf
 import matplotlib.pyplot as plt
-from utils import set_matplotlib_japanese_font  # ✅ 追加
+from matplotlib import font_manager, rcParams
 
-# ✅ フォント設定をutils.pyから呼び出す
+# ===== ここで日本語フォントをセット（utils不要・このファイル内に実装）=====
+def set_matplotlib_japanese_font():
+    """
+    利用可能な日本語フォントを探して matplotlib に設定する。
+    ダメなら最後に DejaVu Sans にフォールバック（記号は出るが日本語は□になる可能性あり）。
+    """
+    candidates = [
+        "IPAexGothic",           # Linux系で入っていることが多い
+        "IPAGothic",
+        "Noto Sans CJK JP",
+        "Noto Sans JP",
+        "Hiragino Sans",         # macOS
+        "Hiragino Kaku Gothic ProN",
+        "Yu Gothic",             # Windows
+        "Meiryo",
+        "MS Gothic",
+        "TakaoGothic",
+        "VL PGothic",
+        "DejaVu Sans",           # 最終手段（日本語×）
+    ]
+    found = None
+    for name in candidates:
+        try:
+            font_manager.findfont(name, fallback_to_default=False)
+            found = name
+            break
+        except Exception:
+            continue
+    if found is None:
+        found = "DejaVu Sans"
+
+    # 日本語フォントを優先しつつ、複数候補を設定
+    rcParams["font.family"] = "sans-serif"
+    rcParams["font.sans-serif"] = [found] + [f for f in candidates if f != found]
+    rcParams["axes.unicode_minus"] = False  # マイナスが豆腐になるのを防止
+
+# ✅ フォント設定（このファイル内の関数を呼ぶ）
 set_matplotlib_japanese_font()
 
 st.title("賃貸 vs 購入 住居費・資産価値シミュレーター")
@@ -236,7 +272,7 @@ fig2, ax2 = plt.subplots(figsize=(14, 4))
 ax2.plot(ages, loan_balance, label="ローン残債", marker='o')
 ax2.plot(ages, property_value, label="資産価値", marker='o')
 if reverse_year is not None:
-    ax2.axvline(ages[reverse_year], color='orange', linestyle='--', label='逆転年')
+    ax2.axvline(ages[reverse_year], linestyle='--', label='逆転年')
 ax2.set_xlabel("年齢")
 ax2.set_ylabel("万円")
 ax2.set_title("資産価値とローン残債の推移")
