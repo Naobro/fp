@@ -32,10 +32,15 @@ if st.session_state.get("_active_client") != client_id:
 def ns(key: str) -> str:
     return f"{client_id}::{key}"
 # ==== BLOCK A ここまで ====
-# ==== ガード：client=... なしの誤保存防止 ====
+
+# ==== ガード：client=... なしの誤保存防止（改良版：自動救済）====
 if client_id == "default":
-    st.error("URL に ?client=◯◯ を付けて開いてください（例：...?client=c-9fc8q2）。この状態では保存できません。")
-    st.stop()
+    st.info("client_id が未指定なので、仮ID 'dev' を一時適用します。URLに ?client=◯◯ を付ければ固定できます。")
+    client_id = "dev"
+    st.query_params["client"] = client_id
+    st.session_state.clear()
+    st.session_state["_active_client"] = client_id
+# ==============================================
 
 # =========================================================
 # ⑤ PDF用フォント（NotoSansJP）を用意
@@ -187,6 +192,7 @@ def reset_client(cid: str, use_master: bool = False) -> dict:
 # 偏差値換算（平均3.0→50、1.0→30、5.0→70）
 def to_hensachi(avg_1to5: float) -> float:
     return round(50 + (avg_1to5 - 3.0) * 10, 1)
+
 # =========================
 # 本体：クライアントデータロード
 # =========================
@@ -195,6 +201,20 @@ payload = load_or_init_client(client_id)
 st.title("理想の住まいへのロードマップ")
 header_name = payload.get("meta",{}).get("name") or "お客様"
 st.success(f"{header_name} 専用ページ（ID: {client_id}）")
+
+# === 画面上のクライアントID切替UI（右側） ===
+c_left, c_right = st.columns([1,1])
+with c_right:
+    st.caption("クライアント切替")
+    _new_id = st.text_input("client_id", value=client_id, key="__client_switcher")
+    if st.button("このIDで切替", key="__client_switch_btn"):
+        _new_id = (_new_id or "").strip()
+        if _new_id and _new_id != client_id:
+            st.query_params["client"] = _new_id
+            st.session_state.clear()
+            st.session_state["_active_client"] = _new_id
+            st.rerun()
+
 # === 管理：このIDの初期化/マスター操作 ===
 with st.expander("管理（このIDの初期化・マスター操作）", expanded=False):
     st.caption(f"現在の client_id: **{client_id}**  ｜ データパス: data/clients/{client_id}.json")
@@ -714,7 +734,6 @@ with st.form("basic_prefs_form", clear_on_submit=False):
 if submitted_basic:
     payload["basic_prefs"] = dict(bp)
     save_client(client_id, payload)
-    
     st.success("④.5 基本の希望条件を上書き保存しました。")
     st.rerun()
 
@@ -784,6 +803,7 @@ for idx, (k, label) in enumerate(CATS):
                   key=key, on_change=_on_change, args=(k, key,), format_func=_fmt,
                   help="各カテゴリに 1番〜5番 を重複なく割当て")
 
+# [IMP-SAVE] 重要度のトレードオフ 保存ボタン
 c1, c2 = st.columns(2)
 with c1:
     if st.button("↺ リセット（1番→価格, 2番→立地 ...）", use_container_width=True, key=ns("imp_reset")):
