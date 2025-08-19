@@ -32,6 +32,10 @@ if st.session_state.get("_active_client") != client_id:
 def ns(key: str) -> str:
     return f"{client_id}::{key}"
 # ==== BLOCK A ここまで ====
+# ==== ガード：client=... なしの誤保存防止 ====
+if client_id == "default":
+    st.error("URL に ?client=◯◯ を付けて開いてください（例：...?client=c-9fc8q2）。この状態では保存できません。")
+    st.stop()
 
 # =========================================================
 # ⑤ PDF用フォント（NotoSansJP）を用意
@@ -107,29 +111,82 @@ def _disp_to_code(disp: str) -> str:
     return "S"  # 既定値（南）
 
 # =========================
-# データ入出力ユーティリティ
+# データ入出力ユーティリティ（置き換え版）
 # =========================
 DATA_DIR = Path("data/clients")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+MASTER_FILE = DATA_DIR / "_master.json"  # あれば新規作成時の雛形に使う
+
 def _client_path(cid: str) -> Path:
     return DATA_DIR / f"{cid}.json"
 
-def load_or_init_client(cid: str):
-    f = _client_path(cid)
-    if not f.exists():
-        payload = {"meta": {"id": cid, "name": ""}}
-        f.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return payload
-    return json.loads(f.read_text(encoding="utf-8"))
+def _blank_payload(cid: str) -> dict:
+    """完全な白紙データ"""
+    return {"meta": {"id": cid, "name": ""}}
+
+def _save_json(p: Path, data: dict):
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _load_json(p: Path) -> dict:
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+def load_or_init_client(cid: str) -> dict:
+    """
+    client_id のJSONがあれば読み込み。
+    無ければ _master.json があればそれを雛形にして作成、
+    それも無ければ白紙で作成して返す。
+    """
+    fp = _client_path(cid)
+    if fp.exists():
+        data = _load_json(fp)
+        if data:
+            return data
+        # 壊れていたら白紙で再作成
+        data = _blank_payload(cid)
+        _save_json(fp, data)
+        return data
+
+    # 既存なし → マスター雛形優先
+    if MASTER_FILE.exists():
+        base = _load_json(MASTER_FILE) or {}
+        base.setdefault("meta", {})
+        base["meta"]["id"] = cid
+        base["meta"]["name"] = base["meta"].get("name", "") or ""
+        _save_json(fp, base)
+        return base
+
+    # マスターも無ければ白紙
+    data = _blank_payload(cid)
+    _save_json(fp, data)
+    return data
 
 def save_client(cid: str, data: dict):
-    _client_path(cid).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_json(_client_path(cid), data)
+
+def reset_client(cid: str, use_master: bool = False) -> dict:
+    """
+    この client_id のデータを作り直す。
+    use_master=True なら _master.json を雛形に、False なら完全白紙。
+    返り値は保存後のデータ。
+    """
+    if use_master and MASTER_FILE.exists():
+        base = _load_json(MASTER_FILE) or {}
+        base.setdefault("meta", {})
+        base["meta"]["id"] = cid
+        base["meta"]["name"] = base["meta"].get("name", "") or ""
+        save_client(cid, base)
+        return base
+    blank = _blank_payload(cid)
+    save_client(cid, blank)
+    return blank
 
 # 偏差値換算（平均3.0→50、1.0→30、5.0→70）
 def to_hensachi(avg_1to5: float) -> float:
     return round(50 + (avg_1to5 - 3.0) * 10, 1)
-
 # =========================
 # 本体：クライアントデータロード
 # =========================
@@ -138,6 +195,25 @@ payload = load_or_init_client(client_id)
 st.title("理想の住まいへのロードマップ")
 header_name = payload.get("meta",{}).get("name") or "お客様"
 st.success(f"{header_name} 専用ページ（ID: {client_id}）")
+# === 管理：このIDの初期化/マスター操作 ===
+with st.expander("管理（このIDの初期化・マスター操作）", expanded=False):
+    st.caption(f"現在の client_id: **{client_id}**  ｜ データパス: data/clients/{client_id}.json")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("🧹 このIDを白紙で初期化", key=ns("btn_reset_blank")):
+            payload = reset_client(client_id, use_master=False)
+            st.success("このIDを白紙データで作り直しました。")
+            st.rerun()
+    with c2:
+        if st.button("🧱 このIDをマスターから再作成", key=ns("btn_reset_from_master")):
+            payload = reset_client(client_id, use_master=True)
+            st.success("_master.json を雛形にして、このIDを作り直しました。")
+            st.rerun()
+    with c3:
+        if st.button("⭐ 今の内容をマスターに保存", key=ns("btn_save_master")):
+            # id はマスター名に付け替えて保存
+            _save_json(MASTER_FILE, {**payload, "meta": {**payload.get("meta", {}), "id": "_master"}})
+            st.success("現在の内容を data/clients/_master.json に保存しました。")
 
 # ============================================
 # ① ヒアリング（5W2H）＋ PDF出力
@@ -638,25 +714,7 @@ with st.form("basic_prefs_form", clear_on_submit=False):
 if submitted_basic:
     payload["basic_prefs"] = dict(bp)
     save_client(client_id, payload)
-    # 任意エクスポート
-    try:
-        export = {
-            "budget_man": bp.get("budget_man"),
-            "age_limit_year": bp.get("age_limit_year"),
-            "dist_limit_min": bp.get("dist_limit_min"),
-            "bus_ok": bp.get("bus_ok"),
-            "parking_must": bp.get("parking_must"),
-            "types": bp.get("types", []),
-            "layout_free": bp.get("layout_free",""),
-            "must_free": bp.get("must_free",""),
-            "areas": bp.get("areas", {}),
-            "importance": bp.get("importance", {})
-        }
-        os.makedirs("data", exist_ok=True)
-        with open("data/client_prefs.json","w",encoding="utf-8") as f:
-            json.dump(export, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    
     st.success("④.5 基本の希望条件を上書き保存しました。")
     st.rerun()
 
@@ -736,14 +794,6 @@ with c2:
         bp["importance"] = dict(st.session_state[ns("imp_state")])
         payload["basic_prefs"] = bp
         save_client(client_id, payload)
-        try:
-            export_path = "data/client_prefs.json"
-            export = json.load(open(export_path,"r",encoding="utf-8")) if os.path.exists(export_path) else {}
-            export["importance"] = dict(st.session_state[ns("imp_state")])
-            with open(export_path,"w",encoding="utf-8") as f:
-                json.dump(export, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
         st.success("重要度を保存しました（重複なし・1番〜5番）。")
         st.rerun()
 
