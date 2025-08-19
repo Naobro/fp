@@ -8,13 +8,13 @@ from pathlib import Path
 
 import requests
 import streamlit as st
-from fpdf import FPDF, FPDF_FONT_DIR
+from fpdf import FPDF
 
 # =========================
 # フォント（IPAexに全面切替／自動DL＆展開）
 # =========================
-# FPDFのデフォルトフォントディレクトリを使用
-FONT_DIR = Path(FPDF_FONT_DIR)
+# 書き込み可能な一時領域にフォントを置く（Streamlit Cloudでも安全）
+FONT_DIR = Path(tempfile.gettempdir()) / "fonts_fp"
 FONT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ここを上書き
@@ -31,6 +31,9 @@ def _download_and_extract_ttf(zip_url: str, member_suffix: str, save_path: Path)
     zip_url からzipを取得→中の *.ttf を抽出して save_path に保存
     member_suffix 例: 'ipaexg.ttf', 'ipaexm.ttf'
     """
+    # ★ 追加：保存先の親ディレクトリを必ず作成（堅牢化）
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
     resp = requests.get(zip_url, timeout=30)
     resp.raise_for_status()
     with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
