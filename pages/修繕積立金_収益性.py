@@ -1,19 +1,18 @@
 # pages/修繕積立金_収益性.py
-# 結論ファースト：①現在の㎡単価と国交省基準・将来値上げ予想 ②収益性（周辺家賃×専有×12 ÷ 購入価格）
-# その下に（仮）長期修繕計画（35年・万円横テーブル）
+# 結論ファースト：
+# ① 現状の㎡単価と国交省基準（＋機械式補正）で妥当性判定
+# ② 将来の値上げ予想（次回大規模修繕の必要額→逆算）
+# ③ 収益性（周辺家賃㎡単価×専有×12 ÷ 購入価格）
+# ④ 下段：（仮）長期修繕計画（35年・万円横テーブル）
+# ⑤ 追加：短期ターゲット（例：5年後に2億円必要）を“住戸月額”に逆算＋据置可否判定
 #
-# 追加（本修正）：
-# ・インフレ複利で次回必要費を時価化
-# ・国交省モデル（円/㎡・回）×延床×(OH, TAX) をバックアップ推計に採用
-# ・桁（万円⇄円）取り違え防止：表示は明確に「円」表記
+# デフォルト
+# ・あなたの月額 15,000 円、専有 70㎡ → 現状 214 円/㎡・月（psqm直入力が0なら自動）
+# ・延べ床 8,000㎡、戸数 100、築 2000、階数 10、EV 1、機械式 0
+# ・周辺家賃 4,000 円/㎡・月、購入価格 7,000 万円
+# ・インフレ既定 3%（年・複利）
 #
-# デフォルト（指示どおり）
-# ・住戸月額 15,000 円、専有 70㎡ → 現状 214 円/㎡・月（psqm直入力が0なら自動計算）
-# ・延べ床 8,000㎡、戸数 100、築年 2000、階数 10、EV 1、機械式 0
-# ・周辺家賃（㎡単価） 4,000 円/㎡・月
-# ・購入価格 7,000 万円（万円入力）
-#
-# ルール：整数表示（円/万円/％）。％は四捨五入の整数。
+# 表示は整数（円／万円／％）。長期表は“万円”、結論は“円”で明示。
 
 import math
 import datetime as dt
@@ -23,8 +22,8 @@ import streamlit as st
 # =====================
 # 内部固定パラメータ
 # =====================
-INFL = 0.03         # 長期表のインフレ年3%（複利・デフォルト）
-TAX = 0.10          # 消費税10%
+INFL = 0.03         # 既定インフレ（年3%・複利）
+TAX = 0.10          # 消費税
 OH = 0.10           # 諸経費（工事費小計の10%）
 PRIVATE_RATIO_BUILDING = 0.75  # 延床→総専有（代表値）
 FACADE_COEF = 1.25             # 外壁係数
@@ -44,7 +43,7 @@ ITEMS = [
     ("建築", "鉄部塗装（手すり・階段・フェンス等）", 12, "sqm", 1_000),
     ("設備", "給水設備（ポンプ・受水槽等）更新", 12, "sqm",    1_200),
     ("設備", "給排水管 更生/更新（㎡按分）",      24, "sqm",    4_400),
-   ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",    1_500),
+    ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",    1_500),  # ← カンマではなくアンダースコア
     ("設備", "インターホン更新（モニター化）",     20, "per_unit", 70_000),
     ("設備", "エレベーター更新（本体）",          25, "ev",   20_000_000),
     ("設備", "外構・舗装・植栽 等",               12, "sqm",      800),
@@ -55,7 +54,7 @@ ITEMS = [
 # ユーティリティ
 # ==========
 def fmt_man(n_yen: float) -> str:
-    """円→万円（整数）"""
+    """円→万円（整数・カンマ）"""
     man = int(round(n_yen / 10_000))
     return f"{man:,}"
 
@@ -100,12 +99,12 @@ def mlit_benchmark(floors:int, total_floor_area:float):
 
 # 機械式駐車場：国交省の台当たり月額（円/台・月）
 MECH_PARK_UNIT_YEN = {
-    "2段（ピット1段）昇降式":      6450,
-    "2段（ピット2段）昇降式":      5840,
-    "3段（ピット1段）昇降横行式":  7210,
-    "4段（ピット2段）昇降横行式":  6235,
-    "エレベーター式・垂直循環式":   4645,
-    "その他":                       5235,
+    "2段（ピット1段）昇降式":      6_450,
+    "2段（ピット2段）昇降式":      5_840,
+    "3段（ピット1段）昇降横行式":  7_210,
+    "4段（ピット2段）昇降横行式":  6_235,
+    "エレベーター式・垂直循環式":   4_645,
+    "その他":                       5_235,
 }
 
 def mech_add_psqm(unit_type:str, slots:int, total_private_area:float) -> int:
@@ -145,39 +144,46 @@ with st.sidebar:
     st.header("入力（整数・デフォルト込み）")
 
     # 現状の積立：psqmを主入力。0なら「住戸月額÷専有」で自動計算。
-    my_monthly_now   = st.number_input("あなたの修繕積立金（月額・円）", min_value=0, value=15000, step=1000)
+    my_monthly_now   = st.number_input("あなたの修繕積立金（月額・円）", min_value=0, value=15_000, step=1_000)
     my_private_area  = st.number_input("専有面積（㎡）", min_value=0, value=70, step=1)
     current_psqm_in  = st.number_input("現状の修繕積立金（円/㎡・月）※未入力=0で自動計算", min_value=0, value=0, step=1)
 
     # 建物条件
-    total_floor_area = st.number_input("延べ床面積（㎡）", min_value=0, value=8000, step=100)
+    total_floor_area = st.number_input("延べ床面積（㎡）", min_value=0, value=8_000, step=100)
     units            = st.number_input("戸数（戸）", min_value=0, value=100, step=1)
-    built_year       = st.number_input("築年（西暦）", min_value=0, max_value=9999, value=2000, step=1)
+    built_year       = st.number_input("築年（西暦）", min_value=0, max_value=9_999, value=2_000, step=1)
     floors           = st.number_input("階数（階）", min_value=0, value=10, step=1)
     ev_count         = st.number_input("EV台数（基）", min_value=0, value=1, step=1)
     mech_park_slots  = st.number_input("機械式駐車場の区画数（基）", min_value=0, value=0, step=1)
     mech_park_type   = st.selectbox("機械式駐車場の形式", list(MECH_PARK_UNIT_YEN.keys()), index=0)
 
     # 収益性（周辺家賃・購入価格）
-    rent_psqm        = st.number_input("周辺家賃相場（円/㎡・月）", min_value=0, value=4000, step=1000)
-    price_million    = st.number_input("購入価格（万円）", min_value=0, value=7000, step=100)
+    rent_psqm        = st.number_input("周辺家賃相場（円/㎡・月）", min_value=0, value=4_000, step=1_000)
+    price_million    = st.number_input("購入価格（万円）", min_value=0, value=7_000, step=100)
 
     st.divider()
     # 次回大規模修繕（逆算）：年は築年から自動推定を初期値に
     next_year_default = predict_next_major_year(int(built_year), 12)
     next_major_year   = st.number_input("次回大規模修繕の年（YYYY）", min_value=0, value=next_year_default, step=1)
 
-    # ① 長期表から拾えない場合の「国交省モデル（円/㎡・回）」※任意
-    mlit_unit_per_sqm = st.number_input("（任意）大規模修繕 単価（円/㎡・回）", min_value=0, value=20000, step=1000)
+    # 長期表から拾えない時のバックアップ：国交省モデル（円/㎡・回）
+    mlit_unit_per_sqm = st.number_input("（任意）大規模修繕 単価（円/㎡・回）", min_value=0, value=20_000, step=1_000)
 
-    # ② 今日の必要費を直接入れる場合（使えばこちら優先）
-    base_cost_today   = st.number_input("（任意）今日の必要費（全体・円）※入力時はこれが最優先", min_value=0, value=0, step=100000)
+    # 今日の必要費を直接入れる場合（使えばこちら最優先）
+    base_cost_today   = st.number_input("（任意）今日の必要費（全体・円）※入力時はこれが最優先", min_value=0, value=0, step=100_000)
 
-    # ③ インフレ率（空欄=0なら既定3%を採用）
+    # インフレ率（空欄=0なら既定3%）
     infl_rate_pct     = st.number_input("（任意）インフレ率（年％）※未入力=0は内部既定3%", min_value=0, value=0, step=1)
 
-    # ④ いまの積立残高（全体）
-    current_balance   = st.number_input("（任意）現在の修繕積立金 残高（全体・円）", min_value=0, value=0, step=100000)
+    # 現在の積立残高（全体）
+    current_balance   = st.number_input("（任意）現在の修繕積立金 残高（全体・円）", min_value=0, value=0, step=100_000)
+
+    st.divider()
+    # 短期ターゲット（住戸逆算）— 例：5年後に2億円必要なら？
+    st.subheader("短期ターゲット（住戸逆算）")
+    short_years        = st.number_input("目標までの年数（年）", min_value=1, value=5, step=1)
+    short_needed_total = st.number_input("目標時点の必要費（全体・円）", min_value=0, value=200_000_000, step=1_000_000)
+    use_infl_short     = st.checkbox("インフレ複利を適用（年率は上の設定を使用）", value=True)
 
 # 年レンジ（長期表）
 start_year = dt.date.today().year
@@ -188,7 +194,7 @@ years      = list(range(start_year, end_year + 1))
 # 総専有面積（推計）
 total_private_area = int(total_floor_area * PRIVATE_RATIO_BUILDING) if total_floor_area else 0
 
-# 現状の円/㎡・月
+# 現状の円/㎡・月（psqm直入力優先→無ければ住戸月額÷専有で推計）
 if current_psqm_in > 0:
     current_psqm = int(current_psqm_in)
 elif my_private_area > 0:
@@ -229,7 +235,7 @@ for cat, name, cycle, utype, unit_cost in ITEMS:
                 base = unit_cost * ev_count
             else:
                 base = unit_cost
-            amt = inflated(base, t)         # 円
+            amt = inflated(base, t)         # 円（将来価格）
             data[y].append(fmt_man(amt))    # 万円（文字列）
         else:
             data[y].append("")
@@ -287,17 +293,6 @@ required_psqm_35 = int(round(required_monthly_total_35 / total_private_area)) if
 # ==========
 # 妥当性＆将来値上げ（結論ファースト）
 # ==========
-def mlit_benchmark(floors:int, total_floor_area:float):
-    if floors >= 20:
-        return {"avg": 338, "low": 240, "high": 410, "label": "20階以上"}
-    if total_floor_area < 5_000:
-        return {"avg": 335, "low": 235, "high": 430, "label": "20階未満・延床<5,000㎡"}
-    if total_floor_area < 10_000:
-        return {"avg": 252, "low": 170, "high": 320, "label": "20階未満・延床5,000〜10,000㎡"}
-    if total_floor_area < 20_000:
-        return {"avg": 271, "low": 200, "high": 330, "label": "20階未満・延床10,000〜20,000㎡"}
-    return {"avg": 255, "low": 190, "high": 325, "label": "20階未満・延床20,000㎡以上"}
-
 g = mlit_benchmark(int(floors), float(total_floor_area)) if (floors and total_floor_area) else {"avg":0,"low":0,"high":0,"label":"—"}
 mech_add = mech_add_psqm(mech_park_type, int(mech_park_slots), float(total_private_area)) if total_private_area>0 else 0
 low, avg, high = g["low"]+mech_add, g["avg"]+mech_add, g["high"]+mech_add
@@ -316,14 +311,14 @@ judge_now = judge(current_psqm, low, high)
 diff_now_vs_avg = pct_diff(current_psqm, avg)
 diff_req_vs_avg = pct_diff(required_psqm_35, avg)
 
-# ===== 結論ブロック =====
-st.subheader("結論（妥当性・将来値上げ・収益性）")
-
-# 収益性
+# 収益性（周辺相場ベース）
 rent_monthly = (rent_psqm * my_private_area) if (rent_psqm and my_private_area) else 0
 rent_annual  = rent_monthly * 12
 price_yen    = price_million * 10_000  # 万円→円
 yield_pct    = int(round((rent_annual / price_yen) * 100)) if price_yen>0 else 0
+
+# ===== 結論ブロック =====
+st.subheader("結論（妥当性・将来値上げ・収益性）")
 
 c1, c2, c3 = st.columns([1.05,1.05,1.2])
 with c1:
@@ -355,7 +350,7 @@ today_year = dt.date.today().year
 years_to_next = max(0, int(next_major_year) - today_year) if next_major_year else 0
 months_left   = years_to_next * 12
 
-# 1) 長期表から自動取得（該当年が列にある場合）
+# 1) 長期表から自動取得（該当年が列にある場合）— 万円→円
 auto_needed_next = 0
 if next_major_year and (start_year <= next_major_year <= end_year):
     a_row_idx = None
@@ -364,28 +359,25 @@ if next_major_year and (start_year <= next_major_year <= end_year):
             a_row_idx = i
             break
     if a_row_idx is not None:
-        val = data[next_major_year][a_row_idx]  # 万円（文字列 or ""）
+        val = data[next_major_year][a_row_idx]  # 万円の文字列
         if val != "":
-            auto_needed_next = int(val.replace(",","")) * 10_000  # 万円→円
+            auto_needed_next = int(val.replace(",","")) * 10_000
 
 # 2) 今日の必要費の手入力が最優先
 if base_cost_today and base_cost_today > 0:
     model_today = int(base_cost_today)
-# 3) それも無ければ、国交省モデル（円/㎡・回）で推計（今日時点の金額）
+# 3) 無ければ、国交省モデル（円/㎡・回）で推計（今日時点）
 elif mlit_unit_per_sqm and total_floor_area:
-    # 今日の1回分の総額（円）＝ 単価×延床 → 諸経費→消費税
-    subtotal = mlit_unit_per_sqm * total_floor_area          # ベース
-    subtotal_oh = subtotal * (1 + OH)                        # 諸経費
-    model_today = int(round(subtotal_oh * (1 + TAX)))        # 税込み
+    subtotal = mlit_unit_per_sqm * total_floor_area   # ベース（円）
+    subtotal_oh = subtotal * (1 + OH)                 # 諸経費
+    model_today = int(round(subtotal_oh * (1 + TAX))) # 税込
 else:
     model_today = 0
 
 # 4) 次回年の必要費（円）
-#   ・長期表から拾えたらそれ（auto_needed_next）は既に“年別インフレ反映後”
-#   ・拾えなければ、model_today をインフレ複利で次回年に引き上げる
-use_infl = (infl_rate_pct/100) if infl_rate_pct and infl_rate_pct>0 else INFL
+use_infl = (infl_rate_pct/100) if (infl_rate_pct and infl_rate_pct>0) else INFL
 if auto_needed_next > 0:
-    needed_at_next = int(auto_needed_next)
+    needed_at_next = int(auto_needed_next)  # 表の値は年次インフレ反映済
 else:
     needed_at_next = int(round(model_today * ((1 + use_infl) ** years_to_next))) if model_today>0 else 0
 
@@ -399,13 +391,13 @@ delta_psqm_threshold = max(0, required_psqm_threshold - current_psqm)
 
 c4, c5, c6 = st.columns([1.05,1.05,1.2])
 with c4:
-    st.markdown("**次回時点の必要額**")
+    st.markdown("**次回時点の必要額（全体）**")
     st.metric("次回年", int_fmt(next_major_year) if next_major_year else "—")
-    st.metric("必要費（全体・円）", int_fmt(needed_at_next) if needed_at_next>0 else "—")
+    st.metric("必要費（円）", int_fmt(needed_at_next) if needed_at_next>0 else "—")
     if auto_needed_next>0:
         st.caption("※ 長期表（万円）から自動取得 → 円換算済")
     elif model_today>0:
-        st.caption(f"※ 国交省モデル：{int_fmt(mlit_unit_per_sqm)} 円/㎡・回 × 延床 → (OH, TAX) → インフレ{int(round(use_infl*100))}%/年で{years_to_next}年分複利")
+        st.caption(f"※ 国交省モデル：{int_fmt(mlit_unit_per_sqm)} 円/㎡・回 × 延床 → (OH, TAX) → インフレ{int(round(use_infl*100))}%/年×{years_to_next}年 複利")
 
 with c5:
     st.markdown("**閾値（値上げ不要となる最小水準）**")
@@ -413,12 +405,51 @@ with c5:
     st.metric("必要：円/㎡・月（閾値）", int_fmt(required_psqm_threshold) if required_psqm_threshold>0 else "—")
 
 with c6:
-    st.markdown("**現状との差**")
+    st.markdown("**現行との差**")
     st.metric("差分：円/㎡・月", int_fmt(delta_psqm_threshold) if delta_psqm_threshold>0 else "0")
     if months_left>0:
         st.caption(f"残月数：{months_left} ヶ月（{today_year}→{next_major_year}）")
 
-st.caption("※ 単位注意：長期表は『万円』表示、ここは『円』表示。必要費＝ceil((次回必要費 − 現在残高) ÷ 残月数)。")
+st.caption("※ 注意：長期表は『万円』表示、結論・逆算欄は『円』表示。")
+
+# ==========================
+# 短期ターゲット（住戸逆算）— 例：5年後に2億円必要なら？
+# ==========================
+st.subheader("短期ターゲット（住戸逆算）")
+
+# 目標額（全体）の将来価値（インフレ任意）
+if use_infl_short:
+    target_total_future = int(round(short_needed_total * ((1 + use_infl) ** short_years)))
+else:
+    target_total_future = int(short_needed_total)
+
+# 建物全体の必要“月額”を逆算 → 円/㎡・月 → 住戸月額
+short_months = short_years * 12
+short_required_monthly_total = ceil_div(max(0, target_total_future - int(current_balance)), max(1, short_months))
+short_required_psqm           = ceil_div(short_required_monthly_total, max(1, total_private_area)) if total_private_area>0 else 0
+short_required_monthly_unit   = short_required_psqm * my_private_area
+
+# 現行（月額・住戸）と比較（psqm由来 or 直接入力のどちらでも OK）
+current_monthly_unit = current_psqm * my_private_area if current_psqm>0 else my_monthly_now
+short_delta_unit     = max(0, short_required_monthly_unit - current_monthly_unit)
+
+c7, c8, c9 = st.columns([1.05,1.05,1.2])
+with c7:
+    st.markdown("**目標の将来価値**")
+    st.metric("必要額（全体・円）", int_fmt(target_total_future))
+    st.metric("残月数（ヶ月）", int_fmt(short_months))
+
+with c8:
+    st.markdown("**据置可否の境界（月額）**")
+    st.metric("必要：円/㎡・月", int_fmt(short_required_psqm) if short_required_psqm>0 else "—")
+    st.metric("あなたの必要月額（円）", int_fmt(short_required_monthly_unit) if short_required_monthly_unit>0 else "—")
+
+with c9:
+    st.markdown("**現行との差（住戸）**")
+    st.metric("現在（月額・円）", int_fmt(current_monthly_unit))
+    st.metric("追加必要額（円/月）", int_fmt(short_delta_unit))
+
+st.caption("※ 算式：ceil((目標の将来価値 − 現在残高) ÷ 残月数) を円/㎡・月に換算 → 専有㎡で住戸月額へ。")
 
 # ==========================
 # （仮）長期修繕計画（35年・万円横テーブル）
@@ -453,6 +484,6 @@ if reasons:
     st.markdown("- " + "\n- ".join(reasons))
 
 st.caption(
-    "※ すべて概算。単価・周期・インフレ率3%は仮置き。外壁・屋上・鉄部面積は延床と階数から推定。"
-    " ガイドラインと機械式駐車場の加算は国交省の代表値を実装。"
+    "※ すべて概算。単価・周期・既定インフレ3%は仮置き。外壁・屋上・鉄部面積は延床と階数から推定。"
+    " 国交省ガイドラインと機械式加算は代表値。長期表＝『万円』、結論＝『円』。"
 )
