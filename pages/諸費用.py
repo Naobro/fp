@@ -502,7 +502,7 @@ try:
     st.download_button(
         label="📄 資金計画書.pdf をダウンロード",
         data=pdf_bytes,
-        file_name="資金計画書.pdf",
+        file_name=f"{property_name}＋諸費用明細.pdf",
         mime="application/pdf",
     )
 except Exception as e:
