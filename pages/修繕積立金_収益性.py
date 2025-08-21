@@ -6,13 +6,7 @@
 # ④ 下段：（仮）長期修繕計画（35年・万円横テーブル）
 # ⑤ 追加：短期ターゲット（例：5年後に2億円必要）を“住戸月額”に逆算＋据置可否判定
 #
-# デフォルト
-# ・あなたの月額 15,000 円、専有 70㎡ → 現状 214 円/㎡・月（psqm直入力が0なら自動）
-# ・延べ床 8,000㎡、戸数 100、築 2000、階数 10、EV 1、機械式 0
-# ・周辺家賃 4,000 円/㎡・月、購入価格 7,000 万円
-# ・インフレ既定 3%（年・複利）
-#
-# 表示は整数（円／万円／％）。長期表は“万円”、結論は“円”で明示。
+# 重要：表示は整数（円／万円／％）。長期表は“万円”、結論は“円”。
 
 import math
 import datetime as dt
@@ -23,8 +17,8 @@ import streamlit as st
 # 内部固定パラメータ
 # =====================
 INFL = 0.03         # 既定インフレ（年3%・複利）
-TAX = 0.10          # 消費税
-OH = 0.10           # 諸経費（工事費小計の10%）
+TAX = 0.10          # 消費税（本体+諸経費に課税）
+OH = 0.10           # 諸経費（工事費小計の10%）※設計監理・予備費は任意で拡張可
 PRIVATE_RATIO_BUILDING = 0.75  # 延床→総専有（代表値）
 FACADE_COEF = 1.25             # 外壁係数
 STEEL_RATIO = 0.10             # 鉄部塗装面積 ≒ 外壁の10%
@@ -38,16 +32,16 @@ def floor_factor_by_floors(f:int)->float:
 # 工事項目（カテゴリ, 名称, 周期(年), 単価タイプ, 単価（円/単位））
 # 単価タイプ：'sqm'（㎡単価×推定面積）/'lump'（一式）/'per_unit'（戸数×単価）/'ev'（EV台数×単価）
 ITEMS = [
-    ("建築", "外壁塗装・タイル補修・シーリング", 12, "sqm",    6_000),
-    ("建築", "屋上・バルコニー・庇 防水改修",   12, "sqm",    2_800),
-    ("建築", "鉄部塗装（手すり・階段・フェンス等）", 12, "sqm", 1_000),
-    ("設備", "給水設備（ポンプ・受水槽等）更新", 12, "sqm",    1_200),
-    ("設備", "給排水管 更生/更新（㎡按分）",      24, "sqm",    4_400),
-    ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",    1_500),  # ← カンマではなくアンダースコア
+    ("建築", "外壁塗装・タイル補修・シーリング", 12, "sqm",      6_000),
+    ("建築", "屋上・バルコニー・庇 防水改修",   12, "sqm",      2_800),
+    ("建築", "鉄部塗装（手すり・階段・フェンス等）", 12, "sqm",  1_000),
+    ("設備", "給水設備（ポンプ・受水槽等）更新", 12, "sqm",      1_200),
+    ("設備", "給排水管 更生/更新（㎡按分）",      24, "sqm",      4_400),
+    ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",      1_500),
     ("設備", "インターホン更新（モニター化）",     20, "per_unit", 70_000),
-    ("設備", "エレベーター更新（本体）",          25, "ev",   20_000_000),
-    ("設備", "外構・舗装・植栽 等",               12, "sqm",      800),
-    ("足場仮設", "足場仮設（共通）",              12, "sqm",    2_000),
+    ("設備", "エレベーター更新（本体）",          25, "ev",     20_000_000),
+    ("設備", "外構・舗装・植栽 等",               12, "sqm",        800),
+    ("足場仮設", "足場仮設（共通）",              12, "sqm",      2_000),
 ]
 
 # ==========
@@ -64,6 +58,11 @@ def int_fmt(n) -> str:
     except:
         return "0"
 
+def man_str_to_yen(s: str) -> int:
+    """'1,234'（万円文字列）→ 円"""
+    if not s: return 0
+    return int(s.replace(",", "")) * 10_000
+
 def inflated(base_yen: float, years_from_start: int) -> float:
     return base_yen * ((1.0 + INFL) ** max(0, years_from_start))
 
@@ -75,15 +74,6 @@ def schedule_years(built_year:int, cycle:int, start_year:int, end_year:int):
             years.append(y)
         y += cycle
     return years
-
-def any_zero_required(vals) -> bool:
-    for v in vals:
-        try:
-            if v is None or int(v) == 0:
-                return True
-        except:
-            return True
-    return False
 
 # 国交省ガイドライン（R6.6.7改定） ㎡単価の目安（機械式除く）
 def mlit_benchmark(floors:int, total_floor_area:float):
@@ -122,7 +112,7 @@ def area_for_item(cat:str, name:str, per_floor_area:float, facade_area_est:float
     if "鉄部塗装" in name:               return steel_area_est * floor_factor
     if "外構・舗装・植栽" in name:        return per_floor_area * 0.5
     if cat == "足場仮設":                 return facade_area_est * floor_factor
-    return total_floor_area  # 設備系は㎡按分
+    return total_floor_area  # 設備系は㎡按分（粗按分）
 
 def predict_next_major_year(built_year:int, cycle:int=12)->int:
     """築年から12年周期の『次回年』を自動推定（直近未来年）"""
@@ -221,6 +211,7 @@ def area_for(cat, name):
 row_index = []
 data = {y: [] for y in years}
 
+# 明細行（各工事行：万円で記入）
 for cat, name, cycle, utype, unit_cost in ITEMS:
     row_index.append((cat, name, f"{cycle}年"))
     scheduled = set(schedule_years(int(built_year), int(cycle), start_year, end_year)) if built_year else set()
@@ -235,48 +226,74 @@ for cat, name, cycle, utype, unit_cost in ITEMS:
                 base = unit_cost * ev_count
             else:
                 base = unit_cost
-            amt = inflated(base, t)         # 円（将来価格）
-            data[y].append(fmt_man(amt))    # 万円（文字列）
+            amt = inflated(base, t)           # 円（将来価格）
+            data[y].append(fmt_man(amt))      # 万円（文字列）
         else:
             data[y].append("")
 
-# 工事費小計
+# 位置インデックスを確定して以降の集計で使用（参照のズレ防止）
+# 1) 工事費小計
 row_index.append(("支出集計", "工事費小計", ""))
+idx_subtotal = len(row_index) - 1
 for y in years:
     subtotal_yen = 0
-    for i, _ in enumerate(row_index[:-1]):
+    # 明細行のみ集計（= 小計行の直前まで）
+    for i in range(idx_subtotal):
         val = data[y][i]
-        if val != "":
-            subtotal_yen += int(val.replace(",","")) * 10_000
+        if val:
+            subtotal_yen += man_str_to_yen(val)
     data[y].append(fmt_man(subtotal_yen))
 
-# 諸経費／消費税／A.支出合計
-for label, kind in [("諸経費（10%）","oh"), ("消費税（10%）","tax"), ("A.支出合計","sum")]:
-    row_index.append(("支出集計", label, ""))
-    for y in years:
-        subtotal_yen = int(data[y][-1].replace(",","")) * 10_000
-        if kind=="oh":
-            v = subtotal_yen * OH
-        elif kind=="tax":
-            v = (subtotal_yen + subtotal_yen*OH) * TAX
-        else:
-            v = subtotal_yen + subtotal_yen*OH + (subtotal_yen + subtotal_yen*OH)*TAX
-        data[y].append(fmt_man(v))
+# 2) 諸経費（OH）、3) 消費税、4) A.支出合計（いずれも“工事費小計”を基礎に算出）
+row_index.append(("支出集計", "諸経費（10%）", ""))
+idx_oh = len(row_index) - 1
+for y in years:
+    base_yen = man_str_to_yen(data[y][idx_subtotal])
+    oh_yen = int(round(base_yen * OH))
+    data[y].append(fmt_man(oh_yen))
+
+row_index.append(("支出集計", "消費税（10%）", ""))
+idx_tax = len(row_index) - 1
+for y in years:
+    base_yen = man_str_to_yen(data[y][idx_subtotal])
+    oh_yen   = man_str_to_yen(data[y][idx_oh])
+    tax_yen  = int(round((base_yen + oh_yen) * TAX))
+    data[y].append(fmt_man(tax_yen))
+
+row_index.append(("支出集計", "A.支出合計", ""))
+idx_A = len(row_index) - 1
+for y in years:
+    base_yen = man_str_to_yen(data[y][idx_subtotal])
+    oh_yen   = man_str_to_yen(data[y][idx_oh])
+    tax_yen  = man_str_to_yen(data[y][idx_tax])
+    sum_yen  = base_yen + oh_yen + tax_yen
+    data[y].append(fmt_man(sum_yen))
 
 # 収入・残高（現行のまま徴収した場合）
 row_index.append(("収入・残高", "期首繰越", ""))
+idx_beg = len(row_index) - 1
 row_index.append(("収入・残高", "修繕積立金収入（年額）", ""))
+idx_income = len(row_index) - 1
 row_index.append(("収入・残高", "当期収入合計", ""))
+idx_income_total = len(row_index) - 1
 row_index.append(("収入・残高", "当期収支（収入合計－A）", ""))
+idx_net = len(row_index) - 1
 row_index.append(("収入・残高", "期末残高（次期繰越）", ""))
+idx_end = len(row_index) - 1
 
 for y_idx, y in enumerate(years):
-    beg_yen = 0 if y_idx == 0 else int(data[years[y_idx-1]][-1].replace(",","")) * 10_000
+    if y_idx == 0:
+        beg_yen = 0
+    else:
+        # 前年の“期末残高”を参照
+        beg_yen = man_str_to_yen(data[years[y_idx-1]][idx_end])
+
     income_yen = monthly_total_now * 12
     income_total_yen = beg_yen + income_yen
-    a_yen = int(data[y][-3].replace(",","")) * 10_000  # A.支出合計は末尾から3番目
+    a_yen = man_str_to_yen(data[y][idx_A])  # A.支出合計（円）
     net_yen = income_total_yen - a_yen
-    end_yen = net_yen
+    end_yen = net_yen  # マイナスもそのまま表示（不足の可視化）
+
     data[y].extend([
         fmt_man(beg_yen),
         fmt_man(income_yen),
@@ -285,8 +302,8 @@ for y_idx, y in enumerate(years):
         fmt_man(end_yen),
     ])
 
-# 35年総支出A（円）と必要月額（均等）
-total_A_yen = sum(int(data[y][-3].replace(",","")) * 10_000 for y in years)
+# 35年総支出A（円）と必要月額（均等・全体）→ 円/㎡・月へ正規化
+total_A_yen = sum(man_str_to_yen(data[y][idx_A]) for y in years)
 required_monthly_total_35 = math.ceil(total_A_yen / (horizon * 12)) if total_A_yen>0 else 0
 required_psqm_35 = int(round(required_monthly_total_35 / total_private_area)) if total_private_area>0 else 0
 
@@ -350,18 +367,12 @@ today_year = dt.date.today().year
 years_to_next = max(0, int(next_major_year) - today_year) if next_major_year else 0
 months_left   = years_to_next * 12
 
-# 1) 長期表から自動取得（該当年が列にある場合）— 万円→円
+# 1) 長期表から自動取得（該当年が列にある場合）— 万円→円（A.支出合計）
 auto_needed_next = 0
 if next_major_year and (start_year <= next_major_year <= end_year):
-    a_row_idx = None
-    for i, (c,n,cy) in enumerate(row_index):
-        if c=="支出集計" and n=="A.支出合計":
-            a_row_idx = i
-            break
-    if a_row_idx is not None:
-        val = data[next_major_year][a_row_idx]  # 万円の文字列
-        if val != "":
-            auto_needed_next = int(val.replace(",","")) * 10_000
+    val = data[next_major_year][idx_A]  # 万円の文字列
+    if val:
+        auto_needed_next = man_str_to_yen(val)
 
 # 2) 今日の必要費の手入力が最優先
 if base_cost_today and base_cost_today > 0:
@@ -369,7 +380,7 @@ if base_cost_today and base_cost_today > 0:
 # 3) 無ければ、国交省モデル（円/㎡・回）で推計（今日時点）
 elif mlit_unit_per_sqm and total_floor_area:
     subtotal = mlit_unit_per_sqm * total_floor_area   # ベース（円）
-    subtotal_oh = subtotal * (1 + OH)                 # 諸経費
+    subtotal_oh = int(round(subtotal * (1 + OH)))     # 諸経費込
     model_today = int(round(subtotal_oh * (1 + TAX))) # 税込
 else:
     model_today = 0
@@ -395,7 +406,7 @@ with c4:
     st.metric("次回年", int_fmt(next_major_year) if next_major_year else "—")
     st.metric("必要費（円）", int_fmt(needed_at_next) if needed_at_next>0 else "—")
     if auto_needed_next>0:
-        st.caption("※ 長期表（万円）から自動取得 → 円換算済")
+        st.caption("※ 長期表（A.支出合計・万円）から自動取得 → 円換算済")
     elif model_today>0:
         st.caption(f"※ 国交省モデル：{int_fmt(mlit_unit_per_sqm)} 円/㎡・回 × 延床 → (OH, TAX) → インフレ{int(round(use_infl*100))}%/年×{years_to_next}年 複利")
 
@@ -410,7 +421,7 @@ with c6:
     if months_left>0:
         st.caption(f"残月数：{months_left} ヶ月（{today_year}→{next_major_year}）")
 
-st.caption("※ 注意：長期表は『万円』表示、結論・逆算欄は『円』表示。")
+st.caption("※ 注意：長期表は『万円』表示、結論・逆算欄は『円』表示。単位混在を防止。")
 
 # ==========================
 # 短期ターゲット（住戸逆算）— 例：5年後に2億円必要なら？
