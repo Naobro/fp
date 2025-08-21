@@ -415,7 +415,7 @@ def build_pdf(
 
     # ① 自己資金0（物件＋諸費用フル）
     pdf.set_font("IPAexGothic", "", 10)
-    title1 = f"①自己資金0（物件＋諸費用フル）金利{base_rate:.2f}%／{base_years}年"
+    title1 = f"①自己資金0（物件＋諸費用フル）"
     pdf.cell(col2_w[0], 8, title1, 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(loan_amount_full), 1, 0, "R")
     pdf.cell(col2_w[2], 8, fmt_jpy(monthly_full), 1, 0, "R")
@@ -424,7 +424,7 @@ def build_pdf(
 
     # ② 諸費用のみ自己資金（物件のみ）
     pdf.set_font("IPAexGothic", "", 10)
-    title2 = f"②諸費用のみ自己資金（物件のみ借入）金利{base_rate:.2f}%／{base_years}年"
+    title2 = f"②諸費用のみ自己資金（物件のみ借入）"
     pdf.cell(col2_w[0], 8, title2, 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(loan_amount_only), 1, 0, "R")
     pdf.cell(col2_w[2], 8, fmt_jpy(monthly_only), 1, 0, "R")
@@ -433,7 +433,7 @@ def build_pdf(
 
     # ③ 入力A（手動）
     pdf.set_font("IPAexGothic", "", 10)
-    title3 = f"③入力A（手動）金利{loan_rate_A:.2f}%／{loan_years_A}年"
+    title3 = f"③パターンA　金利{loan_rate_A:.2f}%／{loan_years_A}年"
     pdf.cell(col2_w[0], 8, title3, 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(loan_amount_A), 1, 0, "R")
     pdf.cell(col2_w[2], 8, fmt_jpy(monthly_A), 1, 0, "R")
@@ -442,7 +442,7 @@ def build_pdf(
 
     # ④ 入力B（手動）
     pdf.set_font("IPAexGothic", "", 10)
-    title4 = f"④入力B（手動）金利{loan_rate_B:.2f}%／{loan_years_B}年"
+    title4 = f"④パターンB 金利{loan_rate_B:.2f}%／{loan_years_B}年"
     pdf.cell(col2_w[0], 8, title4, 1, 0, "L")
     pdf.cell(col2_w[1], 8, fmt_jpy(loan_amount_B), 1, 0, "R")
     pdf.cell(col2_w[2], 8, fmt_jpy(monthly_B), 1, 0, "R")
