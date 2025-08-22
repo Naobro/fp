@@ -1,19 +1,19 @@
 # pages/修繕積立金_収益性.py
 # ─────────────────────────────────────────────────────────
 # 目的：結論ファーストPDF（4本柱のみ）＋ 画面下に「長期修繕計画（横テーブル）」を表示
-# 4本柱の順序と中身（PDF出力に含む）：
+# 4本柱（PDF出力に含む）：
 #  ① 現在の修繕積立金の妥当性（円/㎡・月：妥当/安い/高い）…国交省モデル＋機械式加算
 #  ② 次回大規模修繕の予想額（インフレ3%＋諸経費10%＋消費税10%）
-#  ③ 「安心な修繕積立金（全体）」＝ 次回大規模 × 安心係数S%（初期値30%）
+#  ③ 「安心な修繕積立金（全体）」＝ ② × S%（初期30%）
 #  ④ 収益性（家賃見込み・利回り）
 # 画面下（PDFには入れない）：
-#   ・長期修繕計画（35年・万円：横テーブル｜収入/支出/期首/期末）
-#   ・一番下に「もし運用（年5%・積立の30%）」行を追加（情報用／残高とは合算しない）
+#  ・長期修繕計画（35年・万円：横テーブル｜収入/支出/期首/期末）
+#  ・最下行に「もし運用（年5%・積立の30%）」行（情報用。残高へは合算しない）
 # 注意：
 #  ・「基金」NG。全て「修繕積立金残高」と表記。
 #  ・縦表NG。横テーブルのみ。
-#  ・小数点を出さない（整数表示）。
-#  ・PDFの日本語はIPAexフォント（./fonts/ipaexg.ttf）を利用。無い場合は警告表示。
+#  ・内部計算はすべて “円（int）” で保持。表示直前にだけ “万円文字列化”。
+#  ・PDFの日本語はIPAexフォント（./fonts/ipaexg.ttf）。無い場合は警告表示。
 # ─────────────────────────────────────────────────────────
 
 import io
@@ -27,9 +27,8 @@ import streamlit as st
 
 # ===== PDF（日本語フォント） =====
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab import rl_config
@@ -93,6 +92,7 @@ MECH_PARK_UNIT_YEN = {
 # ユーティリティ
 # ==========
 def fmt_man(n_yen:int)->str:
+    """円→万円（整数・カンマ文字列）"""
     return f"{int(round(n_yen/10_000)):,}"
 
 def int_fmt(n)->str:
@@ -214,7 +214,7 @@ else:
 
 # 全体月額（現行）
 monthly_total_now = int(current_psqm * total_private_area) if (current_psqm > 0 and total_private_area > 0) else 0
-annual_income_now = monthly_total_now * 12
+annual_income_now = monthly_total_now * 12  # 円
 
 # ========== ① 妥当性（国交省＋機械式加算） ==========
 g = mlit_benchmark(int(floors) if floors else 0, float(total_floor_area) if total_floor_area else 0)
@@ -229,7 +229,7 @@ def judge_price(psqm:int, low:int, high:int):
 
 judge_now = judge_price(current_psqm, low, high)
 
-# ========== （仮）長期修繕計画（横テーブル：万円） ==========
+# ========== （仮）長期修繕計画（横テーブル：内部は円で保持） ==========
 per_floor_area  = total_floor_area / max(1, floors) if floors else 0
 facade_area_est = per_floor_area * FACADE_COEF
 roof_area_est   = per_floor_area
@@ -254,10 +254,10 @@ def add_row(row_index, data, cat, name, cycle, utype, unit_cost):
                 base = unit_cost * mech_park_slots
             else:
                 base = unit_cost
-            amt_yen = inflated(base, t)
-            data[y].append(fmt_man(amt_yen))  # 万円
+            amt_yen = inflated(base, t)      # 円
+            data[y].append(int(amt_yen))     # 円のまま保持
         else:
-            data[y].append("")
+            data[y].append(0)                # 円（0）
 
 row_index = []
 data = {y: [] for y in years}
@@ -267,37 +267,37 @@ for cat, name, cy, utype, unit in ITEMS:
         continue
     add_row(row_index, data, cat, name, cy, utype, unit)
 
-# 支出集計（万円）
+# 支出集計（内部は円で保持）
 row_index.append(("支出集計", "工事費小計", ""))
 for y in years:
     subtotal_yen = 0
     for i, (c, n, cyc) in enumerate(row_index[:-1]):
-        if c == "支出集計":  # まだ無い
+        if c == "支出集計":
             continue
         val = data[y][i]
-        if val != "":
-            subtotal_yen += int(val.replace(",", "")) * 10_000
-    data[y].append(fmt_man(subtotal_yen))
+        if isinstance(val, int) and val > 0:
+            subtotal_yen += val
+    data[y].append(int(subtotal_yen))  # 円
 
 row_index.append(("支出集計", "諸経費（10%）", ""))
 for y in years:
-    sub_yen = int(data[y][-1].replace(",", "")) * 10_000
-    data[y].append(fmt_man(int(round(sub_yen * OH))))
+    sub_yen = int(data[y][-1])
+    data[y].append(int(round(sub_yen * OH)))  # 円
 
 row_index.append(("支出集計", "消費税（10%）", ""))
 for y in years:
-    sub_yen = int(data[y][-2].replace(",", "")) * 10_000
-    oh_yen  = int(data[y][-1].replace(",", "")) * 10_000
+    sub_yen = int(data[y][-2])
+    oh_yen  = int(data[y][-1])
     tax_yen = int(round((sub_yen + oh_yen) * TAX))
-    data[y].append(fmt_man(tax_yen))
+    data[y].append(int(tax_yen))  # 円
 
 row_index.append(("支出集計", "A.支出合計", ""))
 for y in years:
-    sub_yen = int(data[y][-3].replace(",", "")) * 10_000
-    oh_yen  = int(data[y][-2].replace(",", "")) * 10_000
-    tax_yen = int(data[y][-1].replace(",", "")) * 10_000
+    sub_yen = int(data[y][-3])
+    oh_yen  = int(data[y][-2])
+    tax_yen = int(data[y][-1])
     total_yen = sub_yen + oh_yen + tax_yen
-    data[y].append(fmt_man(total_yen))
+    data[y].append(int(total_yen))  # 円
 
 # 収入・残高（現行のまま徴収した場合）— 年額は一定（増やさない）
 row_index.append(("収入・残高", "期首残高", ""))
@@ -307,38 +307,44 @@ row_index.append(("収入・残高", "当期収支（収入合計－A）", ""))
 row_index.append(("収入・残高", "期末残高", ""))
 
 for yi, y in enumerate(years):
-    beg = current_balance_total if yi == 0 else int(data[years[yi-1]][-1].replace(",", "")) * 10_000
-    income = annual_income_now
+    beg = int(current_balance_total) if yi == 0 else int(data[years[yi-1]][-1])
+    income = int(annual_income_now)
     income_total = beg + income
-    a_yen = int(data[y][-3].replace(",", "")) * 10_000
+    a_yen = int(data[y][-3])
     net = income_total - a_yen
     end_bal = net
-    data[y].extend([fmt_man(beg), fmt_man(income), fmt_man(income_total), fmt_man(net), fmt_man(end_bal)])
+    data[y].extend([beg, income, income_total, net, end_bal])  # すべて円（int）
 
-# もし運用（年5%・積立の◯%）…情報行（残高へは合算しない）
+# もし運用（年X%・積立のY%）…情報行（残高へは合算しない）
 row_index.append(("参考", f"もし運用（年{invest_rate_pct}%・積立の{invest_share_pct}%）", ""))
 invest_share = max(0, min(100, int(invest_share_pct))) / 100.0
 invest_rate  = max(0, int(invest_rate_pct)) / 100.0
-sim_val = 0  # 運用口座の年末残高（万円扱いの見せ方に合わせて円→万円化して表示）
+sim_val = 0  # 円
 for yi, y in enumerate(years):
-    # その年の新規投資＝当年の「修繕積立金収入（年額）」の◯%
     invest_add = int(round(annual_income_now * invest_share))
-    # 複利成長
     sim_val = int(round((sim_val * (1 + invest_rate)) + invest_add))
-    data[y].append(fmt_man(sim_val))
+    data[y].append(sim_val)  # 円（情報表示用）
 
-# 横テーブル（万円）作成
+# 横テーブル：内部は円 → 表示時だけ万円文字列に変換
 idx = pd.MultiIndex.from_tuples(row_index, names=["区分","項目","周期"])
-df_man = pd.DataFrame({y: data[y] for y in years}, index=idx)
+df_yen = pd.DataFrame({y: data[y] for y in years}, index=idx)  # 円（int）
+
+def yen_to_man_str(v):
+    try:
+        v_int = int(v)
+        return fmt_man(v_int) if v_int > 0 else ""
+    except:
+        return ""
+
+df_man = df_yen.applymap(yen_to_man_str)  # 表示用（万円）
 
 # ========== ② 次回大規模の予想額（円） ==========
 next_major_year = predict_next_major_year(int(built_year), 12) if built_year else 0
 next_major_cost_yen = 0
 if next_major_year and (start_year <= next_major_year <= end_year):
     try:
-        a_val = df_man.loc[("支出集計","A.支出合計",""), next_major_year]
-        if a_val:
-            next_major_cost_yen = int(a_val.replace(",","")) * 10_000
+        a_val = df_yen.loc[("支出集計","A.支出合計",""), next_major_year]  # 円（int）
+        next_major_cost_yen = int(a_val) if a_val else 0
     except Exception:
         next_major_cost_yen = 0
 
