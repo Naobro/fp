@@ -1,32 +1,42 @@
 # pages/修繕積立金_収益性.py
 # ─────────────────────────────────────────────────────────
-# 目的：結論ファーストPDF（4点）＋ 下段に「仮の長期修繕計画」横テーブル
-# 表示順（重要度順）：
-#  ① 現在の修繕積立金の妥当性（円/㎡・月：妥当/安い/高い）
-#  ② 次回大規模の予想額（インフレ3%＋諸経費10%＋消費税10%）
-#  ③ 「安心な修繕積立金（全体）」＝◯◯円以上（=②×安全率S%）
+# 目的：結論ファーストPDF（4本柱のみ）＋ 画面下に「長期修繕計画（横テーブル）」を表示
+# 4本柱の順序と中身（PDF出力に含む）：
+#  ① 現在の修繕積立金の妥当性（円/㎡・月：妥当/安い/高い）…国交省モデル＋機械式加算
+#  ② 次回大規模修繕の予想額（インフレ3%＋諸経費10%＋消費税10%）
+#  ③ 「安心な修繕積立金（全体）」＝ 次回大規模 × 安心係数S%（初期値30%）
 #  ④ 収益性（家賃見込み・利回り）
-#  下段：仮の長期修繕計画（35年・万円）横テーブル（工事項目×年／工事費小計→諸経費→税→A.支出合計）
+# 画面下（PDFには入れない）：
+#   ・長期修繕計画（35年・万円：横テーブル｜収入/支出/期首/期末）
+#   ・一番下に「もし運用（年5%・積立の30%）」行を追加（情報用／残高とは合算しない）
 # 注意：
-#  - 「修繕積立金 残高」不明時は判定しない（“未確認”と明示）
-#  - 「基金」という語は使わない（全て「修繕積立金」）
-#  - 縦表NG／横表のみ
+#  ・「基金」NG。全て「修繕積立金残高」と表記。
+#  ・縦表NG。横テーブルのみ。
+#  ・小数点を出さない（整数表示）。
+#  ・PDFの日本語はIPAexフォント（./fonts/ipaexg.ttf）を利用。無い場合は警告表示。
 # ─────────────────────────────────────────────────────────
 
 import io
 import math
 import datetime as dt
 from math import ceil
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+# ===== PDF（日本語フォント） =====
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab import rl_config
 
-# ========== 内部既定 ==========
+# =====================
+# 内部固定パラメータ
+# =====================
 INFL = 0.03   # インフレ率（年3%・複利）
 OH   = 0.10   # 諸経費（工事費小計の10%）
 TAX  = 0.10   # 消費税（小計+諸経費の10%）
@@ -40,17 +50,19 @@ def floor_factor_by_floors(f:int)->float:
     if f <= 20:  return 1.25
     return 1.40
 
-# ========== 工事項目マスター（省略なし） ==========
+# ==========
+# 工事項目マスター（省略なし）
 # 単価タイプ：'sqm'（㎡按分）/'per_unit'（戸数×単価）/'ev'（EV台数×単価）/'per_slot'（機械式区画×単価）/'lump'（一式）
+# ==========
 ITEMS = [
-    # 建築系（12年目安）
+    # 建築（12年）
     ("建築", "外壁塗装・タイル補修・シーリング", 12, "sqm",      6_000),
     ("建築", "屋上・バルコニー・庇 防水改修",     12, "sqm",      2_800),
     ("建築", "鉄部塗装（手すり・階段・フェンス等）", 12, "sqm",  1_000),
     ("建築", "外構・舗装・植栽 等",               12, "sqm",        800),
     ("仮設", "足場仮設（外装工事年）",            12, "sqm",      2_000),
 
-    # 設備系
+    # 設備
     ("設備", "給水設備（ポンプ・受水槽等）更新",   12, "sqm",      1_200),
     ("設備", "給排水管 更生/更新（㎡按分）",      24, "sqm",      4_400),
     ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",      1_500),
@@ -77,7 +89,9 @@ MECH_PARK_UNIT_YEN = {
     "その他":                       5_235,
 }
 
-# ========== ユーティリティ ==========
+# ==========
+# ユーティリティ
+# ==========
 def fmt_man(n_yen:int)->str:
     return f"{int(round(n_yen/10_000)):,}"
 
@@ -137,12 +151,18 @@ def mech_add_psqm(unit_type:str, slots:int, total_private_area:float)->int:
     per = MECH_PARK_UNIT_YEN.get(unit_type, 0)
     return int(round(per * slots / total_private_area))
 
-# ========== 画面 ==========
+def ceil_div(a:int, b:int)->int:
+    if b <= 0: return 0
+    return (a + b - 1) // b
+
+# ==========
+# 画面
+# ==========
 st.set_page_config(page_title="修繕積立｜結論PDF＋長期表（横）", layout="wide")
 st.title("修繕積立｜妥当性・次回大規模・安心ライン・収益性（＋長期表/横）")
 
 with st.sidebar:
-    st.header("入力（整数・デフォルト込み）")
+    st.header("入力（整数）")
 
     # 現状の積立：psqmが0なら「住戸月額÷専有」で自動
     my_monthly_now   = st.number_input("あなたの修繕積立金（月額・円）", min_value=0, value=15_000, step=1_000)
@@ -166,8 +186,14 @@ with st.sidebar:
     price_million = st.number_input("購入価格（万円）", min_value=0, value=7_000, step=100)
 
     st.divider()
-    # 安心係数S（直近大規模×S%）
-    safe_ratio_pct = st.number_input("安心係数 S（％）", min_value=10, value=40, step=5)
+    # PDF：安心係数S（次回大規模×S%）
+    safe_ratio_pct = st.number_input("安心係数 S（％）", min_value=10, value=30, step=5)
+
+    st.divider()
+    # 長期表関連
+    current_balance_total = st.number_input("現在の修繕積立金残高（全体・円）", min_value=0, value=0, step=100_000)
+    invest_share_pct      = st.number_input("（長期表）運用に回す割合（積立の％）", min_value=0, max_value=100, value=30, step=5)
+    invest_rate_pct       = st.number_input("（長期表）運用利回り（年％・複利）", min_value=0, max_value=20, value=5, step=1)
 
 # 年レンジ（横展開）
 start_year = dt.date.today().year
@@ -186,7 +212,11 @@ elif my_private_area > 0:
 else:
     current_psqm = 0
 
-# ========== 妥当性①（国交省＋機械式加算） ==========
+# 全体月額（現行）
+monthly_total_now = int(current_psqm * total_private_area) if (current_psqm > 0 and total_private_area > 0) else 0
+annual_income_now = monthly_total_now * 12
+
+# ========== ① 妥当性（国交省＋機械式加算） ==========
 g = mlit_benchmark(int(floors) if floors else 0, float(total_floor_area) if total_floor_area else 0)
 mech_add = mech_add_psqm(mech_park_type, int(mech_park_slots), float(total_private_area)) if total_private_area>0 else 0
 low, avg, high = g["low"]+mech_add, g["avg"]+mech_add, g["high"]+mech_add
@@ -199,22 +229,18 @@ def judge_price(psqm:int, low:int, high:int):
 
 judge_now = judge_price(current_psqm, low, high)
 
-# ========== 仮の長期修繕計画（横テーブル生成：万円文字列） ==========
+# ========== （仮）長期修繕計画（横テーブル：万円） ==========
 per_floor_area  = total_floor_area / max(1, floors) if floors else 0
 facade_area_est = per_floor_area * FACADE_COEF
 roof_area_est   = per_floor_area
 steel_area_est  = facade_area_est * STEEL_RATIO
 floor_factor    = floor_factor_by_floors(int(floors)) if floors else 1.0
 
-def add_row_to_table(row_index, data, cat, name, cycle, utype, unit_cost):
+def add_row(row_index, data, cat, name, cycle, utype, unit_cost):
     row_index.append((cat, name, f"{cycle}年" if cycle>1 else "毎年"))
     scheduled = set(schedule_years(int(built_year), int(cycle), start_year, end_year)) if built_year else set()
     for y in years:
-        put = False
-        if cycle == 1 and built_year>0:
-            put = True
-        elif y in scheduled and total_floor_area>0:
-            put = True
+        put = (cycle == 1 and built_year>0) or (y in scheduled and total_floor_area>0)
         if put:
             t = y - start_year
             if utype == "sqm":
@@ -239,7 +265,7 @@ data = {y: [] for y in years}
 for cat, name, cy, utype, unit in ITEMS:
     if "機械式" in cat and mech_park_slots <= 0:
         continue
-    add_row_to_table(row_index, data, cat, name, cy, utype, unit)
+    add_row(row_index, data, cat, name, cy, utype, unit)
 
 # 支出集計（万円）
 row_index.append(("支出集計", "工事費小計", ""))
@@ -273,9 +299,37 @@ for y in years:
     total_yen = sub_yen + oh_yen + tax_yen
     data[y].append(fmt_man(total_yen))
 
-# 横テーブルDF
-idx = pd.MultiIndex.from_tuples(row_index, names=["工事区分","工事項目","周期"])
-df_man = pd.DataFrame({y: data[y] for y in years}, index=idx)  # 単位：万円（文字列）
+# 収入・残高（現行のまま徴収した場合）— 年額は一定（増やさない）
+row_index.append(("収入・残高", "期首残高", ""))
+row_index.append(("収入・残高", "修繕積立金収入（年額）", ""))
+row_index.append(("収入・残高", "当期収入合計", ""))
+row_index.append(("収入・残高", "当期収支（収入合計－A）", ""))
+row_index.append(("収入・残高", "期末残高", ""))
+
+for yi, y in enumerate(years):
+    beg = current_balance_total if yi == 0 else int(data[years[yi-1]][-1].replace(",", "")) * 10_000
+    income = annual_income_now
+    income_total = beg + income
+    a_yen = int(data[y][-3].replace(",", "")) * 10_000
+    net = income_total - a_yen
+    end_bal = net
+    data[y].extend([fmt_man(beg), fmt_man(income), fmt_man(income_total), fmt_man(net), fmt_man(end_bal)])
+
+# もし運用（年5%・積立の◯%）…情報行（残高へは合算しない）
+row_index.append(("参考", f"もし運用（年{invest_rate_pct}%・積立の{invest_share_pct}%）", ""))
+invest_share = max(0, min(100, int(invest_share_pct))) / 100.0
+invest_rate  = max(0, int(invest_rate_pct)) / 100.0
+sim_val = 0  # 運用口座の年末残高（万円扱いの見せ方に合わせて円→万円化して表示）
+for yi, y in enumerate(years):
+    # その年の新規投資＝当年の「修繕積立金収入（年額）」の◯%
+    invest_add = int(round(annual_income_now * invest_share))
+    # 複利成長
+    sim_val = int(round((sim_val * (1 + invest_rate)) + invest_add))
+    data[y].append(fmt_man(sim_val))
+
+# 横テーブル（万円）作成
+idx = pd.MultiIndex.from_tuples(row_index, names=["区分","項目","周期"])
+df_man = pd.DataFrame({y: data[y] for y in years}, index=idx)
 
 # ========== ② 次回大規模の予想額（円） ==========
 next_major_year = predict_next_major_year(int(built_year), 12) if built_year else 0
@@ -292,13 +346,13 @@ if next_major_year and (start_year <= next_major_year <= end_year):
 safe_ratio = max(0, safe_ratio_pct) / 100.0
 safe_line_yen = int(round(next_major_cost_yen * safe_ratio)) if next_major_cost_yen>0 else 0
 
-# ④ 収益性（家賃見込み・利回り）
+# ④ 収益性（家賃・利回り）
 rent_monthly = (rent_psqm * my_private_area) if (rent_psqm and my_private_area) else 0
 rent_annual  = rent_monthly * 12
 price_yen    = price_million * 10_000  # 万円→円
-yield_pct    = round((rent_annual / price_yen) * 100, 1) if price_yen>0 else 0.0
+yield_pct    = int(round((rent_annual / price_yen) * 100)) if price_yen>0 else 0
 
-# ========== 画面の確認表示（簡潔） ==========
+# ========== 画面：4本柱（確認用） ==========
 c1, c2, c3, c4 = st.columns([1,1,1,1.2])
 with c1:
     st.metric("① 妥当性（円/㎡・月）", f"{int_fmt(current_psqm)} → {judge_now}")
@@ -308,79 +362,67 @@ with c2:
     if next_major_year: st.caption(f"対象年：{next_major_year}")
 with c3:
     st.metric("③ 安心ライン（全体・円）", int_fmt(safe_line_yen) if safe_line_yen>0 else "—")
-    st.caption("算式：② × S%")
+    st.caption(f"算式：② × S（{int(safe_ratio*100)}%）")
 with c4:
     st.metric("④ 収益性（利回り％）", f"{yield_pct}%")
     st.caption(f"家賃見込み：{int_fmt(rent_monthly)} 円/月・年間 {int_fmt(rent_annual)} 円")
 
 st.divider()
 st.subheader(f"（仮）長期修繕計画：横テーブル（{start_year}〜{end_year}・単位：万円）")
-st.caption("【注意】本表は“仮”です。一般的に予想しうる工事項目・周期・数量を用いた概算で、年3%（複利）で将来価格を表示。正式計画・見積で必ず確認。")
+st.caption("※ 本表は“仮”。一般的に予想しうる工事項目・周期の概算を年3%複利で表示。PDFには含めません。")
 st.dataframe(df_man, use_container_width=True)
 
-# ========== PDF出力 ==========
-def build_pdf():
+# ========== PDF（4本柱のみ） ==========
+# フォント用意
+FONT_PATH = Path(__file__).resolve().parent.parent / "fonts" / "ipaexg.ttf"
+FONT_NAME = "IPAexGothic"
+font_ready = False
+try:
+    if FONT_PATH.exists():
+        rl_config.TTFSearchPath.append(str(FONT_PATH.parent))
+        pdfmetrics.registerFont(TTFont(FONT_NAME, FONT_PATH.name))
+        font_ready = True
+    else:
+        st.warning("PDF日本語フォント（./fonts/ipaexg.ttf）が見つかりません。日本語が文字化けする場合があります。")
+except Exception:
+    st.warning("日本語フォントの登録に失敗しました。PDFで文字化けする場合があります。")
+
+def build_pdf_4pillars():
     styles = getSampleStyleSheet()
-    h1 = styles["Heading1"]; h2 = styles["Heading2"]; normal = styles["Normal"]
+    base_font = FONT_NAME if font_ready else "Helvetica"
+    h1 = ParagraphStyle(name="H1", parent=styles["Heading1"], fontName=base_font, fontSize=18)
+    h2 = ParagraphStyle(name="H2", parent=styles["Heading2"], fontName=base_font, fontSize=14)
+    normal = ParagraphStyle(name="N", parent=styles["Normal"], fontName=base_font, fontSize=11, leading=16)
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=16, rightMargin=16, topMargin=16, bottomMargin=16)
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=20, rightMargin=20, topMargin=18, bottomMargin=18)
     elems = []
 
-    # タイトル
-    elems.append(Paragraph("🏢 修繕積立レポート（結論ファースト＋長期表/横）", h1))
+    elems.append(Paragraph("🏢 修繕積立レポート（結論ファースト｜4本柱）", h1))
     elems.append(Paragraph(f"作成日：{dt.date.today().isoformat()}", normal))
     elems.append(Spacer(1, 8))
 
-    # 結論ブロック（①→②→③→④の順で強調）
     elems.append(Paragraph("① 現在の修繕積立金の妥当性（円/㎡・月）", h2))
-    elems.append(Paragraph(f"{int_fmt(current_psqm)} → <b>{judge_now}</b>（基準：{int_fmt(low)}〜{int_fmt(high)} ／ 平均 {int_fmt(avg)}・機械式加算含む）", normal))
+    elems.append(Paragraph(f"{int_fmt(current_psqm)} → <b>{judge_now}</b>（基準：{int_fmt(low)}〜{int_fmt(high)}／平均 {int_fmt(avg)}。機械式加算込み）", normal))
     elems.append(Spacer(1, 4))
 
-    elems.append(Paragraph("② 次回大規模の予想額（インフレ3%・諸経費/消費税込）", h2))
+    elems.append(Paragraph("② 次回大規模修繕の予想額（年3%・諸経費/消費税込）", h2))
     elems.append(Paragraph(f"{'—' if next_major_cost_yen<=0 else int_fmt(next_major_cost_yen)} 円（対象年：{next_major_year if next_major_year else '—'}）", normal))
     elems.append(Spacer(1, 4))
 
-    elems.append(Paragraph("③ 安心な修繕積立金（全体）＝ ◯◯円以上", h2))
-    elems.append(Paragraph(f"{'—' if safe_line_yen<=0 else int_fmt(safe_line_yen)} 円　※算式：② × 安心係数S（{int(safe_ratio*100)}%）", normal))
+    elems.append(Paragraph("③ 安心な修繕積立金（全体）＝ 次回大規模 × S％", h2))
+    elems.append(Paragraph(f"{'—' if safe_line_yen<=0 else int_fmt(safe_line_yen)} 円（S＝{int(safe_ratio*100)}%）", normal))
     elems.append(Spacer(1, 4))
 
     elems.append(Paragraph("④ 収益性（家賃見込み・利回り）", h2))
-    elems.append(Paragraph(f"月額家賃見込み：{int_fmt(rent_monthly)} 円／年額：{int_fmt(rent_annual)} 円／利回り：{yield_pct} %（価格：{int_fmt(price_yen)} 円）", normal))
+    elems.append(Paragraph(f"月額家賃見込み：{int_fmt(rent_monthly)} 円／年額：{int_fmt(rent_annual)} 円／表面利回り：{yield_pct} %（価格：{int_fmt(price_yen)} 円）", normal))
     elems.append(Spacer(1, 10))
-
-    # 仮の長期修繕計画（横テーブル）
-    elems.append(Paragraph(f"（仮）長期修繕計画：横テーブル（{start_year}〜{end_year}・単位：万円）", h2))
-    elems.append(Paragraph("【注意】本表は“仮”。一般的に予想しうる工事項目・周期・数量の概算で、年3%（複利）で将来価格。正式計画・見積で必ず確認。", normal))
-    elems.append(Spacer(1, 6))
-
-    # 表を年で分割（横幅対策）
-    all_years = years
-    chunk = 12  # 12年ずつ
-    # ヘッダ
-    header_fixed = ["工事区分","工事項目","周期"]
-
-    for i in range(0, len(all_years), chunk):
-        cols = all_years[i:i+chunk]
-        tbl_data = [header_fixed + [str(c) for c in cols]]
-        for (cat, name, cyc), row in df_man[cols].iterrows():
-            tbl_data.append([cat, name, cyc] + [str(v) for v in row.values.tolist()])
-        t = Table(tbl_data, repeatRows=1)
-        t.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.3, colors.grey),
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#efefef")),
-            ("ALIGN", (3,1), (-1,-1), "RIGHT"),
-            ("FONT", (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE", (0,0), (-1,-1), 7.2),
-        ]))
-        elems.append(t)
-        elems.append(Spacer(1, 8))
 
     doc.build(elems)
     buf.seek(0)
     return buf
 
 st.divider()
-if st.button("📄 PDFを作成（1→2→3→4＋下段：長期表/横）"):
-    pdf_buf = build_pdf()
+if st.button("📄 PDFを作成（4本柱のみ）"):
+    pdf_buf = build_pdf_4pillars()
     st.download_button("📥 ダウンロード：修繕積立レポート.pdf", data=pdf_buf, file_name="修繕積立レポート.pdf", mime="application/pdf")
