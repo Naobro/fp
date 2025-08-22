@@ -1,6 +1,6 @@
 # pages/1_SBI_Shinssei.py
 import streamlit as st
-from lib.bank_common import staff_header, flow_table_horizontal, pdf_viewer, note_box, tag_badge, bullets
+from lib.bank_common import bullets
 
 st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
@@ -29,7 +29,6 @@ bullets([
     "永住権無：単身 or 夫婦のどちらかが永住権あれば可、連帯保証人が日本国籍または永住権者必須、日本語または英語での対話ができること"
 ])
 
-st.markdown("---")
 st.subheader("特殊項目")
 bullets([
     "諸費用ローン　⭕️",
@@ -38,20 +37,21 @@ bullets([
     "※1年間は元金据置・利息のみ返済、その後通常返済へ切替"
 ])
 
-st.markdown("---")
-st.subheader("事前審査用紙（ダウンロード/閲覧）")
+st.subheader("事前審査用紙（クリックでダウンロード）")
 
-# 新生銀行の事前審査用紙リンク
-pdf_links = {
-    "A3 印刷 PS住宅ローン審査申込書": "https://github.com/Naobro/fp/blob/main/pages/A3%20%E5%8D%B0%E5%88%B7.%20%20%20%20%20%20%20%20%20%20%20%20%20%20PS%E4%BD%8F%E5%AE%85%E3%83%AD%E3%83%BC%E3%83%B3%E5%AF%A9%E6%9F%BB%E7%94%B3%E8%BE%BC%E6%9B%B88090-1-20240122.pdf",
-    "A4 印刷": "https://github.com/Naobro/fp/blob/main/pages/A4%20%E5%8D%B0%E5%88%B7.pdf",
-    "ペアローン 同意書": "https://github.com/Naobro/fp/blob/main/pages/%E9%80%A3%E5%B8%AF%E4%BF%9D%E8%A8%BC%E4%BA%88%E5%AE%9A%E8%80%85%E3%81%AE%E5%90%8C%E6%84%8F%E6%9B%B8.pdf"
-}
+st.link_button(
+    "📄 A3 印刷 PS住宅ローン審査申込書",
+    "https://github.com/Naobro/fp/blob/main/pages/A3%20%E5%8D%B0%E5%88%B7.%20%20%20%20%20%20%20%20%20%20%20%20%20%20PS%E4%BD%8F%E5%AE%85%E3%83%AD%E3%83%BC%E3%83%B3%E5%AF%A9%E6%9F%BB%E7%94%B3%E8%BE%BC%E6%9B%B88090-1-20240122.pdf"
+)
 
-for name, url in pdf_links.items():
-    st.link_button(f"📄 {name}", url)
-    st.markdown("")
-    pdf_viewer(url, height=600)
-    st.markdown("---")
+st.link_button(
+    "📄 A4 印刷",
+    "https://github.com/Naobro/fp/blob/main/pages/A4%20%E5%8D%B0%E5%88%B7.pdf"
+)
+
+st.link_button(
+    "📄 ペアローン 同意書",
+    "https://github.com/Naobro/fp/blob/main/pages/%E9%80%A3%E5%B8%AF%E4%BF%9D%E8%A8%BC%E4%BA%88%E5%AE%9A%E8%80%85%E3%81%AE%E5%90%8C%E6%84%8F%E6%9B%B8.pdf"
+)
 
 st.caption("※ページ上の金利/条件は社内用の目安表示です。正式情報は行の公表値をご確認ください。")
