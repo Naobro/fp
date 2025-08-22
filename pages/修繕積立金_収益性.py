@@ -13,13 +13,14 @@
 #  ・「基金」NG。全て「修繕積立金残高」と表記。
 #  ・縦表NG。横テーブルのみ。
 #  ・内部計算はすべて “円（int）” で保持。表示直前にだけ “万円文字列化”。
-#  ・PDFの日本語はIPAexフォント（./fonts/ipaexg.ttf）。無い場合は警告表示。
+#  ・PDFの日本語はIPAexフォント。無ければ自動DL（./fonts/ipaexg.ttf）→登録。
 # ─────────────────────────────────────────────────────────
 
 import io
 import math
 import datetime as dt
-from math import ceil
+import zipfile
+import requests
 from pathlib import Path
 
 import pandas as pd
@@ -51,20 +52,21 @@ def floor_factor_by_floors(f:int)->float:
 
 # ==========
 # 工事項目マスター（省略なし）
+# ※㎡按分の単価を「×10」補正（桁不足解消）
 # 単価タイプ：'sqm'（㎡按分）/'per_unit'（戸数×単価）/'ev'（EV台数×単価）/'per_slot'（機械式区画×単価）/'lump'（一式）
 # ==========
 ITEMS = [
     # 建築（12年）
-    ("建築", "外壁塗装・タイル補修・シーリング", 12, "sqm",      6_000),
-    ("建築", "屋上・バルコニー・庇 防水改修",     12, "sqm",      2_800),
-    ("建築", "鉄部塗装（手すり・階段・フェンス等）", 12, "sqm",  1_000),
-    ("建築", "外構・舗装・植栽 等",               12, "sqm",        800),
-    ("仮設", "足場仮設（外装工事年）",            12, "sqm",      2_000),
+    ("建築", "外壁塗装・タイル補修・シーリング", 12, "sqm",      60_000),  # 6,000 → 60,000
+    ("建築", "屋上・バルコニー・庇 防水改修",     12, "sqm",      28_000),  # 2,800 → 28,000
+    ("建築", "鉄部塗装（手すり・階段・フェンス等）", 12, "sqm",  10_000),  # 1,000 → 10,000
+    ("建築", "外構・舗装・植栽 等",               12, "sqm",       8_000),  #   800 → 8,000
+    ("仮設", "足場仮設（外装工事年）",            12, "sqm",      20_000),  # 2,000 → 20,000
 
-    # 設備
-    ("設備", "給水設備（ポンプ・受水槽等）更新",   12, "sqm",      1_200),
-    ("設備", "給排水管 更生/更新（㎡按分）",      24, "sqm",      4_400),
-    ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",      1_500),
+    # 設備（代表単価は据置。EV本体や更生系は元々スケール大）
+    ("設備", "給水設備（ポンプ・受水槽等）更新",   12, "sqm",      12_000),  # 1,200 → 12,000（設備も×10）
+    ("設備", "給排水管 更生/更新（㎡按分）",      24, "sqm",      44_000),  # 4,400 → 44,000
+    ("設備", "分電盤・配電盤・受変電設備 更新",    24, "sqm",      15_000),  # 1,500 → 15,000
     ("設備", "インターホン更新（モニター化）",     20, "per_unit", 70_000),
     ("設備", "エレベーター更新（本体）",          25, "ev",   20_000_000),
 
@@ -98,7 +100,7 @@ def fmt_man(n_yen:int)->str:
 def fmt_oku_man(n_yen:int)->str:
     """
     円→「◯億◯◯◯◯万円」表記
-    例: 390,000,000 → '3億9000万円' / 12,345,678,901 → '123億4567万円'（万円未満切捨て）
+    例: 390,000,000 → '3億9000万円'（万円未満切捨て）
     """
     if n_yen < 10_000:
         return f"{n_yen}円"
@@ -164,10 +166,6 @@ def mech_add_psqm(unit_type:str, slots:int, total_private_area:float)->int:
         return 0
     per = MECH_PARK_UNIT_YEN.get(unit_type, 0)
     return int(round(per * slots / total_private_area))
-
-def ceil_div(a:int, b:int)->int:
-    if b <= 0: return 0
-    return (a + b - 1) // b
 
 # ==========
 # 画面
@@ -378,10 +376,13 @@ with c1:
     st.metric("① 妥当性（円/㎡・月）", f"{int_fmt(current_psqm)} → {judge_now}")
     st.caption(f"基準：{int_fmt(low)}〜{int_fmt(high)} ／ 平均 {int_fmt(avg)}（機械式加算含む）")
 with c2:
-    st.metric("② 次回大規模 予想額（円）", int_fmt(next_major_cost_yen) if next_major_cost_yen>0 else "—")
+    # 例：3億9000万円（390,000,000）を同時表示
+    val2 = "—" if next_major_cost_yen<=0 else f"{int_fmt(next_major_cost_yen)}（{fmt_oku_man(next_major_cost_yen)}）"
+    st.metric("② 次回大規模 予想額（円）", val2)
     if next_major_year: st.caption(f"対象年：{next_major_year}")
 with c3:
-    st.metric("③ 安心ライン（全体・円）", int_fmt(safe_line_yen) if safe_line_yen>0 else "—")
+    val3 = "—" if safe_line_yen<=0 else f"{int_fmt(safe_line_yen)}（{fmt_oku_man(safe_line_yen)}）"
+    st.metric("③ 安心ライン（全体・円）", val3)
     st.caption(f"算式：② × S（{int(safe_ratio*100)}%）")
 with c4:
     st.metric("④ 収益性（利回り％）", f"{yield_pct}%")
@@ -392,24 +393,46 @@ st.subheader(f"（仮）長期修繕計画：横テーブル（{start_year}〜{e
 st.caption("※ 本表は“仮”。一般的に予想しうる工事項目・周期の概算を年3%複利で表示。PDFには含めません。")
 st.dataframe(df_man, use_container_width=True)
 
-# ========== PDF（4本柱のみ） ==========
-# フォント用意
-FONT_PATH = Path(__file__).resolve().parent.parent / "fonts" / "ipaexg.ttf"
+# ========== フォント：IPAex（無ければ自動DL→登録） ==========
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+FONTS_DIR = PROJECT_ROOT / "fonts"
+FONTS_DIR.mkdir(parents=True, exist_ok=True)
+FONT_PATH = FONTS_DIR / "ipaexg.ttf"
 FONT_NAME = "IPAexGothic"
-font_ready = False
+
+def ensure_ipaex_font(path: Path):
+    if path.exists():
+        return True
+    try:
+        url = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexg00401.zip"
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+            tgt = [n for n in zf.namelist() if n.lower().endswith("ipaexg.ttf")]
+            if not tgt:
+                return False
+            zf.extract(tgt[0], FONTS_DIR)
+            # 展開パスを統一
+            extracted = FONTS_DIR / tgt[0]
+            extracted.rename(path)
+        return path.exists()
+    except Exception:
+        return False
+
+font_ready = ensure_ipaex_font(FONT_PATH)
 try:
-    if FONT_PATH.exists():
-        rl_config.TTFSearchPath.append(str(FONT_PATH.parent))
+    if font_ready and FONT_PATH.exists():
+        rl_config.TTFSearchPath.append(str(FONTS_DIR))
         pdfmetrics.registerFont(TTFont(FONT_NAME, FONT_PATH.name))
-        font_ready = True
     else:
-        st.warning("PDF日本語フォント（./fonts/ipaexg.ttf）が見つかりません。日本語が文字化けする場合があります。")
+        st.warning("PDF日本語フォント（./fonts/ipaexg.ttf）を自動取得できませんでした。環境により日本語が文字化けする場合があります。")
 except Exception:
     st.warning("日本語フォントの登録に失敗しました。PDFで文字化けする場合があります。")
 
+# ========== PDF（4本柱のみ） ==========
 def build_pdf_4pillars():
     styles = getSampleStyleSheet()
-    base_font = FONT_NAME if font_ready else "Helvetica"
+    base_font = FONT_NAME if FONT_PATH.exists() else "Helvetica"
     h1 = ParagraphStyle(name="H1", parent=styles["Heading1"], fontName=base_font, fontSize=18)
     h2 = ParagraphStyle(name="H2", parent=styles["Heading2"], fontName=base_font, fontSize=14)
     normal = ParagraphStyle(name="N", parent=styles["Normal"], fontName=base_font, fontSize=11, leading=16)
@@ -427,11 +450,13 @@ def build_pdf_4pillars():
     elems.append(Spacer(1, 4))
 
     elems.append(Paragraph("② 次回大規模修繕の予想額（年3%・諸経費/消費税込）", h2))
-    elems.append(Paragraph(f"{'—' if next_major_cost_yen<=0 else int_fmt(next_major_cost_yen)} 円（対象年：{next_major_year if next_major_year else '—'}）", normal))
+    nm = "—" if next_major_cost_yen<=0 else f"{int_fmt(next_major_cost_yen)}（{fmt_oku_man(next_major_cost_yen)}）"
+    elems.append(Paragraph(f"{nm}（対象年：{next_major_year if next_major_year else '—'}）", normal))
     elems.append(Spacer(1, 4))
 
     elems.append(Paragraph("③ 安心な修繕積立金（全体）＝ 次回大規模 × S％", h2))
-    elems.append(Paragraph(f"{'—' if safe_line_yen<=0 else int_fmt(safe_line_yen)} 円（S＝{int(safe_ratio*100)}%）", normal))
+    sl = "—" if safe_line_yen<=0 else f"{int_fmt(safe_line_yen)}（{fmt_oku_man(safe_line_yen)}）"
+    elems.append(Paragraph(f"{sl}（S＝{int(safe_ratio*100)}%）", normal))
     elems.append(Spacer(1, 4))
 
     elems.append(Paragraph("④ 収益性（家賃見込み・利回り）", h2))
