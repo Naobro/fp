@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets" / "paypay"
 
 PDF_DESC  = ASSETS / "商品説明.pdf"
-PDF_PREEXAM = ASSETS / "PayPay_事前審査申込書.pdf"  # 追加（必ずassets/paypay/に配置してください）
+PDF_PREEXAM = ASSETS / "paypay事前審査.pdf" # 追加（必ずassets/paypay/に配置してください）
 
 def load_bytes(p: Path) -> bytes:
     try:
