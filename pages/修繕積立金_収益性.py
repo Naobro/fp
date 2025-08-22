@@ -95,6 +95,20 @@ def fmt_man(n_yen:int)->str:
     """円→万円（整数・カンマ文字列）"""
     return f"{int(round(n_yen/10_000)):,}"
 
+def fmt_oku_man(n_yen:int)->str:
+    """
+    円→「◯億◯◯◯◯万円」表記
+    例: 390,000,000 → '3億9000万円' / 12,345,678,901 → '123億4567万円'（万円未満切捨て）
+    """
+    if n_yen < 10_000:
+        return f"{n_yen}円"
+    man = n_yen // 10_000
+    if man < 10_000:
+        return f"{man:,}万円"
+    oku = man // 10_000
+    man_rem = man % 10_000
+    return f"{oku}億{man_rem:04d}万円"
+
 def int_fmt(n)->str:
     try:
         return f"{int(n):,}"
