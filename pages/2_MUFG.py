@@ -4,12 +4,14 @@ from pathlib import Path
 
 st.set_page_config(page_title="三菱UFJ銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
+# タイトルが切れない最小余白
 st.markdown("""
 <style>
 .block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
 </style>
 """, unsafe_allow_html=True)
 
+# ローカルPDFパス
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets" / "mufg"
 
@@ -21,16 +23,38 @@ def load_bytes(p: Path) -> bytes:
 
 st.title("三菱UFJ銀行｜住宅ローン")
 
+# ─ 商品説明（PDF 配布）
 st.subheader("商品説明（PDF）")
-st.download_button("📥 三菱UFJ｜商品説明", data=load_bytes(PDF_DESC), file_name="三菱UFJ_商品説明.pdf", mime="application/pdf")
+st.download_button(
+    "📥 三菱UFJ｜商品説明",
+    data=load_bytes(PDF_DESC),
+    file_name="三菱UFJ_商品説明.pdf",
+    mime="application/pdf"
+)
 
+# ─ 事前審査（オンライン）
 st.subheader("事前審査（オンライン）")
-st.link_button("🔗 事前審査ログイン（仲介向け）",
-               "https://web.smart-entry-tab.jp/setWeb/estate/login/?realtor_cd=HGSHW-04384")
+st.markdown("アクセスコードを **コピペ** して、下のボタン先で入力してください。")
+st.code("w-mufg-hgshw001", language="text")
+st.link_button(
+    "🔗 事前審査ログイン（仲介向け）",
+    "https://web.smart-entry-tab.jp/setWeb/estate/login/?realtor_cd=HGSHW-04384"
+)
 
-st.subheader("入力時の注意点（PDF）")
-st.download_button("📥 入力時の注意点", data=load_bytes(PDF_NOTICE), file_name="三菱UFJ_入力時の注意点.pdf", mime="application/pdf")
+# ─ 入力時の注意点（テキストの追記＋PDF 配布）
+st.subheader("入力時の注意点")
+st.markdown(
+    "担当者名：**西山 直樹**  /  メール：**naoki.nishiyama@terass.com**",
+    unsafe_allow_html=True,
+)
+st.download_button(
+    "📥 入力時の注意点（PDF）",
+    data=load_bytes(PDF_NOTICE),
+    file_name="三菱UFJ_入力時の注意点.pdf",
+    mime="application/pdf"
+)
 
+# ─ 特殊項目（横長テーブル）
 st.subheader("特殊項目")
 st.markdown("""
 <table style="width:100%; border-collapse:collapse; background:#fff;">

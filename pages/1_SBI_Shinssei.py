@@ -8,6 +8,13 @@ st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="�
 st.markdown("""
 <style>
 .block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
+/* テーブルの長文がはみ出さないように調整 */
+.sbi-table th, .sbi-table td {
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: normal;
+  vertical-align: top;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -21,7 +28,11 @@ PDF_A4   = ASSETS / "A4_申込書.pdf"
 PDF_PAIR = ASSETS / "ペアローン同意書.pdf"
 
 def load_bytes(p: Path) -> bytes:
-    return p.read_bytes()
+    try:
+        return p.read_bytes()
+    except Exception:
+        st.warning(f"ファイルが見つかりません：{p}")
+        return b""
 
 st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 
@@ -48,11 +59,39 @@ st.markdown("""
 - 永住権無：単身 or 夫婦のどちらかが永住権あれば可、連保は日本国籍/永住権者、日/英で対話可能であること
 """)
 
+# ─ 特殊項目（横長テーブル）※あなたが追加したテキストを反映
 st.subheader("特殊項目")
 st.markdown("""
-- 諸費用　◯（物件価格の <b>110%</b> まで）  
-- リフォーム　◯（<b>2本扱い／本体と同金利</b>）  
-- 買い替え　◯（可能だが、<b>原則 返済比率に含めて計算</b>）
+<table class="sbi-table" style="width:100%; border-collapse:collapse; background:#fff;">
+  <thead>
+    <tr style="background:#FCF9F0;">
+      <th style="border:1px solid #aaa; padding:12px; width:22%;">項目</th>
+      <th style="border:1px solid #aaa; padding:12px; width:10%;">取扱</th>
+      <th style="border:1px solid #aaa; padding:12px;">備考</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border:1px solid #aaa; padding:12px;">諸費用</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
+      <td style="border:1px solid #aaa; padding:12px;">相談</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #aaa; padding:12px;">リフォーム</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
+      <td style="border:1px solid #aaa; padding:12px;">相談</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
+      <td style="border:1px solid #aaa; padding:12px;">
+        現自宅の売買契約書の売却金額又は査定書記載の査定額が、現自宅の他行借入額の100%以上であれば、
+        現自宅の住宅ローンを返済比率に含めずに審査可能。売却期限の設定はなく、実行後の売却エビデンスの提出も不要。
+        ※1年間のみ、元金据え置きにて利息のみ返済いただきます。1年経過後から通常の月々返済へ切り替わる。
+      </td>
+    </tr>
+  </tbody>
+</table>
 """, unsafe_allow_html=True)
 
 st.subheader("事前審査用紙（クリックでダウンロード）")
