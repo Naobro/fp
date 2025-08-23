@@ -947,8 +947,9 @@ st.markdown("""
 内見物件の優劣を一覧で表示します。
 """)
 
+# ✅ 比較ページへは「/compare?client=...」で必ず開く（マスタ回避）
 if st.button("物件比較ページを開く", key=ns("open_compare")):
-    try:
-        st.switch_page("pages/3_compare.py")
-    except Exception:
-        st.page_link("pages/3_compare.py", label="↔ 物件比較ページを開く", icon="↔️")
+    st.markdown(f"[↔ 物件比較ページを開く](/compare?client={client_id})")
+
+# 直リンク（推奨）：ワンクリックで確実にID付きで開く
+st.link_button("↔ 物件比較（この顧客IDで開く・推奨）", f"/compare?client={client_id}", use_container_width=True)
