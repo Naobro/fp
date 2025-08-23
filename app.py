@@ -4,45 +4,6 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-# --- Deep link: /?page=<ページ名> で指定ページへジャンプ ---
-import streamlit as st
-import urllib.parse
-
-# Streamlit 1.31+ とそれ以前の両対応で取得
-def _get_query_params():
-    if hasattr(st, "query_params"):
-        return dict(st.query_params)
-    else:
-        return st.experimental_get_query_params()
-
-qp = _get_query_params()
-
-# page は「ライフプラン」など“サイドバーに表示されるページ名”を想定
-raw_page = qp.get("page")
-if isinstance(raw_page, list):
-    raw_page = raw_page[0]
-if raw_page:
-    # URLデコード（%E3... → 日本語）
-    target_page_name = urllib.parse.unquote(raw_page)
-
-    # まず「ページ名」での遷移を試す（推奨：Streamlit 1.22+）
-    try:
-        st.switch_page(target_page_name)
-    except Exception:
-        # ファイル指定パターンも順に試す（1_や2_などの接頭辞対策）
-        prefixes = ["", "1_", "2_", "3_", "4_", "5_"]
-        tried = False
-        for p in prefixes:
-            try:
-                st.switch_page(f"pages/{p}{target_page_name}.py")
-                tried = True
-                break
-            except Exception:
-                pass
-        if not tried:
-            st.warning(f"ページ '{target_page_name}' が見つかりません。ページ名を確認してください。")
-    st.stop()
-# --- /Deep link end ---
 from fpdf import FPDF
 
 # ============================================
