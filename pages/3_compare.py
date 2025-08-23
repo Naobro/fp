@@ -296,40 +296,155 @@ prefs = load_prefs(client_id_query)
 weights = to_weights(prefs.get("importance", {}))
 
 # ========== 現住（あなたの現在の住まい） ==========
+# ====== 顧客別・現住データの保存/復元（compare.json） ======
+def _get_client_id_from_query() -> str | None:
+    qp = st.query_params
+    cid = qp.get("client", None)
+    if isinstance(cid, list):
+        cid = cid[0] if cid else None
+    if cid is not None:
+        cid = str(cid).strip()
+        if cid == "":
+            cid = None
+    return cid
+
+def _client_dir(cid: str) -> str:
+    return os.path.join("data", "clients", cid)
+
+def _compare_json_path(cid: str) -> str:
+    return os.path.join(_client_dir(cid), "compare.json")
+
+def _ensure_client_dir(cid: str):
+    os.makedirs(_client_dir(cid), exist_ok=True)
+
+def _load_compare_state(cid: str) -> Dict[str, Any]:
+    p = _compare_json_path(cid)
+    if os.path.exists(p):
+        try:
+            return json.load(open(p, "r", encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+def _save_compare_state(cid: str, state: Dict[str, Any]):
+    _ensure_client_dir(cid)
+    with open(_compare_json_path(cid), "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+client_id_q = _get_client_id_from_query()
+
+# ====== ① 現在の住まい（基準：偏差値50） — 顧客別 永続化 ======
 st.header("① 現在の住まい（基準：偏差値50）")
+
+# compare.json から current_home を読込
+if client_id_q:
+    _state_all = _load_compare_state(client_id_q)
+    _curhome = _state_all.get("current_home", {})
+else:
+    _state_all, _curhome = {}, {}
+
+_defaults_curhome = {
+    "housing_cost_m": 10.0,
+    "walk_min": 20,
+    "area_m2": 55.0,
+    "floor": 3,
+    "corner": "不明",
+    "hall": "不明",
+    "view": "開放",
+    "facing_j": "南",
+    "balcony_depth_m": 1.5,
+    "commute_h": 60,
+    "commute_w": 40,
+    "line_count": 1,
+    "parking": "機械式",
+    "redevelopment": False,
+    "station_free": "",
+    "shop": "普通",
+    "edu": "普通",
+    "med": "普通",
+    "sec": "普通",
+    "dis": "普通",
+    "park": "普通",
+    "noise": "普通",
+}
+
+# セッション初期化（ID切替にも対応）
+if ("curhome" not in st.session_state) or (st.session_state.get("curhome_cid") != client_id_q):
+    base = {**_defaults_curhome, **_curhome}
+    st.session_state["curhome"] = base
+    st.session_state["curhome_cid"] = client_id_q
+    st.session_state["__curhome_hash__"] = json.dumps(base, ensure_ascii=False, sort_keys=True)
+
+cur = st.session_state["curhome"]
+
 with st.container(border=True):
     c1,c2,c3,c4 = st.columns(4)
     with c1:
-        cur_housing_cost = st.number_input("住居費（万円/月）", min_value=0.0, value=10.0, step=0.5)
-        cur_walk = st.number_input("最寄駅 徒歩（分）", min_value=0, value=20, step=1)
-        cur_area = st.number_input("専有面積（㎡）", min_value=0.0, value=55.0, step=0.5)
-        cur_floor = st.number_input("所在階（数値）", min_value=0, value=3, step=1)
+        cur["housing_cost_m"] = st.number_input("住居費（万円/月）", min_value=0.0, value=float(cur.get("housing_cost_m",10.0)), step=0.5, key="__cur_housing_cost_m")
+        cur["walk_min"] = st.number_input("最寄駅 徒歩（分）", min_value=0, value=int(cur.get("walk_min",20)), step=1, key="__cur_walk_min")
+        cur["area_m2"] = st.number_input("専有面積（㎡）", min_value=0.0, value=float(cur.get("area_m2",55.0)), step=0.5, key="__cur_area_m2")
+        cur["floor"] = st.number_input("所在階（数値）", min_value=0, value=int(cur.get("floor",3)), step=1, key="__cur_floor")
     with c2:
-        cur_corner = st.selectbox("角部屋", ["角","中住戸","不明"], index=2)
-        cur_hall   = st.selectbox("内廊下", ["有","無","不明"], index=2)
-        cur_view   = st.selectbox("眺望", ["開放","普通","閉鎖的","不明"], index=0)
-        cur_facing = st.selectbox("バルコニー向き（日本語）", BALC_J, index=4)
+        cur["corner"] = st.selectbox("角部屋", ["角","中住戸","不明"], index=["角","中住戸","不明"].index(cur.get("corner","不明")), key="__cur_corner")
+        cur["hall"]   = st.selectbox("内廊下", ["有","無","不明"], index=["有","無","不明"].index(cur.get("hall","不明")), key="__cur_hall")
+        cur["view"]   = st.selectbox("眺望", ["開放","普通","閉鎖的","不明"], index=["開放","普通","閉鎖的","不明"].index(cur.get("view","開放")), key="__cur_view")
+        cur["facing_j"] = st.selectbox("バルコニー向き（日本語）", BALC_J, index=(BALC_J.index(cur.get("facing_j","南")) if cur.get("facing_j","南") in BALC_J else 4), key="__cur_facing_j")
     with c3:
-        cur_balc_depth = st.number_input("バルコニー奥行（m）", min_value=0.0, value=1.5, step=0.1)
-        cur_comm_h = st.number_input("ご主人様 通勤（分）", min_value=0, value=60, step=5)
-        cur_comm_w = st.number_input("奥様 通勤（分）", min_value=0, value=40, step=5)
-        cur_linecnt= st.number_input("複数路線利用（本数）", min_value=0, value=1, step=1)
+        cur["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", min_value=0.0, value=float(cur.get("balcony_depth_m",1.5)), step=0.1, key="__cur_balc_depth")
+        cur["commute_h"] = st.number_input("ご主人様 通勤（分）", min_value=0, value=int(cur.get("commute_h",60)), step=5, key="__cur_comm_h")
+        cur["commute_w"] = st.number_input("奥様 通勤（分）", min_value=0, value=int(cur.get("commute_w",40)), step=5, key="__cur_comm_w")
+        cur["line_count"]= st.number_input("複数路線利用（本数）", min_value=0, value=int(cur.get("line_count",1)), step=1, key="__cur_linecnt")
     with c4:
-        cur_parking = st.selectbox("駐車場形態", M["parking_types"], index=1)
-        cur_redev   = st.checkbox("再開発予定・特定都市再生緊急整備地域", value=False)
-        cur_station = st.text_input("最寄駅（任意）", value="")
+        cur["parking"] = st.selectbox("駐車場形態", M["parking_types"], index=(M["parking_types"].index(cur.get("parking","機械式")) if cur.get("parking","機械式") in M["parking_types"] else 1), key="__cur_parking")
+        cur["redevelopment"] = st.checkbox("再開発予定・特定都市再生緊急整備地域", value=bool(cur.get("redevelopment", False)), key="__cur_redev")
+        cur["station_free"] = st.text_input("最寄駅（任意）", value=str(cur.get("station_free","")), key="__cur_station")
 
-    # ブロック別（現住）
-    cur_blocks = {
-        "price": 0.5,
-        "location": 0.6*norm_less(cur_walk,0,20) + 0.4*norm_less(min(cur_comm_h,cur_comm_w),0,90),
-        "size_layout": norm_more(cur_area,40,90),
-        "spec": 0.5,
-        "management": 0.5,
-    }
-    cur_fit = to_fit_score(cur_blocks, weights)
+    # 周辺環境（保存対象）
+    st.markdown("**周辺環境**")
+    d1,d2,d3,d4,d5,d6,d7 = st.columns(7)
+    with d1: cur["shop"]  = st.selectbox("商業施設", ["充実","良い","普通","弱い"], index=["充実","良い","普通","弱い"].index(cur.get("shop","普通")), key="__cur_shop")
+    with d2: cur["edu"]   = st.selectbox("教育環境", ["充実","良い","普通","弱い"], index=["充実","良い","普通","弱い"].index(cur.get("edu","普通")), key="__cur_edu")
+    with d3: cur["med"]   = st.selectbox("医療施設", ["充実","良い","普通","弱い"], index=["充実","良い","普通","弱い"].index(cur.get("med","普通")), key="__cur_med")
+    with d4: cur["sec"]   = st.selectbox("治安", ["充実","良い","普通","弱い"], index=["充実","良い","普通","弱い"].index(cur.get("sec","普通")), key="__cur_sec")
+    with d5: cur["dis"]   = st.selectbox("災害リスク", ["充実","良い","普通","弱い"], index=["充実","良い","普通","弱い"].index(cur.get("dis","普通")), key="__cur_dis")
+    with d6: cur["park"]  = st.selectbox("公園・緑地", ["充実","良い","普通","弱い"], index=["充実","良い","普通","弱い"].index(cur.get("park","普通")), key="__cur_park")
+    with d7: cur["noise"] = st.selectbox("騒音", ["充実","良い","普通","弱い"], index=["充実","良い","普通","弱い"].index(cur.get("noise","普通")), key="__cur_noise")
 
-# ========== 基本の希望条件（表示） ==========
+# —— 保存UI ——
+csa1, csa2 = st.columns([1,2])
+with csa1:
+    if st.button("💾 現住を保存（この顧客）"):
+        if client_id_q:
+            _state_all["current_home"] = dict(cur)
+            _save_compare_state(client_id_q, _state_all)
+            st.success("現住を保存しました。")
+            st.session_state["__curhome_saved__"] = True
+        else:
+            st.warning("顧客IDが未設定です。URLに ?client= を付けてください。")
+
+with csa2:
+    auto_on = st.toggle("自動保存ON（変更検知）", value=st.session_state.get("__curhome_autosave__", True), key="__curhome_autosave__")
+
+# —— 変更検知 → 自動保存 ——
+if client_id_q and st.session_state.get("__curhome_autosave__", True):
+    _payload_now = json.dumps(cur, ensure_ascii=False, sort_keys=True)
+    if st.session_state.get("__curhome_hash__") != _payload_now:
+        _state_all["current_home"] = dict(cur)
+        _save_compare_state(client_id_q, _state_all)
+        st.session_state["__curhome_hash__"] = _payload_now
+        st.toast("現住を自動保存しました。", icon="💾")
+
+# ====== ブロック別適合度（現住は保存値から算出） ======
+cur_blocks = {
+    "price": 0.5,
+    "location": 0.6*norm_less(int(cur.get("walk_min",20)),0,20) + 0.4*norm_less(min(int(cur.get("commute_h",60)), int(cur.get("commute_w",40))),0,90),
+    "size_layout": norm_more(float(cur.get("area_m2",55.0)),40,90),
+    "spec": 0.5,
+    "management": 0.5,
+}
+cur_fit = to_fit_score(cur_blocks, weights)
+
+# ====== 次セクション見出し（元の位置を維持） ======
 st.header("② 基本の希望条件（採点ルール）")
 with st.container(border=True):
     cc1,cc2,cc3 = st.columns(3)
