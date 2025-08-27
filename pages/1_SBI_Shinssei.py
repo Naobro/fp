@@ -9,12 +9,22 @@ st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="�
 st.markdown("""
 <style>
 .block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
+
+/* 横切れ防止：横スクロールを許可 */
+.table-wrap { overflow-x: auto; }
+
+/* 特殊項目テーブルの基本体裁 */
+.sbi-table { 
+  width: 100%; border-collapse: collapse; background: #fff;
+  table-layout: fixed; min-width: 1100px; /* 画面が狭い時はスクロール */
+}
 .sbi-table th, .sbi-table td {
   line-height: 1.6;
   word-break: break-word;
   white-space: normal;
   vertical-align: top;
 }
+
 /* 今月の基準金利バナー（PayPayページ準拠） */
 .rate-banner {
   display: flex; flex-direction: column; gap: 6px;
@@ -54,13 +64,13 @@ if sbi_rate is not None:
         <div class="rate-banner">
           <div class="label">🗓 {month_label()} の基準金利（SBI新生銀行）</div>
           <div class="value">{sbi_rate:.3f}%</div>
-          <div class="note">今月はこれです</div>
+          <div class="note">ガン団信　+0.1%</div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-# ===== 事前審査用紙（今月の金利の直下へ移動）=====
+# ===== 事前審査用紙（今月の金利の直下）=====
 st.subheader("事前審査用紙（ダウンロード）")
 st.markdown("""
 事前審査は **紙面での記入** になります。  
@@ -110,10 +120,11 @@ st.markdown("""
 - **団信が弱い（一般・がん100%のみ）**
 """)
 
-# ─ 特殊項目（横長テーブル）
+# ─ 特殊項目（横長テーブル：横スクロール対応） ─
 st.subheader("特殊項目")
 st.markdown("""
-<table class="sbi-table" style="width:100%; border-collapse:collapse; background:#fff;">
+<div class="table-wrap">
+<table class="sbi-table">
   <thead>
     <tr style="background:#FCF9F0;">
       <th style="border:1px solid #aaa; padding:12px; width:22%;">項目</th>
@@ -135,7 +146,7 @@ st.markdown("""
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
       <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
-      <td style="border:1px固 #aaa; padding:12px;">
+      <td style="border:1px solid #aaa; padding:12px;">
         現自宅の売買契約書の売却金額又は査定書記載の査定額が、現自宅の他行借入額の100%以上であれば、
         現自宅の住宅ローンを返済比率に含めずに審査可能。売却期限の設定はなく、実行後の売却エビデンスの提出も不要。
         ※1年間のみ、元金据え置きにて利息のみ返済いただきます。1年経過後から通常の月々返済へ切り替わる。
@@ -143,6 +154,7 @@ st.markdown("""
     </tr>
   </tbody>
 </table>
+</div>
 """, unsafe_allow_html=True)
 
 st.caption("※本ページの数値は社内目安。正式情報は銀行公表値をご確認ください。")
