@@ -22,10 +22,9 @@ st.markdown("""
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets" / "sbi"
 
-# ローカルPDF（必ず存在する前提のパス）
+# ローカルPDF
 PDF_A3   = ASSETS / "A3_申込書.pdf"
-PDF_A4   = ASSETS / "A4_申込書.pdf"
-PDF_PAIR = ASSETS / "ペアローン同意書.pdf"
+PDF_PAIR = ASSETS / "ペアローン申込書.pdf"
 
 def load_bytes(p: Path) -> bytes:
     try:
@@ -59,7 +58,7 @@ st.markdown("""
 - 永住権無：単身 or 夫婦のどちらかが永住権あれば可、連保は日本国籍/永住権者、日/英で対話可能であること
 """)
 
-# ─ 特殊項目（横長テーブル）※あなたが追加したテキストを反映
+# ─ 特殊項目（横長テーブル）
 st.subheader("特殊項目")
 st.markdown("""
 <table class="sbi-table" style="width:100%; border-collapse:collapse; background:#fff;">
@@ -95,11 +94,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.subheader("事前審査用紙（クリックでダウンロード）")
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
-    st.download_button("📥 A3 申込書", data=load_bytes(PDF_A3), file_name="SBI_A3_申込書.pdf", mime="application/pdf")
+    st.download_button(
+        "📥 A3 申込書",
+        data=load_bytes(PDF_A3),
+        file_name="SBI_A3_申込書.pdf",
+        mime="application/pdf"
+    )
 with col2:
-    st.download_button("📥 ペアローンの場合　こちらも必要", data=load_bytes(PDF_A4), file_name="SBI_ペアローン申込書.pdf", mime="application/pdf")
-with col3:
-    
+    st.download_button(
+        "📥 ペアローン申込書",
+        data=load_bytes(PDF_PAIR),
+        file_name="SBI_ペアローン申込書.pdf",
+        mime="application/pdf"
+    )
+
 st.caption("※本ページの数値は社内目安。正式情報は銀行公表値をご確認ください。")
