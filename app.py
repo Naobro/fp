@@ -353,323 +353,50 @@ for name, url in tools.items():
 st.divider()
 
 # ============================================
-# 7) ヒアリングフォーム ＋ PDF出力
+# 8) 孫子の兵法 × 不動産購入・売却
 # ============================================
-st.subheader("ヒアリング内容")
+st.divider()
+st.subheader("📌 孫子の兵法 × 不動産購入・売却")
 
-TO_EMAIL_DEFAULT = "naoki.nishiyama@terass.com"
-base_defaults = {
-    "name": "", "now_area": "", "now_years": 5, "is_owner": "賃貸",
-    "now_rent": 10, "family": "",
-    "husband_company": "", "husband_income": 0, "husband_service_years": 3,
-    "wife_company": "", "wife_income": 0, "wife_service_years": 3,
-    "sat_point": "", "search_status": "", "why_buy": "", "task": "",
-    "anxiety": "", "rent_vs_buy": "", "other_trouble": "", "effect": "",
-    "forecast": "", "event_effect": "", "missed_timing": "", "ideal_life": "",
-    "solve_feeling": "", "goal": "", "important": "",
-    "must": "", "want": "", "ng": "", "other_agent": "", "why_terass": "",
-    "housing_cost": 10,
-    "husband_commute": "", "wife_commute": "",
-    "sat_price": 3, "sat_location": 3, "sat_size": 3, "sat_age": 3, "sat_spec": 3,
-    "dissat_free": "",
-    "self_fund": "", "other_debt": "", "gift_support": "",
-    "w_why": "", "w_when": "", "w_where": "", "w_who": "", "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
-    "prio_price": 3, "prio_location": 3, "prio_size": 3, "prio_age": 3, "prio_spec": 3,
-    "spec_parking": False, "spec_bicycle": False, "spec_ev": False, "spec_pet": False,
-    "spec_barrierfree": False, "spec_security": False, "spec_disaster": False,
-    "spec_mgmt_good": False, "spec_fee_ok": False, "spec_free": "",
-    "contact_pref": "", "share_method": "", "pdf_recipient": TO_EMAIL_DEFAULT,
-}
+st.markdown(
+    """
+### 天の時・地の利・人の和
+- **天の時**  
+　不動産価格・家賃も上昇している局面、インフレの時代背景を読むこと。  
+- **地の利**  
+　立地の良い物件を選び、資産性を確保すること。  
+- **人の和**  
+　信頼できるエージェントと組むこと。  
+    """,
+    unsafe_allow_html=True
+)
 
-if "hearing_data" not in st.session_state:
-    st.session_state["hearing_data"] = base_defaults.copy()
-else:
-    for k, v in base_defaults.items():
-        st.session_state["hearing_data"].setdefault(k, v)
-    if not st.session_state["hearing_data"].get("housing_cost"):
-        st.session_state["hearing_data"]["housing_cost"] = st.session_state["hearing_data"].get("now_rent", 0)
+st.markdown(
+    """
+### 戦略に応用できる名言
+- **「彼を知り己を知れば百戦殆うからず」**  
+👉 市場（相場・金利）を知り、自分（予算・ライフプラン・条件整理）を知れば失敗しない。  
 
-data = st.session_state["hearing_data"]
+- **「勝兵は先ず勝ちて而（しか）る後に戦い、敗兵は先ず戦いて而（しか）る後に勝ちを求む」**  
+　→ ライフプランニング・資金計画やローン事前審査を整えてから動く人は勝つ。準備なく探すと負ける。  
 
-with st.form("hearing_form", clear_on_submit=False):
-    st.markdown("#### 1) 現状把握（基礎）")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        data["name"]      = st.text_input("お名前", value=data["name"])
-        data["now_area"]  = st.text_input("現在の居住エリア・駅", value=data["now_area"])
-    with c2:
-        data["now_years"] = st.number_input("居住年数（年）", min_value=0, max_value=100, value=int(data["now_years"]))
-        data["is_owner"]  = st.selectbox("持ち家・賃貸", ["賃貸", "持ち家"], index=0 if data["is_owner"]=="賃貸" else 1)
-    with c3:
-        data["housing_cost"] = st.number_input("住居費（万円/月）", min_value=0, max_value=200, value=int(data["housing_cost"]))
-    data["family"] = st.text_input("ご家族構成（人数・年齢・将来予定）", value=data["family"])
+- **「勢いは弩（ど）を引き絃（つる）を発つが若（も）し」**  
+　→ 市場の流れに乗る。人気エリア・低金利のチャンスは一瞬で決断。  
 
-    st.divider()
+- **「其の疾きこと風の如く、其の徐（おもむ）ろかなること林の如く」**  
+　→ 良い物件は事前準備して即断即決（風）、売却戦略はじっくり準備（林）。  
+    """,
+    unsafe_allow_html=True
+)
 
-    st.markdown("#### 2) 現在の住まい（満足・不満）")
-    data["sat_point"] = st.text_area("現在の住宅の満足点（自由入力）", value=data["sat_point"])
-    sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-    with sc1:
-        data["sat_price"] = st.slider("満足度：価格（1=不満／5=満足）", 1, 5, int(data["sat_price"]))
-    with sc2:
-        data["sat_location"] = st.slider("満足度：立地（1=不満／5=満足）", 1, 5, int(data["sat_location"]))
-    with sc3:
-        data["sat_size"] = st.slider("満足度：広さ（1=不満／5=満足）", 1, 5, int(data["sat_size"]))
-    with sc4:
-        data["sat_age"] = st.slider("満足度：築年数（1=不満／5=満足）", 1, 5, int(data["sat_age"]))
-    with sc5:
-        data["sat_spec"] = st.slider("満足度：スペック（1=不満／5=満足）", 1, 5, int(data["sat_spec"]))
-    sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
-    st.caption(f"満足度スコア合計：**{sat_total} / 25**（低いほど不満が大きい）")
-    data["dissat_free"] = st.text_area("不満な点（自由入力）", value=data["dissat_free"])
+st.markdown(
+    """
+### 結論
+戦の極意は「戦わずして勝つ」こと。  
+不動産も「焦らず、争わず、準備と戦略で優位に立つ」ことが核心。  
 
-    st.divider()
-
-    st.markdown("#### 3) 収入・勤務（夫婦2名）")
-    st.markdown("**ご主人**")
-    hc1, hc2, hc3 = st.columns(3)
-    with hc1:
-        data["husband_company"] = st.text_input("勤務先・勤務地（ご主人）", value=data["husband_company"])
-    with hc2:
-        data["husband_income"]  = st.number_input("年収（ご主人・万円）", min_value=0, max_value=10000, value=int(data["husband_income"]))
-    with hc3:
-        data["husband_service_years"] = st.number_input("勤続年数（ご主人・年）", min_value=0, max_value=50, value=int(data["husband_service_years"]))
-    data["husband_commute"] = st.text_input("通勤状況（在宅頻度／出社曜日・時間）〈ご主人〉", value=data["husband_commute"])
-
-    st.markdown("**奥様**")
-    wc1, wc2, wc3 = st.columns(3)
-    with wc1:
-        data["wife_company"] = st.text_input("勤務先・勤務地（奥様）", value=data["wife_company"])
-    with wc2:
-        data["wife_income"]  = st.number_input("年収（奥様・万円）", min_value=0, max_value=10000, value=int(data["wife_income"]))
-    with wc3:
-        data["wife_service_years"] = st.number_input("勤続年数（奥様・年）", min_value=0, max_value=50, value=int(data["wife_service_years"]))
-    data["wife_commute"] = st.text_input("通勤状況（在宅頻度／出社曜日・時間）〈奥様〉", value=data["wife_commute"])
-
-    st.divider()
-
-    st.markdown("#### 4) 資金計画")
-    fc1, fc2, fc3 = st.columns(3)
-    with fc1:
-        data["self_fund"] = st.text_input("自己資金（頭金＋諸費用の目安）", value=data["self_fund"])
-    with fc2:
-        data["other_debt"] = st.text_input("借入（自動車ローン等）", value=data["other_debt"])
-    with fc3:
-        data["gift_support"] = st.text_input("相続・贈与・援助（予定額／有無／時期）", value=data["gift_support"])
-
-    st.divider()
-
-    st.markdown("#### 5) ライフイベント・家族計画")
-    data["event_effect"] = st.text_area("出産・進学・転勤・同居 等の予定／学区・保育・医療の希望", value=data["event_effect"])
-
-    st.divider()
-
-    st.markdown("#### 6) 5W2H（購入計画）")
-    data["w_why"]     = st.text_input("Why（なぜ）：購入理由", value=data["w_why"])
-    data["w_when"]    = st.text_input("When（いつ）：購入／入居タイミング", value=data["w_when"])
-    data["w_where"]   = st.text_input("Where（どこで）：希望エリア・沿線", value=data["w_where"])
-    data["w_who"]     = st.text_input("Who（誰が）：居住メンバー", value=data["w_who"])
-    data["w_what"]    = st.text_input("What（何を）：種別・広さ・築年数・階数・設備", value=data["w_what"])
-    data["w_how"]     = st.text_input("How（どう買う）：ローン方針・頭金の考え方", value=data["w_how"])
-    data["w_howmuch"] = st.text_input("How much（いくら）：総予算／月返済の上限", value=data["w_howmuch"])
-    data["w_free"]    = st.text_area("補足（自由入力）", value=data["w_free"])
-
-    st.divider()
-
-    st.markdown("#### 7) 希望条件の優先度")
-    data["must"] = st.text_input("MUST条件（3つまで）", value=data["must"])
-    data["want"] = st.text_area("WANT条件", value=data["want"])
-    data["ng"]   = st.text_area("NG条件", value=data["ng"])
-
-    st.markdown("**重要度のトレードオフ（1=最優先〜5）**")
-    p1, p2, p3, p4, p5 = st.columns(5)
-    with p1:
-        data["prio_price"] = st.selectbox("価格", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_price"])) if str(data["prio_price"]).isdigit() else 2)
-    with p2:
-        data["prio_location"] = st.selectbox("立地（資産性）", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_location"])) if str(data["prio_location"]).isdigit() else 2)
-    with p3:
-        data["prio_size"] = st.selectbox("広さ", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_size"])) if str(data["prio_size"]).isdigit() else 2)
-    with p4:
-        data["prio_age"] = st.selectbox("築年数", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_age"])) if str(data["prio_age"]).isdigit() else 2)
-    with p5:
-        data["prio_spec"] = st.selectbox("スペック", [1,2,3,4,5], index=[1,2,3,4,5].index(int(data["prio_spec"])) if str(data["prio_spec"]).isdigit() else 2)
-
-    st.markdown("#### 8) 物件スペック・住環境（チェック＋自由入力）")
-    csp1, csp2, csp3, csp4, csp5 = st.columns(5)
-    with csp1:
-        data["spec_parking"] = st.checkbox("駐車場", value=bool(data["spec_parking"]))
-        data["spec_bicycle"] = st.checkbox("駐輪", value=bool(data["spec_bicycle"]))
-    with csp2:
-        data["spec_ev"] = st.checkbox("エレベーター", value=bool(data["spec_ev"]))
-        data["spec_pet"] = st.checkbox("ペット可", value=bool(data["spec_pet"]))
-    with csp3:
-        data["spec_barrierfree"] = st.checkbox("バリアフリー", value=bool(data["spec_barrierfree"]))
-        data["spec_security"] = st.checkbox("防犯性（オートロック等）", value=bool(data["spec_security"]))
-    with csp4:
-        data["spec_disaster"] = st.checkbox("災害リスク許容", value=bool(data["spec_disaster"]))
-        data["spec_mgmt_good"] = st.checkbox("管理状態が良好", value=bool(data["spec_mgmt_good"]))
-    with csp5:
-        data["spec_fee_ok"] = st.checkbox("管理費/修繕積立金 許容範囲内", value=bool(data["spec_fee_ok"]))
-    data["spec_free"] = st.text_area("スペック補足（自由入力）", value=data["spec_free"])
-
-    st.divider()
-
-    st.markdown("#### 9) 他社相談状況")
-    data["other_agent"] = st.text_input("他社への相談状況（有無・内容）", value=data["other_agent"])
-
-    st.divider()
-
-    st.markdown("#### 10) 連絡・共有")
-    cc1, cc2, cc3 = st.columns(3)
-    with cc1:
-        data["contact_pref"] = st.text_input("希望連絡手段・時間帯", value=data["contact_pref"])
-    with cc2:
-        data["share_method"] = st.text_input("資料共有（LINE／メール 等）", value=data["share_method"])
-    with cc3:
-        data["pdf_recipient"] = st.text_input("PDF送付先メール", value=data.get("pdf_recipient", TO_EMAIL_DEFAULT))
-
-    submitted = st.form_submit_button("送信")
-
-# ============================================
-# 8) PDF生成（送信後）
-# ============================================
-if submitted:
-    st.success("ご入力ありがとうございました！PDFを生成します。")
-
-    import urllib.request
-
-    REG_NAME = "NotoSansJP-Regular.ttf"
-    BLD_NAME = "NotoSansJP-Bold.ttf"
-    RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Regular.ttf"
-    RAW_BLD = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Bold.ttf"
-
-    def ensure_fonts_dir() -> Path:
-        candidates = [
-            Path(__file__).resolve().parent / "fonts",
-            Path.cwd() / "fonts",
-            Path("/mount/src/fp/fonts"),
-            Path("/app/fonts"),
-        ]
-        for d in candidates:
-            if (d / REG_NAME).exists() and (d / BLD_NAME).exists():
-                return d.resolve()
-        for d in candidates:
-            if (d / REG_NAME).exists():
-                try:
-                    (d / BLD_NAME).write_bytes((d / REG_NAME).read_bytes())
-                except Exception:
-                    pass
-                return d.resolve()
-        tmp = Path(tempfile.mkdtemp(prefix="fonts_"))
-        urllib.request.urlretrieve(RAW_REG, str(tmp / REG_NAME))
-        try:
-            urllib.request.urlretrieve(RAW_BLD, str(tmp / BLD_NAME))
-        except Exception:
-            (tmp / BLD_NAME).write_bytes((tmp / REG_NAME).read_bytes())
-        return tmp.resolve()
-
-    font_dir = ensure_fonts_dir()
-    reg_path = font_dir / REG_NAME
-    bld_path = font_dir / BLD_NAME
-    if not reg_path.exists():
-        st.error(f"日本語フォントが見つかりません: {reg_path}")
-        st.stop()
-    if not bld_path.exists():
-        bld_path.write_bytes(reg_path.read_bytes())
-
-    st.caption(f"Font dir: {font_dir}")
-    st.caption(f"Use TTF: {reg_path.name} / {bld_path.name}")
-
-    save_cwd = os.getcwd()
-    os.chdir(str(font_dir))
-    try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.add_font("NotoSansJP", "", reg_path.name, uni=True)
-        pdf.add_font("NotoSansJP", "B", bld_path.name, uni=True)
-
-        def title(t):
-            pdf.set_font("NotoSansJP", "B", 14); pdf.cell(0, 10, t, 0, 1)
-        def pair(label, val):
-            pdf.set_font("NotoSansJP","B",11); pdf.multi_cell(0, 7, label)
-            pdf.set_font("NotoSansJP","",11); pdf.multi_cell(0, 7, str(val) if val not in [None, ""] else "（未入力）")
-            pdf.ln(1)
-
-        pdf.set_font("NotoSansJP", "B", 16)
-        pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
-        pdf.set_font("NotoSansJP", "", 10)
-        pdf.cell(0, 8, f"作成日時：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "R")
-        pdf.ln(2)
-
-        title("1) 現状把握（基礎）")
-        pair("お名前", data["name"])
-        pair("現在の居住エリア・駅", data["now_area"])
-        pair("居住年数（年）", data["now_years"])
-        pair("種別（賃貸/持ち家）", data["is_owner"])
-        pair("住居費（万円/月）", data["housing_cost"])
-        pair("ご家族構成", data["family"])
-
-        title("2) 現在の住まい（満足・不満）")
-        pair("満足点", data["sat_point"])
-        sat_total = int(data["sat_price"]) + int(data["sat_location"]) + int(data["sat_size"]) + int(data["sat_age"]) + int(data["sat_spec"])
-        pair("満足度（価格/立地/広さ/築年数/スペック）合計", f"{data['sat_price']}/{data['sat_location']}/{data['sat_size']}/{data['sat_age']}/{data['sat_spec']}（計 {sat_total} / 25）")
-        pair("不満な点", data["dissat_free"])
-
-        title("3) 収入・勤務（夫婦2名）")
-        pair("ご主人：勤務先・勤務地", data["husband_company"])
-        pair("ご主人：年収（万円）／勤続（年）", f"{data['husband_income']}／{data['husband_service_years']}")
-        pair("ご主人：通勤状況", data["husband_commute"])
-        pair("奥様：勤務先・勤務地", data["wife_company"])
-        pair("奥様：年収（万円）／勤続（年）", f"{data['wife_income']}／{data['wife_service_years']}")
-        pair("奥様：通勤状況", data["wife_commute"])
-        pair("世帯年収（万円）", (data.get("husband_income",0) or 0) + (data.get("wife_income",0) or 0))
-
-        title("4) 資金計画")
-        pair("自己資金（頭金＋諸費用）", data["self_fund"])
-        pair("借入（自動車ローン等）", data["other_debt"])
-        pair("相続・贈与・援助（予定額／有無／時期）", data["gift_support"])
-
-        title("5) ライフイベント・家族計画")
-        pair("予定／学区・保育・医療の希望", data["event_effect"])
-
-        title("6) 5W2H（購入計画）")
-        pair("Why", data["w_why"]); pair("When", data["w_when"]); pair("Where", data["w_where"])
-        pair("Who", data["w_who"]); pair("What", data["w_what"]); pair("How", data["w_how"]); pair("How much", data["w_howmuch"])
-        pair("補足", data["w_free"])
-
-        title("7) 希望条件の優先度／物件スペック")
-        pair("MUST", data["must"]); pair("WANT", data["want"]); pair("NG", data["ng"])
-        pair("重要度（価格/立地/広さ/築年数/スペック）", f"{data['prio_price']}/{data['prio_location']}/{data['prio_size']}/{data['prio_age']}/{data['prio_spec']}")
-        spec_list = []
-        for k, label in [
-            ("spec_parking","駐車場"), ("spec_bicycle","駐輪"), ("spec_ev","エレベーター"),
-            ("spec_pet","ペット可"), ("spec_barrierfree","バリアフリー"), ("spec_security","防犯性"),
-            ("spec_disaster","災害リスク許容"), ("spec_mgmt_good","管理良好"), ("spec_fee_ok","管理費/修繕積立金 許容")
-        ]:
-            if data.get(k):
-                spec_list.append(label)
-        pair("チェック項目", "・".join(spec_list) if spec_list else "（なし）")
-        pair("スペック補足", data["spec_free"])
-
-        title("8) 他社相談状況")
-        pair("他社相談", data["other_agent"])
-
-        title("9) 連絡・共有")
-        pair("希望連絡手段・時間帯", data["contact_pref"])
-        pair("資料共有", data["share_method"])
-        pair("PDF送付先", data.get("pdf_recipient", TO_EMAIL_DEFAULT))
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            pdf.output(tmp_file.name)
-            pdf_path = tmp_file.name
-    except Exception as e:
-        st.error("PDFの作成でエラーが発生しました（フォント取得/配置を確認してください）。")
-        st.exception(e)
-        os.chdir(save_cwd)
-        st.stop()
-    finally:
-        os.chdir(save_cwd)
-
-    with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-    st.download_button("📄 PDFをダウンロード", data=pdf_bytes, file_name="hearing_sheet.pdf", mime="application/pdf")
+そして良い不動産購入のために  
+**「私のロードマップに乗っかってください」**  
+    """,
+    unsafe_allow_html=True
+)
