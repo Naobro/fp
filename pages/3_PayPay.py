@@ -7,14 +7,18 @@ st.set_page_config(page_title="PayPay銀行｜住宅ローン", page_icon="🏦"
 st.markdown("""
 <style>
 .block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
+.big-link {
+    font-size: 1.4rem;
+    font-weight: bold;
+    margin: 1rem 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets" / "paypay"
 
-PDF_DESC  = ASSETS / "商品説明.pdf"
-PDF_PREEXAM = ASSETS / "paypay事前審査.pdf" # 追加（必ずassets/paypay/に配置してください）
+PDF_DESC = ASSETS / "商品説明.pdf"
 
 def load_bytes(p: Path) -> bytes:
     try:
@@ -35,12 +39,16 @@ st.download_button(
 )
 
 # ─ 事前審査
-st.subheader("事前審査（PDF）")
-st.download_button(
-    "📥 PayPay銀行｜事前審査申込書",
-    data=load_bytes(PDF_PREEXAM),
-    file_name="PayPay_事前審査申込書.pdf",
-    mime="application/pdf"
+st.subheader("事前審査　入力方法")
+st.markdown(
+    """
+    <div class="big-link">
+        👉 <a href="https://www.paypay-bank.co.jp/ad/mortgage/agency4.html" target="_blank">
+        事前審査はこちら（PayPay銀行公式ページ）
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 # ─ 特殊項目（横長テーブル）
