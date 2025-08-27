@@ -117,14 +117,14 @@ st.markdown("""
           <li>転職後 <b>勤続半年</b>でも審査可（承認実例あり）</li>
         </ul>
       </td>
-      <td style="border:1px solid #d1d5db; padding:12px;">
-        <ul>
-          <li>個人事業主には弱い</li>
-          <li><b>125%・5年ルールなし</b></li>
-          <li>リフォーム費用 融資不可</li>
-          <li>物件担保評価が厳しい（借地権・既存不適格・自主管理はNG）</li>
-        </ul>
-      </td>
+      <td style="border:1px solid #d1d5db; padding:12px; vertical-align: top;">
+  <ul>
+    <li>個人事業主には弱い（弁護士・医師などOK）</li>
+    <li><b>125%・5年ルールなし</b></li>
+    <li>リフォーム費用 融資不可</li>
+    <li>物件担保評価が厳しい（借地権・既存不適格・自主管理などはNG）</li>
+  </ul>
+</td>
     </tr>
   </tbody>
 </table>
