@@ -99,8 +99,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.download_button("📥 A3 申込書", data=load_bytes(PDF_A3), file_name="SBI_A3_申込書.pdf", mime="application/pdf")
 with col2:
-    st.download_button("📥 A4 申込書", data=load_bytes(PDF_A4), file_name="SBI_A4_申込書.pdf", mime="application/pdf")
+    st.download_button("📥 ペアローンの場合　こちらも必要", data=load_bytes(PDF_A4), file_name="SBI_ペアローン申込書.pdf", mime="application/pdf")
 with col3:
-    st.download_button("📥 ペアローン同意書", data=load_bytes(PDF_PAIR), file_name="SBI_ペアローン同意書.pdf", mime="application/pdf")
-
+    
 st.caption("※本ページの数値は社内目安。正式情報は銀行公表値をご確認ください。")
