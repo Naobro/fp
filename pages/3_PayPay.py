@@ -36,11 +36,13 @@ st.subheader("① 提携住宅ローン｜事前審査")
 st.markdown(
     """
     <div class="big-link">
-      👉 <a href="https://www.paypay-bank.co.jp/ad/mortgage/agency4.html" target="_blank">
-      提携経由の事前審査はこちら（PayPay銀行 公式・提携ページ）
-      </a>
-    </div>
-    <div>※ 弊社提携枠では、個人申込と <b>金利・頭金等の条件が異なる場合</b>があります。</div>
+  👉 <a href="https://www.paypay-bank.co.jp/ad/mortgage/agency4.html" target="_blank">
+  提携の事前審査はこちら（西山　経由）
+  </a>
+</div>
+<div>
+  <b>諸費用まで借入可能・金利優遇あり</b> など、公式サイトからの個人申込よりも有利な条件でご利用いただけます。
+</div>
     """,
     unsafe_allow_html=True
 )
@@ -49,12 +51,18 @@ st.markdown(
 st.subheader("② 個人で事前審査する場合（公式）")
 st.markdown(
     """
-    <div class="big-link">
-      👉 <a href="https://www.paypay-bank.co.jp/mortgage/index.html?utm_source=chatgpt.com" target="_blank">
-      個人申込はこちら（PayPay銀行 住宅ローン 公式サイト）
-      </a>
-    </div>
-    <div>※ 個人申込は提携条件の対象外です。条件・審査基準が異なる点にご注意ください。</div>
+    <div style="margin-top:1rem; font-weight:bold;">
+  【参考】個人で直接申込する場合の条件
+</div>
+<div class="big-link">
+  👉 <a href="https://www.paypay-bank.co.jp/mortgage/index.html?utm_source=chatgpt.com" target="_blank">
+  PayPay銀行 住宅ローン公式サイト
+  </a>
+</div>
+<div>
+  ※ こちらからの申込は <b>弊社提携の優遇条件（諸費用借入・金利引下げ等）が一切適用されません</b>。<br>
+  条件面では弊社経由でのお申込が有利です。
+</div>
     """,
     unsafe_allow_html=True
 )
