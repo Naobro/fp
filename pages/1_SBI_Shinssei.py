@@ -24,7 +24,7 @@ ASSETS = ROOT / "assets" / "sbi"
 
 # ローカルPDF
 PDF_A3   = ASSETS / "A3_申込書.pdf"
-PDF_PAIR = ASSETS / "ペアローン申込書.pdf"
+PDF_PAIR = ASSETS / "ペアローン申込書.pdf"
 
 def load_bytes(p: Path) -> bytes:
     try:
