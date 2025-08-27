@@ -1,6 +1,7 @@
 # pages/3_PayPay.py
 import streamlit as st
 from pathlib import Path
+from utils.rates import get_base_rates_for_current_month, month_label  # ← 追加
 
 st.set_page_config(page_title="PayPay銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
@@ -11,6 +12,16 @@ st.markdown("""
 .big-link { font-size: 1.4rem; font-weight: bold; margin: 1rem 0; }
 .table-wrap { overflow-x: auto; }
 th, td { font-size: .98rem; }
+
+/* 追加：今月の基準金利バナー */
+.rate-banner {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid #e5e7eb; border-radius: 12px;
+  background: #fff; padding: 14px 16px; margin: 4px 0 14px 0;
+}
+.rate-banner .label { font-size: 1.0rem; color: #374151; }
+.rate-banner .value { font-size: 2.2rem; font-weight: 800; color: #1b232a; line-height: 1.1; }
+.rate-banner .note { font-size: 0.95rem; color: #4b5563; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -31,38 +42,53 @@ def load_bytes(p: Path) -> bytes:
 # ========== Title ==========
 st.title("PayPay銀行｜住宅ローン")
 
-# ① 提携住宅ローン｜事前審査
-st.subheader("① 提携住宅ローン｜事前審査")
+# ========== 追加：ページ最上段に今月の基準金利（PayPay銀行） ==========
+_base = get_base_rates_for_current_month()              # 今月の%を取得（utils/rates.py）
+paypay_rate = _base.get("PayPay銀行", None)             # PayPay銀行の当月レート（%）
+if paypay_rate is not None:
+    st.markdown(
+        f"""
+        <div class="rate-banner">
+          <div class="label">🗓 {month_label()} の基準金利（PayPay銀行）</div>
+          <div class="value">{paypay_rate:.3f}%</div>
+          <div class="note">がん団信など金利上乗せ</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# 提携住宅ローン｜事前審査
+st.subheader("提携住宅ローン｜事前審査")
 st.markdown(
     """
     <div class="big-link">
-  👉 <a href="https://www.paypay-bank.co.jp/ad/mortgage/agency4.html" target="_blank">
-  提携の事前審査はこちら（西山　経由）
-  </a>
-</div>
-<div>
-  <b>諸費用まで借入可能・金利優遇あり</b> など、公式サイトからの個人申込よりも有利な条件でご利用いただけます。
-</div>
+      👉 <a href="https://www.paypay-bank.co.jp/ad/mortgage/agency4.html" target="_blank">
+      提携の事前審査はこちら（西山 経由）
+      </a>
+    </div>
+    <div>
+      <b>諸費用まで借入可能・金利優遇あり</b> など、公式サイトからの個人申込よりも有利な条件でご利用いただけます。
+    </div>
     """,
     unsafe_allow_html=True
 )
 
-# ② 個人で事前審査する場合（公式）
-st.subheader("② 個人で事前審査する場合（公式）")
+# 個人で事前審査する場合（公式）
+st.subheader("個人で事前審査する場合（公式）")
 st.markdown(
     """
     <div style="margin-top:1rem; font-weight:bold;">
-  【参考】個人で直接申込する場合の条件
-</div>
-<div class="big-link">
-  👉 <a href="https://www.paypay-bank.co.jp/mortgage/index.html?utm_source=chatgpt.com" target="_blank">
-  PayPay銀行 住宅ローン公式サイト
-  </a>
-</div>
-<div>
-  ※ こちらからの申込は <b>弊社提携の優遇条件（諸費用借入・金利引下げ等）が一切適用されません</b>。<br>
-  条件面では弊社経由でのお申込が有利です。
-</div>
+      【参考】個人で直接申込する場合の条件
+    </div>
+    <div class="big-link">
+      👉 <a href="https://www.paypay-bank.co.jp/mortgage/index.html?utm_source=chatgpt.com" target="_blank">
+      PayPay銀行 住宅ローン公式サイト
+      </a>
+    </div>
+    <div>
+      ※ こちらからの申込は <b>弊社提携の優遇条件（諸費用借入・金利引下げ等）が一切適用されません</b>。<br>
+      条件面では弊社経由でのお申込が有利です。
+    </div>
     """,
     unsafe_allow_html=True
 )
@@ -118,13 +144,13 @@ st.markdown("""
         </ul>
       </td>
       <td style="border:1px solid #d1d5db; padding:12px; vertical-align: top;">
-  <ul>
-    <li>個人事業主には弱い（弁護士・医師などOK）</li>
-    <li><b>125%・5年ルールなし</b></li>
-    <li>リフォーム費用 融資不可</li>
-    <li>物件担保評価が厳しい（借地権・既存不適格・自主管理などはNG）</li>
-  </ul>
-</td>
+        <ul>
+          <li>個人事業主には弱い（弁護士・医師などOK）</li>
+          <li><b>125%・5年ルールなし</b></li>
+          <li>リフォーム費用 融資不可</li>
+          <li>物件担保評価が厳しい（借地権・既存不適格・自主管理などはNG）</li>
+        </ul>
+      </td>
     </tr>
   </tbody>
 </table>
