@@ -1,5 +1,7 @@
+# 住宅ローン 提案シミュレーター（基準金利を月次管理：方法A）
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.units import mm
@@ -24,7 +26,7 @@ def get_japanese_style(size=11, font_name='NotoSansJP', alignment='CENTER', lead
         fontName=font_name,
         fontSize=size,
         leading=leading,
-        alignment=align_map.get(alignment, 1),  # デフォルトCENTER
+        alignment=align_map.get(alignment, 1),
         fontWeight="bold" if bold else "normal",
         textColor=color,
         spaceAfter=2, spaceBefore=2
@@ -37,7 +39,25 @@ def calc_monthly_payment(principal, annual_rate, years):
         return principal / n
     return principal * r / (1 - (1 + r) ** -n)
 
-# ========== 入力UI ==========
+# ========= 月次の基準金利（ここだけ毎月更新） =========
+# キーは "YYYY-MM"、値は「%（実数）」で3桁程度。
+BASE_RATES = {
+    "2025-08": {"SBI新生銀行": 0.590, "三菱UFJ銀行": 0.595, "PayPay銀行": 0.599, "じぶん銀行": 0.780, "住信SBI銀行": 0.739},
+    "2025-09": {"SBI新生銀行": 0.600, "三菱UFJ銀行": 0.605, "PayPay銀行": 0.610, "じぶん銀行": 0.770, "住信SBI銀行": 0.740},
+    # 次月以降はここに追記 → 例:
+    # "2025-10": {"SBI新生銀行": 0.605, "三菱UFJ銀行": 0.610, "PayPay銀行": 0.615, "じぶん銀行": 0.775, "住信SBI銀行": 0.745},
+}
+
+# 今月キー／表示用
+_now = datetime.now()
+MONTH_KEY = _now.strftime("%Y-%m")
+MONTH_LABEL = _now.strftime("%Y年%m月")
+
+# デフォルト月（万一キーがない場合は最後の項目を使う）
+_DEFAULT_MONTH_KEY = list(BASE_RATES.keys())[-1]
+BASE_THIS_MONTH = BASE_RATES.get(MONTH_KEY, BASE_RATES[_DEFAULT_MONTH_KEY]).copy()
+
+# ========= 入力UI ==========
 st.title("住宅ローン 提案シミュレーター")
 
 c1, c2, c3, c4 = st.columns(4)
@@ -53,16 +73,17 @@ with c4:
 max_year = max(1, 79 - age)
 years = st.slider("返済期間 (年)", 1, max_year, min(35, max_year))
 
-# ========== 銀行・金利設定 ==========
-rates = {
-    "SBI新生銀行": 0.59,
-    "三菱UFJ銀行": 0.595,
-    "PayPay銀行": 0.599,
-    "じぶん銀行": 0.78,
-    "住信SBI銀行": 0.809,
-}
+# ========= 今月の基準金利 見出し =========
+st.markdown(f"### {MONTH_LABEL} 基準金利（初期値）")
+
+# ========= 銀行・金利設定（初期値＝今月分の辞書） =========
+# BASE_THIS_MONTH は % 表記。以降、UI では自由に微修正可能。
+rates = BASE_THIS_MONTH.copy()
+
+# 物件価格概算・LTVに応じた住信SBIの帯調整（従来ロジックを維持）
 property_price_guess = (principal + self_fund) / 1.07
 ltv = principal / property_price_guess if property_price_guess else 1
+# ※ BASE_THIS_MONTH の住信値は「標準帯」。LTVで上書きする。
 if ltv <= 0.8:
     rates["住信SBI銀行"] = 0.649
 elif ltv <= 1.0:
@@ -70,6 +91,7 @@ elif ltv <= 1.0:
 else:
     rates["住信SBI銀行"] = 0.809
 
+# 団信・付帯の金利差（％）
 rate_diff = {
     "SBI新生銀行": {"がん100": 0.01},
     "三菱UFJ銀行": {"がん50": 0.15, "7大疾病": 0.3, "全疾病": 0.5},
@@ -88,14 +110,16 @@ special_notes = {
 bank_order = list(rates.keys())
 plans_order = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
-# ========== 金利修正欄 ==========
+# ========= 金利修正欄（営業担当用：今月基準から微調整） =========
 st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当用）", expanded=False):
     cols = st.columns(len(rates))
     for i, bank in enumerate(rates.keys()):
-        rates[bank] = cols[i].number_input(f"{bank} (%)", value=rates[bank], key=f"rate_input_{bank}", format="%.3f")
+        rates[bank] = cols[i].number_input(
+            f"{bank} (%)", value=float(rates[bank]), key=f"rate_input_{bank}", format="%.3f"
+        )
 
-# ========== 借入上限額（10万円単位切り捨て・右揃え）==========
+# ========= 借入上限額（10万円単位切り捨て・右揃え）==========
 def calc_borrowing_limit(income, exam_rate, limit_ratio, age):
     exam_years = min(35, 79 - age)
     annual_payment = income * limit_ratio
@@ -109,14 +133,13 @@ def calc_borrowing_limit(income, exam_rate, limit_ratio, age):
     return int(raw_limit // 100000 * 100000)
 
 banks_info = {
-    "SBI新生銀行": {"審査金利": 0.03, "返済比率": 0.40},
+    "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
     "三菱UFJ銀行": {"審査金利": 0.0354, "返済比率": 0.35},
-    "PayPay銀行": {"審査金利": 0.03, "返済比率": 0.40},
-    "じぶん銀行": {"審査金利": 0.0257, "返済比率": 0.35},
+    "PayPay銀行":  {"審査金利": 0.03,   "返済比率": 0.40},
+    "じぶん銀行":  {"審査金利": 0.0257, "返済比率": 0.35},
     "住信SBI銀行": {"審査金利": 0.0325, "返済比率": 0.35},
 }
-limit_amounts = {}
-limit_data = []
+limit_amounts, limit_data = {}, []
 for bank, info in banks_info.items():
     limit = calc_borrowing_limit(annual_income, info["審査金利"], info["返済比率"], age)
     limit_amounts[bank] = limit
@@ -135,52 +158,50 @@ table_html = """
 <thead><tr><th align="center" style="width:250px;">銀行名</th><th align="center" style="width:230px;">借入上限額</th></tr></thead>
 <tbody>
 """
-for i, row in limit_df.iterrows():
+for _, row in limit_df.iterrows():
     table_html += f"<tr><td align='center'>{row['銀行名']}</td><td align='right'>{row['借入上限額']}</td></tr>"
 table_html += "</tbody></table>"
 st.markdown(table_html, unsafe_allow_html=True)
 
-# ========== テーブル生成＆ハイライトインデックス抽出 ==========
+# ========= テーブル計算（Web/PDF 共通） =========
 def make_table_data_and_highlight():
-    rows = []
-    highlights = []
+    rows, highlights = [], []
     for plan in plans_order:
-        row = []
-        row_vals = []
+        row, row_vals = [], []
         for bank in bank_order:
             if principal > limit_amounts[bank]:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
             available = (plan == "一般団信" or plan in rate_diff.get(bank, {}))
             if available:
-                base_rate = rates[bank] / 100
+                base_rate = float(rates[bank]) / 100
                 add = rate_diff.get(bank, {}).get(plan, 0) / 100
                 calc_years = min(79 - age, years)
                 if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
                     calc_years = min(calc_years, 35)
                 if bank not in ["SBI新生銀行", "三菱UFJ銀行"] and calc_years > 35:
-                    base_rate += 0.001
+                    base_rate += 0.001  # 36年以上は+0.1bp 想定
                 monthly = calc_monthly_payment(principal, base_rate + add, calc_years)
                 row.append({"rate": base_rate + add, "monthly": monthly, "years": calc_years})
                 row_vals.append((len(row)-1, monthly))
             else:
                 row.append({"rate": None, "monthly": None, "years": None})
+        # 最小返済額ハイライト
         min_idxs = set()
         if row_vals:
-            minval = min([x[1] for x in row_vals])
+            minval = min(v for _, v in row_vals)
             for col_idx, v in row_vals:
                 if abs(v - minval) < 0.5:
                     min_idxs.add(col_idx)
-        rows.append(row)
-        highlights.append(min_idxs)
-    # 最長50年（一般団信下のみ）
-    row_50 = []
-    row_50_vals = []
+        rows.append(row); highlights.append(min_idxs)
+
+    # 最長50年（一般団信の下段）
+    row_50, row_50_vals = [], []
     for bank in bank_order:
         if principal > limit_amounts[bank] or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row_50.append({"rate": None, "monthly": None, "years": None})
         else:
-            base_rate = rates[bank] / 100
+            base_rate = float(rates[bank]) / 100
             add = rate_diff.get(bank, {}).get("一般団信", 0) / 100
             current_bank_max_years = min(79 - age, 50)
             if current_bank_max_years > 35:
@@ -188,21 +209,21 @@ def make_table_data_and_highlight():
             monthly_longest = calc_monthly_payment(principal, base_rate + add, current_bank_max_years)
             row_50.append({"rate": base_rate + add, "monthly": monthly_longest, "years": current_bank_max_years})
             row_50_vals.append((len(row_50)-1, monthly_longest))
+
     min_idxs_50 = set()
     if row_50_vals:
-        minval = min([x[1] for x in row_50_vals])
+        minval = min(v for _, v in row_50_vals)
         for col_idx, v in row_50_vals:
             if abs(v - minval) < 0.5:
                 min_idxs_50.add(col_idx)
+
     return rows, highlights, row_50, min_idxs_50
 
 table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight()
 
-# ========== 金利比較HTMLテーブル（Web UI用）==========
+# ========= 金利比較HTMLテーブル（Web UI）==========
 def make_html_cell(rate_data, is_min_monthly, width_css):
-    rate = rate_data["rate"]
-    monthly = rate_data["monthly"]
-    years = rate_data["years"]
+    rate = rate_data["rate"]; monthly = rate_data["monthly"]; years = rate_data["years"]
     base_style = "text-align:center;vertical-align:middle;"
     bg = "background-color:#FFF8C8;" if is_min_monthly else ""
     if rate is None:
@@ -212,7 +233,6 @@ def make_html_cell(rate_data, is_min_monthly, width_css):
             f"<div style='font-size:22px;font-weight:bold;color:#226BB3'>¥{monthly:,.0f}</div>"
             f"<div style='font-size:14px;color:#666;'>({years}年返済)</div></td>")
 
-# -------- 幅拡大（プラン=220px, 銀行=180px）---------
 plan_width = "min-width:220px;max-width:220px;width:220px;"
 bank_width = "min-width:180px;max-width:180px;width:180px;"
 html_table_output = f"""
@@ -235,7 +255,6 @@ for i, plan in enumerate(plans_order):
         rate_data = table_rows[i][col_idx]
         is_min = (col_idx in highlight_rows[i] and rate_data["monthly"] is not None)
         html_table_output += make_html_cell(rate_data, is_min, bank_width)
-    # 一般団信の下に最長50年
     if plan == "一般団信":
         html_table_output += f"<tr><td style='{plan_width}text-align:center;font-weight:bold;font-size:17px;background-color:#F9F6EF;'>最長50年</td>"
         for col_idx, bank in enumerate(bank_order):
@@ -244,15 +263,15 @@ for i, plan in enumerate(plans_order):
             html_table_output += make_html_cell(rate_data, is_min, bank_width)
         html_table_output += "</tr>"
 
-# 特記事項
+# 特記事項（左寄せ、上詰め）
 html_table_output += f"<tr><td style='{plan_width}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
 for bank in bank_order:
-    html_table_output += f"<td style='{bank_width}font-size:12px;text-align:left;background-color:#FCF9F0;'>{'<br>'.join(special_notes[bank])}</td>"
+    html_table_output += f"<td style='{bank_width}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(special_notes[bank])}</td>"
 html_table_output += "</tr></tbody></table>"
 
 st.markdown(html_table_output, unsafe_allow_html=True)
 
-# ========== PDF出力：UIテーブルの完全コピー ==========
+# ========= PDF出力：UIテーブルの完全コピー ==========
 def create_pdf_reportlab():
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
@@ -295,7 +314,7 @@ def create_pdf_reportlab():
 
     nrows = len(table_data_pdf)
     row_heights = [36*mm]*nrows
-    col_widths = [58*mm] + [43*mm]*len(bank_order)  # 全体で約273mm
+    col_widths = [58*mm] + [43*mm]*len(bank_order)
 
     table_style = TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.9, colors.HexColor("#bbb")),
@@ -323,7 +342,6 @@ def create_pdf_reportlab():
     doc.build(elements)
     buffer.seek(0)
     return buffer
-
 
 if st.button("📄 PDFを作成"):
     pdf_buffer = create_pdf_reportlab()
