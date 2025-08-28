@@ -12,6 +12,21 @@ import streamlit as st
 import json, os, datetime, hashlib
 from typing import Dict, Any, List, Tuple
 
+# ==== Supabase 接続設定（追記） ====
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", "")
+USE_DB = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
+
+if USE_DB:
+    try:
+        from supabase import create_client, Client
+        sb: "Client" = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    except Exception as e:
+        USE_DB = False
+        st.warning(f"Supabase初期化に失敗（ローカル保存にフォールバック）：{e}")
+
+TABLE = "compare_states"
+
 # ---------------- グローバル設定 ----------------
 st.set_page_config(page_title="物件比較｜希望適合度×偏差値（顧客別自動保存）", layout="wide")
 
@@ -54,10 +69,33 @@ os.makedirs(DATA_DIR, exist_ok=True)
 if not os.path.exists(MASTER_JSON):
     with open(MASTER_JSON, "w", encoding="utf-8") as f:
         json.dump(DEFAULT_MASTER, f, ensure_ascii=False, indent=2)
-
 def load_master() -> Dict[str, Any]:
     with open(MASTER_JSON, "r", encoding="utf-8") as f:
-        return json.load(f)
+        return json.load(f)       
+
+def load_compare_state(client_id: str) -> Dict[str, Any]:
+    """
+    1) Supabase から state を取得
+    2) 失敗/未設定時はローカル compare.json にフォールバック
+    """
+    # 1) DB
+    if 'USE_DB' in globals() and USE_DB:
+        try:
+            res = sb.table(TABLE).select("state").eq("client_id", client_id).limit(1).execute()
+            if res.data:
+                return res.data[0]["state"]
+        except Exception as e:
+            st.warning(f"DB読込失敗（ローカルへフォールバック）：{e}")
+
+    # 2) ローカル
+    pth = _compare_json_path(client_id)
+    if os.path.exists(pth):
+        try:
+            with open(pth, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
 
 M = load_master()
 BALC_J = [j for j,_ in M["balcony_facings"]]
@@ -247,22 +285,25 @@ def to_hensachi_abs(fit: float) -> float:
 def to_hensachi_rel(fit_cand: float, fit_current: float) -> float:
     return 50.0 + 50.0*(fit_cand - fit_current)
 
-# ---------------- 顧客別 永続化（読み書き） ----------------
-def load_compare_state(client_id: str) -> Dict[str, Any]:
-    pth = _compare_json_path(client_id)
-    if os.path.exists(pth):
-        try:
-            return json.load(open(pth, "r", encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
 
 def save_compare_state(client_id: str, state: Dict[str, Any]):
+    """
+    1) Supabase へ UPSERT
+    2) 失敗/未設定時はローカル compare.json へ保存
+    """
+    # 1) DB
+    if 'USE_DB' in globals() and USE_DB:
+        try:
+            payload = {"client_id": client_id, "state": state, "updated_at": "now()"}
+            sb.table(TABLE).upsert(payload, on_conflict="client_id").execute()
+            return
+        except Exception as e:
+            st.warning(f"DB保存失敗（ローカルへフォールバック）：{e}")
+
+    # 2) ローカル
     _ensure_client_dir(client_id)
-    payload = {"props": state.get("props", [])}
-    pth = _compare_json_path(client_id)
-    with open(pth, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    with open(_compare_json_path(client_id), "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
 
 # ---------------- 画面開始：顧客IDの確定 ----------------
 st.title("🏠 物件比較｜希望適合度 × 偏差値（現住=50基準）")
@@ -284,8 +325,8 @@ with top_b:
 
 with top_c:
     autosave_default = True if client_id_query else False
-    autosave_on = st.toggle("自動保存ON", value=st.session_state.get("__autosave__", autosave_default), help="変更検知で即保存（顧客ID必須）", key="__autosave__")
-
+    st.toggle("自動保存ON", value=st.session_state.get("__autosave__", autosave_default),
+          help="変更検知で即保存（顧客ID必須）", key="__autosave__")
 with top_d:
     st.markdown(
         f"**状態**：{'顧客別（ID固定）' if client_id_query else 'マスタ（共有）'}  ｜ 最終保存: {st.session_state.get('__last_saved__','—')}"
@@ -295,41 +336,7 @@ with top_d:
 prefs = load_prefs(client_id_query)
 weights = to_weights(prefs.get("importance", {}))
 
-# ========== 現住（あなたの現在の住まい） ==========
-# ====== 顧客別・現住データの保存/復元（compare.json） ======
-def _get_client_id_from_query() -> str | None:
-    qp = st.query_params
-    cid = qp.get("client", None)
-    if isinstance(cid, list):
-        cid = cid[0] if cid else None
-    if cid is not None:
-        cid = str(cid).strip()
-        if cid == "":
-            cid = None
-    return cid
 
-def _client_dir(cid: str) -> str:
-    return os.path.join("data", "clients", cid)
-
-def _compare_json_path(cid: str) -> str:
-    return os.path.join(_client_dir(cid), "compare.json")
-
-def _ensure_client_dir(cid: str):
-    os.makedirs(_client_dir(cid), exist_ok=True)
-
-def _load_compare_state(cid: str) -> Dict[str, Any]:
-    p = _compare_json_path(cid)
-    if os.path.exists(p):
-        try:
-            return json.load(open(p, "r", encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
-
-def _save_compare_state(cid: str, state: Dict[str, Any]):
-    _ensure_client_dir(cid)
-    with open(_compare_json_path(cid), "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
 
 client_id_q = _get_client_id_from_query()
 
@@ -338,7 +345,7 @@ st.header("① 現在の住まい（基準：偏差値50）")
 
 # compare.json から current_home を読込
 if client_id_q:
-    _state_all = _load_compare_state(client_id_q)
+    _state_all = load_compare_state(client_id_q)
     _curhome = _state_all.get("current_home", {})
 else:
     _state_all, _curhome = {}, {}
@@ -416,24 +423,23 @@ with csa1:
     if st.button("💾 現住を保存（この顧客）"):
         if client_id_q:
             _state_all["current_home"] = dict(cur)
-            _save_compare_state(client_id_q, _state_all)
+            save_compare_state(client_id_q, _state_all)
             st.success("現住を保存しました。")
             st.session_state["__curhome_saved__"] = True
         else:
             st.warning("顧客IDが未設定です。URLに ?client= を付けてください。")
 
 with csa2:
-    auto_on = st.toggle("自動保存ON（変更検知）", value=st.session_state.get("__curhome_autosave__", True), key="__curhome_autosave__")
-
+    st.toggle("自動保存ON（変更検知）", value=st.session_state.get("__curhome_autosave__", True), key="__curhome_autosave__")
 # —— 変更検知 → 自動保存 ——
 if client_id_q and st.session_state.get("__curhome_autosave__", True):
     _payload_now = json.dumps(cur, ensure_ascii=False, sort_keys=True)
     if st.session_state.get("__curhome_hash__") != _payload_now:
         _state_all["current_home"] = dict(cur)
-        _save_compare_state(client_id_q, _state_all)
+        save_compare_state(client_id_q, _state_all)  # ← これで統一
         st.session_state["__curhome_hash__"] = _payload_now
+        st.session_state["__last_saved__"] = datetime.datetime.now().strftime("%H:%M:%S")  # 任意：最終保存表示を更新
         st.toast("現住を自動保存しました。", icon="💾")
-
 # ====== ブロック別適合度（現住は保存値から算出） ======
 cur_blocks = {
     "price": 0.5,
