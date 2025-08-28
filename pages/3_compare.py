@@ -647,7 +647,11 @@ for i, tab in enumerate(tabs):
 
         st.subheader("立地（資産性）")
         with st.container(border=True):
-            st.text_input("最寄駅（駅名・路線等）", value=p.get("nearest_station",""), key=f"ns{i}")
+            p["nearest_station"] = st.text_input(
+    "最寄駅（駅名・路線等）",
+    value=p.get("nearest_station", ""),
+    key=f"ns{i}"
+)
             c1,c2,c3,c4 = st.columns(4)
             with c1:
                 p["dist_station"] = st.number_input("最寄駅 徒歩（分）", min_value=0, value=int(p.get("dist_station",10)), step=1, key=f"dst{i}")
