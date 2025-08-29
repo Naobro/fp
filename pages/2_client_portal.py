@@ -144,6 +144,19 @@ def _disp_to_code(disp: str) -> str:
 # =========================
 # データ入出力ユーティリティ
 # =========================
+# === compare.py 用の最小 prefs 書き出し（types だけでもOK） ===
+from pathlib import Path as _Pth
+
+def export_compare_prefs_min(cid: str, mode_label: str):
+    """
+    compare.py が参照する data/clients/<cid>/client_prefs.json を生成/更新。
+    mode_label は "マンション" or "戸建て" を想定（「土地」は戸建カテゴリに含める）。
+    """
+    _dir = _Pth("data/clients") / cid
+    _dir.mkdir(parents=True, exist_ok=True)
+    types = ["マンション"] if mode_label == "マンション" else ["戸建て"]
+    data = {"types": types}
+    (_dir / "client_prefs.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 DATA_DIR = Path("data/clients")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -295,7 +308,7 @@ with st.expander("管理（このIDの初期化・マスター操作）", expand
 # ============================================
 # ① ヒアリング（5W2H）＋ PDF出力
 # ============================================
-st.header("① ヒアリング（5W2H）")
+st.header("ヒアリング（5W2H）")
 
 TO_EMAIL_DEFAULT = payload.get("hearing",{}).get("pdf_recipient","")
 base_defaults = {
@@ -413,7 +426,7 @@ with st.form("hearing_form", clear_on_submit=False):
 
     col_a, col_b = st.columns(2)
     with col_a:
-        save_only = st.form_submit_button("💾 ① 入力を上書き保存")
+        save_only = st.form_submit_button("💾 入力を上書き保存")
     with col_b:
         save_and_pdf = st.form_submit_button("📄 保存してPDF作成")
 
@@ -423,7 +436,7 @@ if 'save_only' in locals() and save_only:
     payload.setdefault("meta", {}).update({"name": hearing.get("name","")})
     save_client(client_id, payload)
     st.session_state[ns("hearing_data")] = dict(payload["hearing"])
-    st.success("① ヒアリングを上書き保存しました。")
+    st.success("ヒアリングを上書き保存しました。")
     st.rerun()
 
 if 'save_and_pdf' in locals() and save_and_pdf:
@@ -526,7 +539,7 @@ st.divider()
 # ============================================
 # ② 現状把握（現在の住宅の基礎情報）
 # ============================================
-st.header("② 現状把握（現在の住宅の基礎情報）")
+st.header("現状把握（現在の住宅の基礎情報）")
 
 b = payload["baseline"]
 
@@ -546,13 +559,13 @@ with st.form("baseline_form"):
         b["view"] = st.selectbox("眺望", ["未設定","開放","一部遮り","正面に遮り"],
                                  index=["未設定","開放","一部遮り","正面に遮り"].index(b.get("view","未設定")), key=ns("b_view"))
 
-    submitted_baseline = st.form_submit_button("💾 ② 現状把握を上書き保存")
+    submitted_baseline = st.form_submit_button("💾 現状把握を上書き保存")
 
 if submitted_baseline:
     b["balcony_aspect"] = _disp_to_code(b_disp)
     payload["baseline"] = dict(b)
     save_client(client_id, payload)
-    st.success("② 現状把握を上書き保存しました。")
+    st.success("現状把握を上書き保存しました。")
     st.rerun()
 
 st.divider()
@@ -560,7 +573,7 @@ st.divider()
 # ============================================
 # ③ 現在の住居スコアリング
 # ============================================
-st.header("③ 現在の住居スコアリング")
+st.header("現在の住居スコアリング")
 
 if "current_home" not in payload:
     payload["current_home"] = {
@@ -716,10 +729,10 @@ with st.expander("管理・共用部", expanded=False):
         cur["c_ev_count"] = st.number_input("エレベーター台数（基数）", 0, 20, _coerce_int(cur["c_ev_count"],0), key=ns("cur_c_ev_count"))
         cur["c_pet_ok"] = st.checkbox("ペット飼育可", value=cur["c_pet_ok"], key=ns("cur_c_pet_ok"))
 
-if st.button("💾 ③ 現状スコアリングを上書き保存", key=ns("save_curhome")):
+if st.button("💾 現状スコアリングを上書き保存", key=ns("save_curhome")):
     payload["current_home"] = dict(cur)
     save_client(client_id, payload)
-    st.success("③ 現状スコアリングを上書き保存しました。")
+    st.success("現状スコアリングを上書き保存しました。")
     st.rerun()
 
 st.divider()
@@ -727,7 +740,7 @@ st.divider()
 # ============================================
 # ③.5 基本の希望条件（マスト項目：④の前に入れる）
 # ============================================
-st.header("④.5 基本の希望条件（マスト項目）")
+st.header("基本の希望条件（マスト項目）")
 
 if "basic_prefs" not in payload:
     payload["basic_prefs"] = {
@@ -775,16 +788,16 @@ with st.form("basic_prefs_form", clear_on_submit=False):
     with a4:
         bp["areas"]["free"]     = st.text_area("（または）エリア自由記述", value=bp["areas"].get("free",""), height=90, key=ns("bp_area_free"))
 
-    submitted_basic = st.form_submit_button("💾 ④.5 基本の希望条件を上書き保存")
+    submitted_basic = st.form_submit_button("💾 基本の希望条件を上書き保存")
 
 if submitted_basic:
     payload["basic_prefs"] = dict(bp)
     save_client(client_id, payload)
-    st.success("④.5 基本の希望条件を上書き保存しました。")
+    st.success("基本の希望条件を上書き保存しました。")
     st.rerun()
 
 # ========= 重要度（1=最優先〜5）重複なし UI（「1番」表記） =========
-st.subheader("⑥ 重要度のトレードオフ（1=最優先〜5）")
+st.subheader("重要度のトレードオフ（1=最優先〜5）")
 st.caption("※ 各カテゴリに 1番,2番,3番,4番,5番 を一度ずつ割当て（重複不可）。")
 
 CATS = [
@@ -863,85 +876,170 @@ with c2:
         st.success("重要度を保存しました（重複なし・1番〜5番）。")
         st.rerun()
 
-st.header("⑤ 希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
+st.header("希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
 
-CHO = {"◎ 必要":"must","○ あったほうがよい":"want","△ どちらでもよい":"neutral","× なくてよい":"no_need"}
-if "wish" not in payload: payload["wish"] = {}
+# ---- 物件モードのタブ（マンション / 戸建て・土地） ----
+tabs = st.tabs(["🏢 マンション", "🏠 戸建て・土地"])
+mode_label = "マンション"  # 既定
+if ns("wish_mode") not in st.session_state:
+    # 既存の basic_prefs.types から初期モード推定
+    _types = [str(t) for t in payload.get("basic_prefs", {}).get("types", [])]
+    st.session_state[ns("wish_mode")] = "戸建て" if any(("戸建" in t or "土地" in t) for t in _types) else "マンション"
+mode_label = st.session_state[ns("wish_mode")]
+
+def _set_mode(new_mode: str):
+    st.session_state[ns("wish_mode")] = new_mode
+    # basic_prefs.types を同期（マルチ選でもOKだが compare 側は types に "戸建て" を含むかで判定）
+    bp_types = payload.get("basic_prefs", {}).get("types", [])
+    if new_mode == "マンション":
+        bp_types = ["マンション"]
+    else:
+        bp_types = ["戸建て", "注文住宅（土地）"]  # ユーザーの語彙に合わせて並記
+    payload.setdefault("basic_prefs", {})["types"] = bp_types
+    save_client(client_id, payload)
+    # compare.py 用の最小 prefs を書き出し
+    export_compare_prefs_min(client_id, new_mode)
+
+# どちらのタブが選ばれたかでモード確定
+with tabs[0]:
+    if st.button("このモードで設定する", key=ns("wish_tab_mansion_set")):
+        _set_mode("マンション")
+with tabs[1]:
+    if st.button("このモードで設定する", key=ns("wish_tab_house_set")):
+        _set_mode("戸建て")
+
+mode_label = st.session_state[ns("wish_mode")]
+st.caption(f"現在のモード：**{mode_label}**（compare も自動追従）")
+
+# ---- ラベル定義 & ショートハンド ----
+CHO = {
+    "◎ 必要":"must",
+    "○ あったほうがよい":"want",
+    "△ どちらでもよい":"neutral",
+    "× なくてよい":"no_need"
+}
+if "wish" not in payload: 
+    payload["wish"] = {}
 wish = payload["wish"]
 
 def wish_select(label, key):
     current = wish.get(key, "neutral")
-    current_label = [k for k,v in CHO.items() if v==current][0] if current in CHO.values() else "△ どちらでもよい"
+    current_label = next((k for k,v in CHO.items() if v == current), "△ どちらでもよい")
     sel = st.selectbox(label, list(CHO.keys()), index=list(CHO.keys()).index(current_label), key=ns(f"wish-{key}"))
     wish[key] = CHO[sel]
 
-with st.expander("立地（資産性）", expanded=True):
-    wish_select("最寄駅まで近いこと", "loc_walk")
-    wish_select("複数路線利用できること", "loc_lines")
-    wish_select("職場アクセスが良いこと", "loc_access")
-    wish_select("商業施設の充実", "loc_shop")
-    wish_select("教育環境の良さ", "loc_edu")
-    wish_select("医療アクセスの良さ", "loc_med")
-    wish_select("治安の良さ", "loc_security")
-    wish_select("災害リスクが低いこと", "loc_hazard_low")
-    wish_select("公園・緑地の充実", "loc_park")
-    wish_select("静かな環境", "loc_silent")
+# ---- モード別 UI（マンション / 戸建て・土地） ----
+if mode_label == "マンション":
+    with st.expander("立地（資産性）", expanded=True):
+        wish_select("最寄駅まで近いこと", "loc_walk")
+        wish_select("複数路線利用できること", "loc_lines")
+        wish_select("職場アクセスが良いこと", "loc_access")
+        wish_select("商業施設の充実", "loc_shop")
+        wish_select("教育環境の良さ", "loc_edu")
+        wish_select("医療アクセスの良さ", "loc_med")
+        wish_select("治安の良さ", "loc_security")
+        wish_select("災害リスクが低いこと", "loc_hazard_low")
+        wish_select("公園・緑地の充実", "loc_park")
+        wish_select("静かな環境", "loc_silent")
 
-with st.expander("広さ・間取り", expanded=False):
-    wish_select("専有面積の広さ", "sz_area")
-    wish_select("リビングの広さ", "sz_living")
-    wish_select("優れた間取り（ワイドスパン等）", "sz_layout")
-    wish_select("収納量（WIC/SIC等）の充実", "sz_storage")
-    wish_select("天井高が高い", "sz_ceiling")
-    wish_select("日当たり（向き）の良さ", "sz_aspect")
-    wish_select("バルコニー奥行の余裕", "sz_balcony_depth")
-    wish_select("採光・通風の良さ", "sz_sun_wind")
-    wish_select("廊下幅・家事動線の良さ", "sz_flow")
+    with st.expander("広さ・間取り", expanded=False):
+        wish_select("専有面積の広さ", "sz_area")
+        wish_select("リビングの広さ", "sz_living")
+        wish_select("優れた間取り（ワイドスパン等）", "sz_layout")
+        wish_select("収納量（WIC/SIC等）の充実", "sz_storage")
+        wish_select("天井高が高い", "sz_ceiling")
+        wish_select("日当たり（向き）の良さ", "sz_aspect")
+        wish_select("バルコニー奥行の余裕", "sz_balcony_depth")
+        wish_select("採光・通風の良さ", "sz_sun_wind")
+        wish_select("廊下幅・家事動線の良さ", "sz_flow")
 
-with st.expander("スペック（専有部分）", expanded=False):
-    st.caption("【キッチン】")
-    for k in ["k_dishwasher","k_purifier","k_disposer","k_highend_cooktop","k_bi_oven"]:
-        wish_select({"k_dishwasher":"食洗機","k_purifier":"浄水器／整水器","k_disposer":"ディスポーザー",
-                     "k_highend_cooktop":"高機能コンロ（IH/高火力）","k_bi_oven":"ビルトインオーブン"}[k], k)
-    st.caption("【バスルーム】")
-    for k in ["b_dryer","b_reheating","b_mist_sauna","b_tv","b_window"]:
-        wish_select({"b_dryer":"浴室暖房乾燥機","b_reheating":"追い焚き機能","b_mist_sauna":"ミストサウナ",
-                     "b_tv":"浴室テレビ","b_window":"浴室に窓"}[k], k)
-    st.caption("【暖房・空調】")
-    for k in ["h_floorheat","h_aircon_built"]:
-        wish_select({"h_floorheat":"床暖房","h_aircon_built":"エアコン（備付）"}[k], k)
-    st.caption("【窓・建具】")
-    for k in ["w_multi","w_low_e","w_double_sash","w_premium_doors"]:
-        wish_select({"w_multi":"複層ガラス","w_low_e":"Low-Eガラス","w_double_sash":"二重サッシ",
-                     "w_premium_doors":"建具ハイグレード（鏡面等）"}[k], k)
-    st.caption("【収納】")
-    for k in ["s_allrooms","s_wic","s_sic","s_pantry","s_linen"]:
-        wish_select({"s_allrooms":"全居室収納","s_wic":"WIC","s_sic":"SIC","s_pantry":"パントリー","s_linen":"リネン庫"}[k], k)
-    st.caption("【セキュリティ・通信】")
-    for k in ["sec_tvphone","sec_sensor","net_ftth"]:
-        wish_select({"sec_tvphone":"TVモニター付インターホン","sec_sensor":"玄関センサーライト","net_ftth":"光配線方式（各戸まで）"}[k], k)
+    with st.expander("スペック（専有部分）", expanded=False):
+        st.caption("【キッチン】")
+        for k, lbl in [("k_dishwasher","食洗機"),("k_purifier","浄水器／整水器"),("k_disposer","ディスポーザー"),
+                       ("k_highend_cooktop","高機能コンロ（IH/高火力）"),("k_bi_oven","ビルトインオーブン")]:
+            wish_select(lbl, k)
+        st.caption("【バスルーム】")
+        for k, lbl in [("b_dryer","浴室暖房乾燥機"),("b_reheating","追い焚き機能"),("b_mist_sauna","ミストサウナ"),
+                       ("b_tv","浴室テレビ"),("b_window","浴室に窓")]:
+            wish_select(lbl, k)
+        st.caption("【暖房・空調】")
+        for k, lbl in [("h_floorheat","床暖房"),("h_aircon_built","エアコン（備付）")]:
+            wish_select(lbl, k)
+        st.caption("【窓・建具】")
+        for k, lbl in [("w_multi","複層ガラス"),("w_low_e","Low-Eガラス"),("w_double_sash","二重サッシ"),
+                       ("w_premium_doors","建具ハイグレード（鏡面等）")]:
+            wish_select(lbl, k)
+        st.caption("【収納】")
+        for k, lbl in [("s_allrooms","全居室収納"),("s_wic","WIC"),("s_sic","SIC"),("s_pantry","パントリー"),("s_linen","リネン庫")]:
+            wish_select(lbl, k)
+        st.caption("【セキュリティ・通信】")
+        for k, lbl in [("sec_tvphone","TVモニター付インターホン"),("sec_sensor","玄関センサーライト"),("net_ftth","光配線方式（各戸まで）")]:
+            wish_select(lbl, k)
 
-with st.expander("管理・共用部・その他", expanded=False):
-    for key, label in [
-        ("c_concierge","コンシェルジュサービス"), ("c_box","宅配ボックス"), ("c_guest","ゲストルーム"),
-        ("c_lounge_kids","ラウンジ/キッズルーム"), ("c_gym_pool","ジム/プール"),
-        ("c_parking_type","駐車場形態（平置き等）"), ("c_gomi24","24時間ゴミ出し"), ("c_seismic","免震・制震構造"),
-        ("c_security","強いセキュリティ（有人/カメラ等）"), ("c_design","外観・エントランスのデザイン"),
-        ("c_ev_enough","エレベーター台数の十分さ"), ("c_brand_tower","ブランド/タワーの属性"),
-        ("c_pet_ok","ペット可"), ("c_ltp_plan","長期修繕/資金計画の良さ"), ("c_fee_reasonable","修繕積立金の妥当性"),
-        ("c_mgmt","管理体制の良さ"), ("c_history","共用部修繕履歴の良さ"), ("c_yield","収益性（将来の利回り）")
-    ]:
-        wish_select(label, key)
+    # マンション”だけ”に存在するブロック
+    with st.expander("管理・共用部・その他", expanded=False):
+        for key, label in [
+            ("c_concierge","コンシェルジュサービス"), ("c_box","宅配ボックス"), ("c_guest","ゲストルーム"),
+            ("c_lounge_kids","ラウンジ/キッズルーム"), ("c_gym_pool","ジム/プール"),
+            ("c_parking_type","駐車場形態（平置き等）"), ("c_gomi24","24時間ゴミ出し"), ("c_seismic","免震・制震構造"),
+            ("c_security","強いセキュリティ（有人/カメラ等）"), ("c_design","外観・エントランスのデザイン"),
+            ("c_ev_enough","エレベーター台数の十分さ"), ("c_brand_tower","ブランド/タワーの属性"),
+            ("c_pet_ok","ペット可"), ("c_ltp_plan","長期修繕/資金計画の良さ"), ("c_fee_reasonable","修繕積立金の妥当性"),
+            ("c_mgmt","管理体制の良さ"), ("c_history","共用部修繕履歴の良さ"), ("c_yield","収益性（将来の利回り）")
+        ]:
+            wish_select(label, key)
 
-if st.button("💾 ④ 希望条件を上書き保存", key=ns("save_wish")):
+else:
+    # 戸建て・土地用（管理系は出さない）
+    with st.expander("立地（資産性）", expanded=True):
+        wish_select("最寄駅まで近いこと", "loc_walk")
+        wish_select("職場アクセスが良いこと", "loc_access")
+        wish_select("商業施設の充実", "loc_shop")
+        wish_select("教育環境の良さ", "loc_edu")
+        wish_select("医療アクセスの良さ", "loc_med")
+        wish_select("治安の良さ", "loc_security")
+        wish_select("災害リスクが低いこと", "loc_hazard_low")
+        wish_select("公園・緑地の充実", "loc_park")
+        wish_select("静かな環境", "loc_silent")
+
+    with st.expander("建物（構造・性能）", expanded=False):
+        wish_select("耐震性（評点/補強含む）が高い", "kd_quake")
+        wish_select("断熱・気密（UA/C値等）が高い", "kd_insulation")
+        wish_select("劣化対策（長期優良/劣化対策等級）", "kd_deterioration")
+        wish_select("白蟻・雨漏り等の瑕疵がない", "kd_defectfree")
+        wish_select("屋根・外壁の状態が良好", "kd_envelope_good")
+
+    with st.expander("間取り・収納・家事動線", expanded=False):
+        wish_select("延床面積の十分さ", "kd_floor_area")
+        wish_select("家事動線が良い", "kd_flow")
+        wish_select("収納量（WIC/SIC/パントリー等）の充実", "kd_storage")
+        wish_select("天井高・日当たり・通風が良い", "kd_light_wind")
+
+    with st.expander("敷地・法規・外構", expanded=False):
+        wish_select("接道（幅員/位置指定等）が良好", "kd_road")
+        wish_select("駐車スペース（台数/サイズ）が十分", "kd_parking")
+        wish_select("高低差・擁壁・排水が適切", "kd_site_retaining")
+        wish_select("用途地域/建ぺい率・容積率がニーズに合う", "kd_zoning")
+        wish_select("越境/筆界等のトラブルがない", "kd_border")
+
+    with st.expander("設備・配管", expanded=False):
+        wish_select("水回り（キッチン/浴室/洗面/トイレ）が良好", "kd_water")
+        wish_select("給排水配管の状態が良好", "kd_pipes")
+        wish_select("電気容量・ガス種別が要件に合う", "kd_power_gas")
+        wish_select("リフォーム履歴/必要工事が明確", "kd_renovation")
+
+# —— 保存ボタン（モードも一緒に反映 & compare 用 prefs も更新）——
+if st.button("💾 希望条件を上書き保存", key=ns("save_wish")):
     payload["wish"] = dict(wish)
+    # basic_prefs.types と compare 用 prefs も同期
+    _set_mode(mode_label)  # 中で save_client と export_compare_prefs_min を呼ぶ
     save_client(client_id, payload)
-    st.success("④ 希望条件を上書き保存しました。")
+    st.success("希望条件を上書き保存しました。（compare 用の種別も更新済み）")
     st.rerun()
 
 st.divider()
 
-st.subheader("⑤ 物件比較（別ページ）")
+st.subheader("物件比較（別ページ）")
 st.markdown("""
 比較ページでは、現住居=偏差値50 を基準に
 内見物件の優劣を一覧で表示します。
