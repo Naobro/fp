@@ -17,10 +17,17 @@ SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
 SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", "")
 USE_DB = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
 
-if USE_DB:
+# Pylance の未インポート警告を避けつつ、実行時はフォールバックするガード
+try:
+    from supabase import create_client, Client  # type: ignore
+except Exception:  # ImportError など
+    create_client = None  # type: ignore
+    Client = Any          # type: ignore
+    USE_DB = False
+
+if USE_DB and create_client:
     try:
-        from supabase import create_client, Client
-        sb: "Client" = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        sb: "Client" = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)  # type: ignore
     except Exception as e:
         USE_DB = False
         st.warning(f"Supabase初期化に失敗（ローカル保存にフォールバック）：{e}")
@@ -265,9 +272,16 @@ def score_mgmt_block(presence_map: Dict[str,bool], labels_mgmt: Dict[str,str], p
             val *= 0.6
     return val
 
-# ——（追加）戸建てスコア：簡易ルール —— 
+# ——（置き換え）戸建てスコア：簡易ルール —— 
+# ——（置き換え）戸建てスコア：簡易ルール —— 
 def _grade_to_score(v: str) -> float:
-    # 高い/良い/十分=1.0, 普通=0.6, 低い/不十分=0.3, True=1.0, False=0.0 などを吸収
+    """
+    共通ラベル→スコア変換
+    - 高い/良い/十分/適切/合致/良好/可 = 1.0
+    - 普通/不明 = 0.6
+    - 低い/不足/不適切/不一致/不良/不可 = 0.3
+    - bool は True=1.0 / False=0.0
+    """
     if isinstance(v, bool):
         return 1.0 if v else 0.0
     if v in ["高い","良い","十分","適切","合致","良好","可"]:
@@ -278,19 +292,55 @@ def _grade_to_score(v: str) -> float:
         return 0.3
     return 0.6
 
+
 def score_house_spec(p: Dict[str,Any]) -> float:
-    # 構造・性能 + 設備・配管 を主に評価
-    keys = ["quake","insulation","deterioration","defectfree","envelope",
-            "water","pipes","power_gas","renovation"]
-    vals = [_grade_to_score(p.get(k,"普通")) for k in keys]
-    return sum(vals)/len(vals) if vals else 0.5
+    """
+    戸建ての「建物（構造・性能）」スコア
+    """
+    # UIのキーに合わせてエイリアス（無ければ envelope を流用）
+    exterior_wall = p.get("exterior_wall", p.get("envelope", "普通"))
+    roof_state    = p.get("roof_state",    p.get("envelope", "普通"))
+
+    base_keys = ["quake", "insulation", "deterioration"]
+    base_vals = [
+        _grade_to_score(p.get("quake", "普通")),
+        _grade_to_score(p.get("insulation", "普通")),
+        _grade_to_score(p.get("deterioration", "普通")),
+        _grade_to_score(exterior_wall),
+        _grade_to_score(roof_state),
+    ]
+    base = sum(base_vals)/len(base_vals) if base_vals else 0.5
+
+    bonus = 0.0
+    if p.get("long_term", False):     bonus += 0.05
+    if p.get("zeh", False):           bonus += 0.05
+    if p.get("energy_saving", False): bonus += 0.05
+    return min(1.0, base + bonus)
 
 def score_house_management_like(p: Dict[str,Any]) -> float:
-    # 戸建てには管理・共用が無いので、敷地・法規・外構の妥当性で代替的に0.5基準で微調整
-    base = 0.5
-    keys_ok = ["road","site_retaining","zoning_ok","border"]
-    bumps = sum(_grade_to_score(p.get(k,"普通")) for k in keys_ok)/len(keys_ok) if keys_ok else 0.5
-    return (base*0.5 + bumps*0.5)
+    """
+    戸建ての「管理・共用」相当を敷地/外構で評価
+    """
+    # UIの 'road' を丸めて評価（良好/普通/不良/不明）
+    road_raw = str(p.get("road", "不明"))
+    if road_raw == "良好":
+        road_label = "良い"
+    elif road_raw == "不良":
+        road_label = "低い"
+    elif road_raw in ["普通", "不明"]:
+        road_label = road_raw
+    else:
+        road_label = "不明"
+
+    parts = [
+        _grade_to_score(road_label),                         # 接道状況の総合評価
+        _grade_to_score(p.get("garbage_spot", "普通")),      # ゴミ捨て場
+        _grade_to_score(p.get("utility_pole", "普通")),      # 電柱位置
+        _grade_to_score(p.get("car_parking_ease", "普通")),  # 車の止め易さ
+        _grade_to_score(p.get("site_retaining", "普通")),    # 高低差・擁壁・排水
+    ]
+    return sum(parts) / len(parts)
+# —— ここから下は共有関数（削除してしまった場合の復旧用。既に他所にあれば重複定義は削除してください）——
 
 def to_weights(importance: Dict[str,int]) -> Dict[str,float]:
     raw = {
@@ -312,13 +362,11 @@ def to_hensachi_abs(fit: float) -> float:
 def to_hensachi_rel(fit_cand: float, fit_current: float) -> float:
     return 50.0 + 50.0*(fit_cand - fit_current)
 
-
 def save_compare_state(client_id: str, state: Dict[str, Any]):
     """
     1) Supabase へ UPSERT
     2) 失敗/未設定時はローカル compare.json へ保存
     """
-    # 1) DB
     if 'USE_DB' in globals() and USE_DB:
         try:
             payload = {"client_id": client_id, "state": state, "updated_at": "now()"}
@@ -326,12 +374,9 @@ def save_compare_state(client_id: str, state: Dict[str, Any]):
             return
         except Exception as e:
             st.warning(f"DB保存失敗（ローカルへフォールバック）：{e}")
-
-    # 2) ローカル
     _ensure_client_dir(client_id)
     with open(_compare_json_path(client_id), "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
-
 # ---------------- 画面開始：顧客IDの確定 ----------------
 st.title("🏠 物件比較｜希望適合度 × 偏差値（現住=50基準）")
 st.caption("・顧客IDをURLに固定すると、そのお客様専用の下書きが自動保存／自動復元されます。")
