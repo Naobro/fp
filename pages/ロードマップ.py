@@ -1,8 +1,10 @@
 # pages/7_ロードマップ.py
 # 縦=項目 / 横=日付 の横テーブル（購入 / 売却 / 買い替え）
-# ヘッダーは「日付ピッカー（カレンダー）」で選択。PDFは Matplotlib 出力（ReportLab不要）。
+# ヘッダー：日付ピッカー（カレンダー）／「次の日曜」ボタン／クリア
+# セル：クリック（⤵︎日付）で、上のヘッダー日付をそのセルに自動記入
+# 依存: streamlit, pandas, matplotlib（ReportLab不要）
 from pathlib import Path
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Dict
 import io
 
@@ -13,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import Rectangle
 
-# ========== 基本設定 ==========
+# ---------- 基本設定 ----------
 st.set_page_config(page_title="ロードマップ（横テーブル）", page_icon="🗓️", layout="wide")
 APP_TITLE = "不動産ロードマップ（横テーブル：縦=項目／横=日付）"
 
@@ -22,11 +24,13 @@ FONT_PATH = Path("fonts/NotoSansJP-Regular.ttf")
 if FONT_PATH.exists():
     try:
         matplotlib.font_manager.fontManager.addfont(str(FONT_PATH))
-        plt.rcParams["font.family"] = matplotlib.font_manager.FontProperties(fname=str(FONT_PATH)).get_name()
+        plt.rcParams["font.family"] = matplotlib.font_manager.FontProperties(
+            fname=str(FONT_PATH)
+        ).get_name()
     except Exception:
         pass
 
-# ========== 初期データ ==========
+# ---------- 初期データ ----------
 PURCHASE_ITEMS_DEFAULT = [
     "問合せ", "初回面談", "ライフプランニング", "条件整理", "事前審査",
     "内見①", "内見②", "内見③",
@@ -42,10 +46,14 @@ SALE_ITEMS_DEFAULT = [
 REPLACE_PURCHASE_ITEMS_DEFAULT = ["内見①", "内見②", "売買契約", "決済（引渡し）"]
 REPLACE_SALE_ITEMS_DEFAULT     = ["媒介契約", "内見", "売買契約", "決済（引渡し）"]
 
-DEFAULT_COLS = 13  # ★ デフォルト13列
+DEFAULT_COLS = 13   # ★ デフォルト13列
 MAX_COLS     = 50
 
-# ========== ヘルパ ==========
+# ---------- ヘルパ ----------
+def next_sunday(base: date | None = None) -> date:
+    d = base or date.today()
+    return d + timedelta(days=(6 - d.weekday()) % 7)  # 月=0 … 日=6
+
 def iso_or_empty(d: date | None) -> str:
     return d.isoformat() if isinstance(d, date) else ""
 
@@ -60,22 +68,23 @@ def fmt_md(s: str) -> str:
     d = parse_iso(s)
     if not d:
         return ""
-    # Linux/Mac: %-m/%-d, Windows: %#m/%#d
     try:
-        return d.strftime("%-m/%-d")
+        return d.strftime("%-m/%-d")  # Unix系
     except Exception:
-        return d.strftime("%#m/%#d")
+        return d.strftime("%#m/%#d")  # Windows
 
-# ========== State ==========
+# ---------- State ----------
 def init_state_once():
     if "roadmap" in st.session_state:
         return
+
     def _block(rows_src):
         return dict(
             col_count=DEFAULT_COLS,
-            headers=[""] * DEFAULT_COLS,  # ISO文字列 "YYYY-MM-DD" を保持（空なら未設定）
+            headers=[""] * DEFAULT_COLS,  # ISO文字列 "YYYY-MM-DD" を保持
             rows=[{"項目": name, "cells": [""] * DEFAULT_COLS} for name in rows_src],
         )
+
     st.session_state.roadmap = dict(
         purchase=_block(PURCHASE_ITEMS_DEFAULT),
         sale=_block(SALE_ITEMS_DEFAULT),
@@ -85,7 +94,7 @@ def init_state_once():
         ),
     )
 
-# ========== 共通UI ==========
+# ---------- 共通UI ----------
 def resize_columns(block: Dict, new_count: int):
     new_count = max(1, min(MAX_COLS, int(new_count)))
     cur = block["col_count"]
@@ -111,6 +120,32 @@ def delete_row(block: Dict, idx: int):
     if 0 <= idx < len(block["rows"]):
         block["rows"].pop(idx)
 
+def render_header_row(block: Dict, key_prefix: str):
+    """ヘッダー行（カレンダー, 次の日曜, クリア）"""
+    st.markdown("**ヘッダー（日付）**")
+    cols = st.columns([2] + [1] * block["col_count"])
+    cols[0].markdown("**項目**")
+    for i in range(block["col_count"]):
+        # 現在値
+        cur_d = parse_iso(block["headers"][i]) or date.today()
+
+        with cols[i + 1]:
+            # 日付ピッカー
+            picked = st.date_input(" ", value=cur_d, key=f"{key_prefix}_hdr_date_{i}", format="YYYY-MM-DD")
+            block["headers"][i] = iso_or_empty(picked)
+
+            bcols = st.columns([1, 1, 1])
+            # 次の日曜
+            if bcols[0].button("日曜", key=f"{key_prefix}_hdr_sun_{i}"):
+                block["headers"][i] = iso_or_empty(next_sunday())
+                st.rerun()
+            # クリア
+            if bcols[1].button("×", key=f"{key_prefix}_hdr_clear_{i}"):
+                block["headers"][i] = ""
+                st.rerun()
+            # （スペーサ）
+            bcols[2].markdown("&nbsp;", unsafe_allow_html=True)
+
 def render_editor(block: Dict, key_prefix: str, caption_text: str = ""):
     # 列数
     c1, c2, c3 = st.columns([2, 2, 6])
@@ -121,41 +156,41 @@ def render_editor(block: Dict, key_prefix: str, caption_text: str = ""):
             resize_columns(block, desired)
             st.rerun()
     with c3:
-        st.caption(caption_text or "ヘッダーは日付ピッカー（クリックでカレンダー）。セルは「■」「10:00」など自由記入。")
+        st.caption(caption_text or "ヘッダーはカレンダー選択。各セルの「⤵︎日付」を押すと、上のヘッダー日付が自動記入。")
 
-    # ヘッダー（日付ピッカー）
-    st.markdown("**ヘッダー（日付）**")
-    heads = st.columns([2] + [1] * block["col_count"])
-    heads[0].markdown("**項目**")
-    for i in range(block["col_count"]):
-        cur = parse_iso(block["headers"][i]) or date.today()
-        picked = heads[i+1].date_input(
-            " ", value=cur, key=f"{key_prefix}_hdr_{i},date", format="YYYY-MM-DD"
-        )
-        # クリアボタン
-        if heads[i+1].button("×", key=f"{key_prefix}_hdr_clear_{i}"):
-            block["headers"][i] = ""
-        else:
-            block["headers"][i] = iso_or_empty(picked)
+    # ヘッダー（日付ピッカー群）
+    render_header_row(block, key_prefix)
 
     st.write("---")
 
-    # 行追加/削除
-    a1, a2, _ = st.columns([1,1,8])
+    # 行の追加/削除
+    a1, a2, _ = st.columns([1, 1, 8])
     with a1:
         if st.button("＋行追加", key=f"{key_prefix}_addrow"):
             add_row(block)
     with a2:
         st.caption("行末の🗑で削除")
 
-    # 本体（縦=項目、横=日付）
+    # 本体（セル：⤵︎日付 でヘッダー値を貼る）
     for r_idx, row in enumerate(block["rows"]):
-        cols = st.columns([2] + [1]*block["col_count"] + [0.5])
+        cols = st.columns([2] + [1] * block["col_count"] + [0.6])
+        # 項目名
         row["項目"] = cols[0].text_input(" ", value=row["項目"], key=f"{key_prefix}_item_{r_idx}")
+
         for c_idx in range(block["col_count"]):
-            row["cells"][c_idx] = cols[c_idx+1].text_input(
-                " ", value=row["cells"][c_idx], key=f"{key_prefix}_cell_{r_idx}_{c_idx}"
-            )
+            with cols[c_idx + 1]:
+                # 表示用の入力欄
+                row["cells"][c_idx] = st.text_input(
+                    " ", value=row["cells"][c_idx], key=f"{key_prefix}_cell_{r_idx}_{c_idx}"
+                )
+                # 貼付ボタン（上のヘッダー日付をM/Dで貼る）
+                hdr_text = fmt_md(block["headers"][c_idx])
+                if st.button("⤵︎日付", key=f"{key_prefix}_paste_{r_idx}_{c_idx}", disabled=(hdr_text == "")):
+                    row["cells"][c_idx] = hdr_text
+                    st.session_state[f"{key_prefix}_cell_{r_idx}_{c_idx}"] = hdr_text  # 表示側も更新
+                    st.rerun()
+
+        # 行削除
         if cols[-1].button("🗑", key=f"{key_prefix}_delrow_{r_idx}"):
             delete_row(block, r_idx)
             st.rerun()
@@ -165,7 +200,7 @@ def to_dataframe(block: Dict) -> pd.DataFrame:
     data = [[r["項目"], *r["cells"]] for r in block["rows"]]
     return pd.DataFrame(data, columns=headers)
 
-# ========== PDF化（Matplotlib） ==========
+# ---------- PDF（Matplotlib） ----------
 def draw_table(ax, df: pd.DataFrame, title: str):
     ax.clear(); ax.axis("off")
     n_rows = len(df) + 1
@@ -175,7 +210,7 @@ def draw_table(ax, df: pd.DataFrame, title: str):
     item_w_ratio = 0.22
     width = 1.0
     item_w = item_w_ratio * width
-    date_w = (width - item_w) / max(1, n_cols-1)
+    date_w = (width - item_w) / max(1, n_cols - 1)
     row_h = 1.0 / n_rows
 
     # タイトル
@@ -183,32 +218,32 @@ def draw_table(ax, df: pd.DataFrame, title: str):
 
     # ヘッダー
     y = 1 - row_h
-    ax.add_patch(Rectangle((0, y), item_w, row_h, fc=(0.92,0.92,0.92), ec="black", lw=1))
-    ax.text(0.01, y + row_h/2, str(df.columns[0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
+    ax.add_patch(Rectangle((0, y), item_w, row_h, fc=(0.92, 0.92, 0.92), ec="black", lw=1))
+    ax.text(0.01, y + row_h / 2, str(df.columns[0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
     x = item_w
     for j in range(1, n_cols):
-        ax.add_patch(Rectangle((x, y), date_w, row_h, fc=(0.92,0.92,0.92), ec="black", lw=1))
+        ax.add_patch(Rectangle((x, y), date_w, row_h, fc=(0.92, 0.92, 0.92), ec="black", lw=1))
         hdr = "" if pd.isna(df.columns[j]) else str(df.columns[j])
-        ax.text(x + date_w/2, y + row_h/2, hdr, va="center", ha="center", fontsize=9, transform=ax.transAxes)
+        ax.text(x + date_w / 2, y + row_h / 2, hdr, va="center", ha="center", fontsize=9, transform=ax.transAxes)
         x += date_w
 
     # 本体
     for i in range(len(df)):
-        y = 1 - row_h*(i+2)
+        y = 1 - row_h * (i + 2)
         ax.add_patch(Rectangle((0, y), item_w, row_h, fc="white", ec="black", lw=1))
-        ax.text(0.01, y + row_h/2, str(df.iloc[i, 0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
+        ax.text(0.01, y + row_h / 2, str(df.iloc[i, 0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
         x = item_w
         for j in range(1, n_cols):
             ax.add_patch(Rectangle((x, y), date_w, row_h, fc="white", ec="black", lw=1))
             val = df.iloc[i, j]
             txt = "" if (pd.isna(val) or str(val) == "nan") else str(val)
-            ax.text(x + date_w/2, y + row_h/2, txt, va="center", ha="center", fontsize=9, transform=ax.transAxes)
+            ax.text(x + date_w / 2, y + row_h / 2, txt, va="center", ha="center", fontsize=9, transform=ax.transAxes)
             x += date_w
 
 def fig_from_table(df: pd.DataFrame, title: str):
     n_cols = len(df.columns)
     n_rows = len(df) + 1
-    w = max(14, n_cols * 0.7)      # 列数に応じて横幅可変
+    w = max(14, n_cols * 0.7)   # 列数に応じて横幅可変
     h = max(3.5, n_rows * 0.35)
     fig, ax = plt.subplots(figsize=(w, h))
     draw_table(ax, df, title)
@@ -239,7 +274,7 @@ def pdf_bytes_two(df_top: pd.DataFrame, title_top: str, df_bottom: pd.DataFrame,
         plt.close(fig)
     return buf.getvalue()
 
-# ========== 画面 ==========
+# ---------- 画面 ----------
 init_state_once()
 st.title(APP_TITLE)
 
@@ -247,13 +282,13 @@ left, right = st.columns([3, 2])
 with left:
     project_name = st.text_input("案件名（PDFタイトル）", value="")
 with right:
-    st.caption("デフォルト13列。ヘッダーはクリックでカレンダー選択（M/D表示）。")
+    st.caption("デフォルト13列。ヘッダーはカレンダー。セルの「⤵︎日付」で上のヘッダーを貼り付け。")
 
 tab_p, tab_s, tab_r = st.tabs(["🏠 購入", "🏢 売却", "🔄 買い替え（上下2段）"])
 
 # --- 購入 ---
 with tab_p:
-    st.subheader("購入：横テーブル編集（ヘッダーは日付ピッカー）")
+    st.subheader("購入：横テーブル編集")
     render_editor(st.session_state.roadmap["purchase"], key_prefix="p")
     if st.button("📄 PDF出力（購入）", use_container_width=True, key="btn_pdf_p"):
         df = to_dataframe(st.session_state.roadmap["purchase"])
@@ -264,7 +299,7 @@ with tab_p:
 
 # --- 売却 ---
 with tab_s:
-    st.subheader("売却：横テーブル編集（ヘッダーは日付ピッカー）")
+    st.subheader("売却：横テーブル編集")
     render_editor(st.session_state.roadmap["sale"], key_prefix="s")
     if st.button("📄 PDF出力（売却）", use_container_width=True, key="btn_pdf_s"):
         df = to_dataframe(st.session_state.roadmap["sale"])
