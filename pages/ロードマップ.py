@@ -1,33 +1,31 @@
 # pages/7_ロードマップ.py
 # 縦=項目 / 横=日付 の横テーブル編集＋PDF出力（購入 / 売却 / 買い替え）
-# 依存: streamlit, pandas, matplotlib のみ（ReportLab不要）
+# 依存: streamlit, pandas, matplotlib（ReportLab不要）
 from pathlib import Path
-from datetime import datetime
 from typing import Dict
 import io
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import Rectangle
 
-# ========== 基本設定 ==========
+# ===== 基本設定 =====
 st.set_page_config(page_title="ロードマップ（横テーブル）", page_icon="🗓️", layout="wide")
 APP_TITLE = "不動産ロードマップ（横テーブル：縦=項目／横=日付）"
 
-# 日本語フォント（任意配置）
+# 日本語フォント（任意）
 FONT_PATH = Path("fonts/NotoSansJP-Regular.ttf")
 if FONT_PATH.exists():
     try:
         matplotlib.font_manager.fontManager.addfont(str(FONT_PATH))
         plt.rcParams["font.family"] = matplotlib.font_manager.FontProperties(fname=str(FONT_PATH)).get_name()
     except Exception:
-        pass  # 失敗しても英字フォントで継続
+        pass
 
-# ========== 初期行 ==========
+# ===== 初期行 =====
 PURCHASE_ITEMS_DEFAULT = [
     "問合せ", "初回面談", "ライフプランニング", "条件整理", "事前審査",
     "内見①", "内見②", "内見③", "売買契約", "本申込", "金消契約", "決済（引渡し）",
@@ -40,47 +38,47 @@ SALE_ITEMS_DEFAULT = [
 REPLACE_PURCHASE_ITEMS_DEFAULT = ["内見①", "内見②", "売買契約", "決済（引渡し）"]
 REPLACE_SALE_ITEMS_DEFAULT     = ["媒介契約", "内見", "売買契約", "決済（引渡し）"]
 
-# ========== State ==========
+DEFAULT_COLS = 20           # ★ 初期列数を20に拡張（必要に応じてUIで変更可）
+MAX_COLS     = 50           # ★ 上限50列
+
+# ===== State =====
 def init_state_once():
     if "roadmap" in st.session_state:
         return
-    st.session_state.roadmap = dict(
-        purchase=dict(
-            col_count=6,
-            headers=[""] * 6,  # 例: 9/5, 9/7, 9/10 …
-            rows=[{"項目": x, "cells": [""] * 6} for x in PURCHASE_ITEMS_DEFAULT],
-        ),
-        sale=dict(
-            col_count=6,
-            headers=[""] * 6,
-            rows=[{"項目": x, "cells": [""] * 6} for x in SALE_ITEMS_DEFAULT],
-        ),
-        replace=dict(  # 買い替え：上下2段（別表）
-            up=dict(
-                col_count=6, headers=[""] * 6,
-                rows=[{"項目": x, "cells": [""] * 6} for x in REPLACE_PURCHASE_ITEMS_DEFAULT],
-            ),
-            down=dict(
-                col_count=6, headers=[""] * 6,
-                rows=[{"項目": x, "cells": [""] * 6} for x in REPLACE_SALE_ITEMS_DEFAULT],
-            ),
+    def _block(rows_src):
+        return dict(
+            col_count=DEFAULT_COLS,
+            headers=[""] * DEFAULT_COLS,
+            rows=[{"項目": name, "cells": [""] * DEFAULT_COLS} for name in rows_src],
         )
+    st.session_state.roadmap = dict(
+        purchase=_block(PURCHASE_ITEMS_DEFAULT),
+        sale=_block(SALE_ITEMS_DEFAULT),
+        replace=dict(
+            up=_block(REPLACE_PURCHASE_ITEMS_DEFAULT),
+            down=_block(REPLACE_SALE_ITEMS_DEFAULT),
+        ),
     )
 
-# ========== 共通：編集UI ==========
-def add_column(block: Dict):
-    block["col_count"] += 1
-    block["headers"].append("")
-    for r in block["rows"]:
-        r["cells"].append("")
-
-def remove_last_column(block: Dict):
-    if block["col_count"] <= 1:
+# ===== 共通ユーティリティ =====
+def resize_columns(block: Dict, new_count: int):
+    """列数を増減（既存値は可能な限り保持）"""
+    new_count = max(1, min(MAX_COLS, int(new_count)))
+    cur = block["col_count"]
+    if new_count == cur:
         return
-    block["col_count"] -= 1
-    block["headers"] = block["headers"][: block["col_count"]]
+    # headers
+    if new_count > cur:
+        block["headers"].extend([""] * (new_count - cur))
+    else:
+        block["headers"] = block["headers"][:new_count]
+    # rows
     for r in block["rows"]:
-        r["cells"] = r["cells"][: block["col_count"]]
+        if new_count > cur:
+            r["cells"].extend([""] * (new_count - cur))
+        else:
+            r["cells"] = r["cells"][:new_count]
+    block["col_count"] = new_count
 
 def add_row(block: Dict, label_default="新規項目"):
     block["rows"].append({"項目": label_default, "cells": [""] * block["col_count"]})
@@ -89,17 +87,20 @@ def delete_row(block: Dict, idx: int):
     if 0 <= idx < len(block["rows"]):
         block["rows"].pop(idx)
 
-def render_editor(block: Dict, key_prefix: str):
-    # 列操作
-    c1, c2, c3 = st.columns([1,1,8])
-    with c1:
-        if st.button("＋列追加", key=f"{key_prefix}_addcol"):
-            add_column(block)
-    with c2:
-        if st.button("－列削除", key=f"{key_prefix}_delcol"):
-            remove_last_column(block)
-    with c3:
-        st.caption("ヘッダー（日付）は自由入力：例 9/5, 9/7, 9/10。セルは「■」「10:00」等を記入。")
+def render_editor(block: Dict, key_prefix: str, title_help: str = ""):
+    # 列数コントロール（数値指定）
+    cc1, cc2, cc3 = st.columns([2, 2, 6])
+    with cc1:
+        new_cols = st.number_input(
+            "列数（日付の数）", min_value=1, max_value=MAX_COLS,
+            value=int(block["col_count"]), step=1, key=f"{key_prefix}_colnum"
+        )
+    with cc2:
+        if st.button("列数を反映", key=f"{key_prefix}_applycols"):
+            resize_columns(block, new_cols)
+            st.rerun()
+    with cc3:
+        st.caption(title_help or "ヘッダー（日付）は自由入力：例 9/5, 9/7, 9/10…。セルは「■」「10:00」等を記入。")
 
     # ヘッダー（日付）
     head_cols = st.columns([2] + [1] * block["col_count"])
@@ -137,16 +138,10 @@ def to_dataframe(block: Dict) -> pd.DataFrame:
     data = [[r["項目"], *r["cells"]] for r in block["rows"]]
     return pd.DataFrame(data, columns=headers)
 
-# ========== 描画（Matplotlib でPDF） ==========
+# ===== Matplotlib でPDF化 =====
 def draw_table(ax, df: pd.DataFrame, title: str):
-    """
-    Matplotlibで表を手描き（日本語対応／塗り無し）
-    - 1列目が『項目』。以降はヘッダー（日付）
-    """
-    ax.clear()
-    ax.axis("off")
-
-    n_rows = len(df) + 1          # +1 = ヘッダー行
+    ax.clear(); ax.axis("off")
+    n_rows = len(df) + 1
     n_cols = len(df.columns)
 
     # レイアウト
@@ -159,40 +154,35 @@ def draw_table(ax, df: pd.DataFrame, title: str):
     # タイトル
     ax.text(0, 1.02, title, ha="left", va="bottom", fontsize=12, transform=ax.transAxes)
 
-    # ヘッダー背景
+    # ヘッダー
+    from matplotlib.patches import Rectangle
     y = 1 - row_h
-    # 項目ヘッダー
-    ax.add_patch(Rectangle((0, y), item_w, row_h, fill=True, fc=(0.92,0.92,0.92), ec="black", lw=1))
-    ax.text(0.01, y + row_h/2, str(df.columns[0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
-    # 日付ヘッダー
+    ax.add_patch(Rectangle((0, y), item_w, row_h, fc=(0.92,0.92,0.92), ec="black", lw=1))
+    ax.text(0.01, y+row_h/2, str(df.columns[0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
     x = item_w
     for j in range(1, n_cols):
-        ax.add_patch(Rectangle((x, y), date_w, row_h, fill=True, fc=(0.92,0.92,0.92), ec="black", lw=1))
+        ax.add_patch(Rectangle((x, y), date_w, row_h, fc=(0.92,0.92,0.92), ec="black", lw=1))
         hdr = "" if pd.isna(df.columns[j]) else str(df.columns[j])
-        ax.text(x + 0.01, y + row_h/2, hdr, va="center", ha="left", fontsize=9, transform=ax.transAxes)
+        ax.text(x+date_w/2, y+row_h/2, hdr, va="center", ha="center", fontsize=9, transform=ax.transAxes)
         x += date_w
 
     # 本体
     for i in range(len(df)):
         y = 1 - row_h*(i+2)
-        # 項目セル
-        ax.add_patch(Rectangle((0, y), item_w, row_h, fill=False, ec="black", lw=1))
-        ax.text(0.01, y + row_h/2, str(df.iloc[i,0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
-        # 日付セル
+        ax.add_patch(Rectangle((0, y), item_w, row_h, fc="white", ec="black", lw=1))
+        ax.text(0.01, y+row_h/2, str(df.iloc[i,0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
         x = item_w
         for j in range(1, n_cols):
-            ax.add_patch(Rectangle((x, y), date_w, row_h, fill=False, ec="black", lw=1))
+            ax.add_patch(Rectangle((x, y), date_w, row_h, fc="white", ec="black", lw=1))
             val = df.iloc[i, j]
             txt = "" if (pd.isna(val) or str(val)=="nan") else str(val)
-            # 中央配置（短い文字想定：■/時刻/短文）
-            ax.text(x + date_w/2, y + row_h/2, txt, va="center", ha="center", fontsize=9, transform=ax.transAxes)
+            ax.text(x+date_w/2, y+row_h/2, txt, va="center", ha="center", fontsize=9, transform=ax.transAxes)
             x += date_w
 
 def fig_from_table(df: pd.DataFrame, title: str):
-    # 見やすさ：列×行に応じてサイズ可変
     n_cols = len(df.columns)
     n_rows = len(df) + 1
-    w = max(12, n_cols * 1.0)
+    w = max(14, n_cols * 0.7)      # 列数に応じて横幅拡張
     h = max(3.5, n_rows * 0.35)
     fig, ax = plt.subplots(figsize=(w, h))
     draw_table(ax, df, title)
@@ -208,12 +198,10 @@ def pdf_bytes_single(df: pd.DataFrame, title: str) -> bytes:
     return buf.getvalue()
 
 def pdf_bytes_two(df_top: pd.DataFrame, title_top: str, df_bottom: pd.DataFrame, title_bottom: str) -> bytes:
-    # 1ページに上下2表を配置
-    top_rows = len(df_top) + 1
-    bottom_rows = len(df_bottom) + 1
+    # 1ページに上下2表
     n_cols = max(len(df_top.columns), len(df_bottom.columns))
-    w = max(12, n_cols * 1.0)
-    h = max(6, (top_rows + bottom_rows) * 0.28 + 1.0)  # ざっくり
+    w = max(14, n_cols * 0.7)
+    h = 8
     fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(w, h))
     draw_table(ax1, df_top, title_top)
     draw_table(ax2, df_bottom, title_bottom)
@@ -225,7 +213,7 @@ def pdf_bytes_two(df_top: pd.DataFrame, title_top: str, df_bottom: pd.DataFrame,
         plt.close(fig)
     return buf.getvalue()
 
-# ========== 画面 ==========
+# ===== 画面 =====
 init_state_once()
 st.title(APP_TITLE)
 
@@ -233,13 +221,13 @@ left, right = st.columns([3,2])
 with left:
     project_name = st.text_input("案件名（PDFタイトルに使用）", value="")
 with right:
-    st.caption("ヘッダーに日付（例: 9/5, 9/7, 9/10…）を横に入力 → セルへ「■」「10:00」等を記入 → PDF出力")
+    st.caption("列数は自由。ヘッダーに日付（例: 9/5, 9/7, 9/10…）を横に入力 → セルへ「■」「10:00」等を記入 → PDF出力")
 
 tab_p, tab_s, tab_r = st.tabs(["🏠 購入", "🏢 売却", "🔄 買い替え（上下2段）"])
 
 # --- 購入 ---
 with tab_p:
-    st.subheader("購入：横テーブル編集")
+    st.subheader("購入：横テーブル編集（列数は数値で調整可 / 上限50）")
     render_editor(st.session_state.roadmap["purchase"], key_prefix="p")
     if st.button("📄 PDF出力（購入）", use_container_width=True, key="btn_pdf_p"):
         df = to_dataframe(st.session_state.roadmap["purchase"])
@@ -250,7 +238,7 @@ with tab_p:
 
 # --- 売却 ---
 with tab_s:
-    st.subheader("売却：横テーブル編集")
+    st.subheader("売却：横テーブル編集（列数は数値で調整可 / 上限50）")
     render_editor(st.session_state.roadmap["sale"], key_prefix="s")
     if st.button("📄 PDF出力（売却）", use_container_width=True, key="btn_pdf_s"):
         df = to_dataframe(st.session_state.roadmap["sale"])
@@ -259,9 +247,9 @@ with tab_s:
                            file_name=f"{(project_name or '売却ロードマップ')}_売却.pdf",
                            mime="application/pdf", use_container_width=True)
 
-# --- 買い替え（上下2段・別表を同一ページに配置） ---
+# --- 買い替え ---
 with tab_r:
-    st.subheader("買い替え：上＝購入／下＝売却（別テーブル・同一ページ）")
+    st.subheader("買い替え：上＝購入／下＝売却（2表を同ページ）※列数は各表で独立調整")
     st.markdown("**上段：購入**")
     render_editor(st.session_state.roadmap["replace"]["up"], key_prefix="r_up")
     st.markdown("---")
