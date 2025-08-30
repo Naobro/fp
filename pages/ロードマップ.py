@@ -1,100 +1,73 @@
 # pages/7_ロードマップ.py
-# 5W2H：What=横テーブル型ロードマップ（縦=項目／横=日付）, Why=初回面談で次回以降を即確定→PDF共有, Who=なおき×顧客,
-# When=面談時〜更新, Where=Streamlit, How=タブ編集→PDF出力, How much=費用管理なし
+# 縦=項目 / 横=日付 の横テーブル編集＋PDF出力（購入 / 売却 / 買い替え）
+# 依存: streamlit, pandas, matplotlib のみ（ReportLab不要）
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict
+from typing import Dict
+import io
 
 import streamlit as st
 import pandas as pd
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.patches import Rectangle
 
-# --- PDF（ReportLab） ---
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-
-# ==============================
-# 基本設定
-# ==============================
+# ========== 基本設定 ==========
 st.set_page_config(page_title="ロードマップ（横テーブル）", page_icon="🗓️", layout="wide")
-
 APP_TITLE = "不動産ロードマップ（横テーブル：縦=項目／横=日付）"
-FONT_PATH = Path("fonts/NotoSansJP-Regular.ttf")
-FONT_NAME = "NotoSansJP"
 
-# フォント登録（無ければデフォルト）
+# 日本語フォント（任意配置）
+FONT_PATH = Path("fonts/NotoSansJP-Regular.ttf")
 if FONT_PATH.exists():
     try:
-        pdfmetrics.registerFont(TTFont(FONT_NAME, str(FONT_PATH)))
-        DEFAULT_FONT = FONT_NAME
+        matplotlib.font_manager.fontManager.addfont(str(FONT_PATH))
+        plt.rcParams["font.family"] = matplotlib.font_manager.FontProperties(fname=str(FONT_PATH)).get_name()
     except Exception:
-        DEFAULT_FONT = "Helvetica"
-else:
-    DEFAULT_FONT = "Helvetica"
+        pass  # 失敗しても英字フォントで継続
 
-# ==============================
-# 初期データ
-# ==============================
+# ========== 初期行 ==========
 PURCHASE_ITEMS_DEFAULT = [
     "問合せ", "初回面談", "ライフプランニング", "条件整理", "事前審査",
-    "内見①", "内見②", "内見③",
-    "売買契約", "本申込", "金消契約", "決済（引渡し）",
+    "内見①", "内見②", "内見③", "売買契約", "本申込", "金消契約", "決済（引渡し）",
 ]
-
 SALE_ITEMS_DEFAULT = [
-    "問合せ", "初回面談",
-    "売出価格査定", "買取保証査定", "訪問査定",
-    "媒介契約", "ポータルサイト掲載", "レインズ掲載",
-    "内見",
+    "問合せ", "初回面談", "売出価格査定", "買取保証査定", "訪問査定",
+    "媒介契約", "ポータルサイト掲載", "レインズ掲載", "内見",
     "売買契約", "本申込", "金消契約", "決済（引渡し）",
 ]
+REPLACE_PURCHASE_ITEMS_DEFAULT = ["内見①", "内見②", "売買契約", "決済（引渡し）"]
+REPLACE_SALE_ITEMS_DEFAULT     = ["媒介契約", "内見", "売買契約", "決済（引渡し）"]
 
-REPLACE_PURCHASE_ITEMS_DEFAULT = [
-    "内見①", "内見②", "売買契約", "決済（引渡し）",
-]
-REPLACE_SALE_ITEMS_DEFAULT = [
-    "媒介契約", "内見", "売買契約", "決済（引渡し）",
-]
-
-# ==============================
-# ユーティリティ
-# ==============================
+# ========== State ==========
 def init_state_once():
-    if "roadmap" not in st.session_state:
-        st.session_state.roadmap = dict(
-            purchase=dict(
-                title="購入ロードマップ",
-                col_count=6,
-                headers=[""] * 6,  # 横の日付列（自由入力：例 9/5, 9/7, 9/10 …）
-                rows=[{"項目": x, "cells": [""] * 6} for x in PURCHASE_ITEMS_DEFAULT],
+    if "roadmap" in st.session_state:
+        return
+    st.session_state.roadmap = dict(
+        purchase=dict(
+            col_count=6,
+            headers=[""] * 6,  # 例: 9/5, 9/7, 9/10 …
+            rows=[{"項目": x, "cells": [""] * 6} for x in PURCHASE_ITEMS_DEFAULT],
+        ),
+        sale=dict(
+            col_count=6,
+            headers=[""] * 6,
+            rows=[{"項目": x, "cells": [""] * 6} for x in SALE_ITEMS_DEFAULT],
+        ),
+        replace=dict(  # 買い替え：上下2段（別表）
+            up=dict(
+                col_count=6, headers=[""] * 6,
+                rows=[{"項目": x, "cells": [""] * 6} for x in REPLACE_PURCHASE_ITEMS_DEFAULT],
             ),
-            sale=dict(
-                title="売却ロードマップ",
-                col_count=6,
-                headers=[""] * 6,
-                rows=[{"項目": x, "cells": [""] * 6} for x in SALE_ITEMS_DEFAULT],
-            ),
-            replace=dict(
-                title="買い替えロードマップ（上下2段：購入／売却）",
-                # 上段（購入）
-                up=dict(
-                    label="購入",
-                    col_count=6,
-                    headers=[""] * 6,
-                    rows=[{"項目": x, "cells": [""] * 6} for x in REPLACE_PURCHASE_ITEMS_DEFAULT],
-                ),
-                # 下段（売却）
-                down=dict(
-                    label="売却",
-                    col_count=6,
-                    headers=[""] * 6,
-                    rows=[{"項目": x, "cells": [""] * 6} for x in REPLACE_SALE_ITEMS_DEFAULT],
-                ),
+            down=dict(
+                col_count=6, headers=[""] * 6,
+                rows=[{"項目": x, "cells": [""] * 6} for x in REPLACE_SALE_ITEMS_DEFAULT],
             ),
         )
+    )
 
+# ========== 共通：編集UI ==========
 def add_column(block: Dict):
     block["col_count"] += 1
     block["headers"].append("")
@@ -102,251 +75,202 @@ def add_column(block: Dict):
         r["cells"].append("")
 
 def remove_last_column(block: Dict):
-    if block["col_count"] > 1:
-        block["col_count"] -= 1
-        block["headers"] = block["headers"][: block["col_count"]]
-        for r in block["rows"]:
-            r["cells"] = r["cells"][: block["col_count"]]
+    if block["col_count"] <= 1:
+        return
+    block["col_count"] -= 1
+    block["headers"] = block["headers"][: block["col_count"]]
+    for r in block["rows"]:
+        r["cells"] = r["cells"][: block["col_count"]]
 
-def add_row(block: Dict, label_default: str = "新規項目"):
+def add_row(block: Dict, label_default="新規項目"):
     block["rows"].append({"項目": label_default, "cells": [""] * block["col_count"]})
 
 def delete_row(block: Dict, idx: int):
     if 0 <= idx < len(block["rows"]):
         block["rows"].pop(idx)
 
-def render_horizontal_table_editor(block: Dict, key_prefix: str):
-    """
-    横テーブル編集UI（縦＝項目、横＝日付ヘッダ）。セルは自由入力（■/時間/メモなど）。
-    """
-    colA, colB, colC = st.columns([1, 1, 8], vertical_alignment="center")
-    with colA:
+def render_editor(block: Dict, key_prefix: str):
+    # 列操作
+    c1, c2, c3 = st.columns([1,1,8])
+    with c1:
         if st.button("＋列追加", key=f"{key_prefix}_addcol"):
             add_column(block)
-    with colB:
+    with c2:
         if st.button("－列削除", key=f"{key_prefix}_delcol"):
             remove_last_column(block)
-    with colC:
-        st.caption("※ ヘッダー（日付）は自由入力：例 `9/5`, `9/7`, `9/10` など。セルは「■」「10:00」など自由記入。")
+    with c3:
+        st.caption("ヘッダー（日付）は自由入力：例 9/5, 9/7, 9/10。セルは「■」「10:00」等を記入。")
 
-    # ヘッダー編集（横に日付を並べる）
-    st.write("**ヘッダー（日付）**")
-    header_cols = st.columns([2] + [1] * block["col_count"])
-    header_cols[0].markdown("**項目**")
+    # ヘッダー（日付）
+    head_cols = st.columns([2] + [1] * block["col_count"])
+    head_cols[0].markdown("**項目**")
     for i in range(block["col_count"]):
-        block["headers"][i] = header_cols[i + 1].text_input(
-            label=" ",
-            value=block["headers"][i],
-            key=f"{key_prefix}_hdr_{i}",
-            placeholder=f"9/{5+i}",
+        block["headers"][i] = head_cols[i+1].text_input(
+            " ", value=block["headers"][i],
+            key=f"{key_prefix}_hdr_{i}", placeholder=f"9/{5+i}"
         )
 
     st.write("---")
 
-    # 本体テーブル（縦＝項目、横＝日付）
-    # 行追加・削除ボタン
-    act_cols = st.columns([1, 1, 8])
-    with act_cols[0]:
+    # 行追加/削除
+    a1, a2, _ = st.columns([1,1,8])
+    with a1:
         if st.button("＋行追加", key=f"{key_prefix}_addrow"):
             add_row(block)
-    with act_cols[1]:
+    with a2:
         st.caption("行末の🗑で削除")
 
-    # 各行レンダリング
+    # 本体
     for r_idx, row in enumerate(block["rows"]):
-        row_cols = st.columns([2] + [1] * block["col_count"] + [0.5])
-        # 項目名
-        row["項目"] = row_cols[0].text_input(" ", value=row["項目"], key=f"{key_prefix}_item_{r_idx}")
-        # セル群（横方向）
+        cols = st.columns([2] + [1]*block["col_count"] + [0.5])
+        row["項目"] = cols[0].text_input(" ", value=row["項目"], key=f"{key_prefix}_item_{r_idx}")
         for c_idx in range(block["col_count"]):
-            row["cells"][c_idx] = row_cols[c_idx + 1].text_input(
-                " ",
-                value=row["cells"][c_idx],
-                key=f"{key_prefix}_cell_{r_idx}_{c_idx}",
-                placeholder="",
+            row["cells"][c_idx] = cols[c_idx+1].text_input(
+                " ", value=row["cells"][c_idx], key=f"{key_prefix}_cell_{r_idx}_{c_idx}"
             )
-        # 削除
-        if row_cols[-1].button("🗑", key=f"{key_prefix}_delrow_{r_idx}"):
+        if cols[-1].button("🗑", key=f"{key_prefix}_delrow_{r_idx}"):
             delete_row(block, r_idx)
-            st.experimental_rerun()
+            st.rerun()
 
-def to_dataframe(block: Dict]) -> pd.DataFrame:
-    """ReportLab描画用に DataFrame 化（1行目ヘッダ：項目 + 日付ヘッダ）"""
+def to_dataframe(block: Dict) -> pd.DataFrame:
     headers = ["項目"] + block["headers"]
-    data = []
-    for row in block["rows"]:
-        data.append([row["項目"]] + row["cells"])
-    df = pd.DataFrame(data, columns=headers)
-    return df
+    data = [[r["項目"], *r["cells"]] for r in block["rows"]]
+    return pd.DataFrame(data, columns=headers)
 
-def draw_table_on_canvas(c: canvas.Canvas, df: pd.DataFrame, title: str, x_margin=28, y_start=520, row_h=20, font_size=9):
+# ========== 描画（Matplotlib でPDF） ==========
+def draw_table(ax, df: pd.DataFrame, title: str):
     """
-    ReportLabで横テーブルを描画。
-    - df列：1列目=「項目」、以降=日付ヘッダ
-    - セルは文字列のまま（塗り無し）
+    Matplotlibで表を手描き（日本語対応／塗り無し）
+    - 1列目が『項目』。以降はヘッダー（日付）
     """
-    page_w, page_h = landscape(A4)
+    ax.clear()
+    ax.axis("off")
+
+    n_rows = len(df) + 1          # +1 = ヘッダー行
+    n_cols = len(df.columns)
+
+    # レイアウト
+    item_w_ratio = 0.22
+    width = 1.0
+    item_w = item_w_ratio * width
+    date_w = (width - item_w) / max(1, n_cols-1)
+    row_h = 1.0 / n_rows
 
     # タイトル
-    c.setFont(DEFAULT_FONT, 12 if DEFAULT_FONT != "Helvetica" else 11)
-    c.drawString(x_margin, y_start + 30, title)
+    ax.text(0, 1.02, title, ha="left", va="bottom", fontsize=12, transform=ax.transAxes)
 
-    # テーブル領域計算
-    col_count = len(df.columns)
-    usable_w = page_w - x_margin * 2
-    # 項目列は広め、日付列は均等
-    item_col_w = max(120, int(usable_w * 0.22))
-    other_w = usable_w - item_col_w
-    date_col_w = max(60, int(other_w / (col_count - 1))) if col_count > 1 else 80
+    # ヘッダー背景
+    y = 1 - row_h
+    # 項目ヘッダー
+    ax.add_patch(Rectangle((0, y), item_w, row_h, fill=True, fc=(0.92,0.92,0.92), ec="black", lw=1))
+    ax.text(0.01, y + row_h/2, str(df.columns[0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
+    # 日付ヘッダー
+    x = item_w
+    for j in range(1, n_cols):
+        ax.add_patch(Rectangle((x, y), date_w, row_h, fill=True, fc=(0.92,0.92,0.92), ec="black", lw=1))
+        hdr = "" if pd.isna(df.columns[j]) else str(df.columns[j])
+        ax.text(x + 0.01, y + row_h/2, hdr, va="center", ha="left", fontsize=9, transform=ax.transAxes)
+        x += date_w
 
-    # ヘッダ行
-    c.setStrokeColor(colors.black)
-    c.setLineWidth(1)
-    c.setFont(DEFAULT_FONT, font_size)
-    # ヘッダ背景（薄グレー）
-    c.setFillColorRGB(0.92, 0.92, 0.92)
-    c.rect(x_margin, y_start, item_col_w, row_h, stroke=1, fill=1)
-    c.setFillColor(colors.black)
-    c.drawString(x_margin + 4, y_start + 5, str(df.columns[0]))
-
-    x = x_margin + item_col_w
-    for j in range(1, col_count):
-        c.setFillColorRGB(0.92, 0.92, 0.92)
-        c.rect(x, y_start, date_col_w, row_h, stroke=1, fill=1)
-        c.setFillColor(colors.black)
-        hdr = str(df.columns[j]) if df.columns[j] else ""
-        c.drawString(x + 4, y_start + 5, hdr)
-        x += date_col_w
-
-    # 本体行
-    y = y_start - row_h
+    # 本体
     for i in range(len(df)):
+        y = 1 - row_h*(i+2)
         # 項目セル
-        c.setFillColor(colors.white)
-        c.rect(x_margin, y, item_col_w, row_h, stroke=1, fill=1)
-        c.setFillColor(colors.black)
-        c.drawString(x_margin + 4, y + 5, str(df.iloc[i, 0]))
+        ax.add_patch(Rectangle((0, y), item_w, row_h, fill=False, ec="black", lw=1))
+        ax.text(0.01, y + row_h/2, str(df.iloc[i,0]), va="center", ha="left", fontsize=9, transform=ax.transAxes)
+        # 日付セル
+        x = item_w
+        for j in range(1, n_cols):
+            ax.add_patch(Rectangle((x, y), date_w, row_h, fill=False, ec="black", lw=1))
+            val = df.iloc[i, j]
+            txt = "" if (pd.isna(val) or str(val)=="nan") else str(val)
+            # 中央配置（短い文字想定：■/時刻/短文）
+            ax.text(x + date_w/2, y + row_h/2, txt, va="center", ha="center", fontsize=9, transform=ax.transAxes)
+            x += date_w
 
-        # 日付セル群
-        x = x_margin + item_col_w
-        for j in range(1, col_count):
-            c.setFillColor(colors.white)
-            c.rect(x, y, date_col_w, row_h, stroke=1, fill=1)
-            c.setFillColor(colors.black)
-            txt = str(df.iloc[i, j]) if pd.notna(df.iloc[i, j]) else ""
-            if txt == "nan":
-                txt = ""
-            c.drawString(x + 4, y + 5, txt)
-            x += date_col_w
+def fig_from_table(df: pd.DataFrame, title: str):
+    # 見やすさ：列×行に応じてサイズ可変
+    n_cols = len(df.columns)
+    n_rows = len(df) + 1
+    w = max(12, n_cols * 1.0)
+    h = max(3.5, n_rows * 0.35)
+    fig, ax = plt.subplots(figsize=(w, h))
+    draw_table(ax, df, title)
+    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.98])
+    return fig
 
-        y -= row_h
+def pdf_bytes_single(df: pd.DataFrame, title: str) -> bytes:
+    buf = io.BytesIO()
+    with PdfPages(buf) as pdf:
+        fig = fig_from_table(df, title)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+    return buf.getvalue()
 
-def export_pdf_purchase(roadmap: Dict, filename: str, project_name: str):
-    """購入タブPDF：1ページ"""
-    page_w, page_h = landscape(A4)
-    c = canvas.Canvas(filename, pagesize=landscape(A4))
-    c.setTitle(project_name or "購入ロードマップ")
+def pdf_bytes_two(df_top: pd.DataFrame, title_top: str, df_bottom: pd.DataFrame, title_bottom: str) -> bytes:
+    # 1ページに上下2表を配置
+    top_rows = len(df_top) + 1
+    bottom_rows = len(df_bottom) + 1
+    n_cols = max(len(df_top.columns), len(df_bottom.columns))
+    w = max(12, n_cols * 1.0)
+    h = max(6, (top_rows + bottom_rows) * 0.28 + 1.0)  # ざっくり
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(w, h))
+    draw_table(ax1, df_top, title_top)
+    draw_table(ax2, df_bottom, title_bottom)
+    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.98])
 
-    # ヘッダ
-    c.setFont(DEFAULT_FONT, 13 if DEFAULT_FONT != "Helvetica" else 12)
-    c.drawString(28, page_h - 30, f"{project_name or '購入ロードマップ'}（購入）")
-    c.setFont(DEFAULT_FONT, 9)
-    c.drawRightString(page_w - 28, page_h - 30, datetime.now().strftime("%Y-%m-%d %H:%M"))
+    buf = io.BytesIO()
+    with PdfPages(buf) as pdf:
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+    return buf.getvalue()
 
-    df = to_dataframe(roadmap["purchase"])
-    draw_table_on_canvas(c, df, title="", x_margin=28, y_start=page_h - 70, row_h=22, font_size=9)
-
-    c.showPage()
-    c.save()
-
-def export_pdf_sale(roadmap: Dict, filename: str, project_name: str):
-    """売却タブPDF：1ページ"""
-    page_w, page_h = landscape(A4)
-    c = canvas.Canvas(filename, pagesize=landscape(A4))
-    c.setTitle(project_name or "売却ロードマップ")
-
-    c.setFont(DEFAULT_FONT, 13 if DEFAULT_FONT != "Helvetica" else 12)
-    c.drawString(28, page_h - 30, f"{project_name or '売却ロードマップ'}（売却）")
-    c.setFont(DEFAULT_FONT, 9)
-    c.drawRightString(page_w - 28, page_h - 30, datetime.now().strftime("%Y-%m-%d %H:%M"))
-
-    df = to_dataframe(roadmap["sale"])
-    draw_table_on_canvas(c, df, title="", x_margin=28, y_start=page_h - 70, row_h=22, font_size=9)
-
-    c.showPage()
-    c.save()
-
-def export_pdf_replace(roadmap: Dict, filename: str, project_name: str):
-    """買い替えPDF：1ページ内に 上=購入 下=売却 を上下2段で描画"""
-    page_w, page_h = landscape(A4)
-    c = canvas.Canvas(filename, pagesize=landscape(A4))
-    c.setTitle(project_name or "買い替えロードマップ")
-
-    c.setFont(DEFAULT_FONT, 13 if DEFAULT_FONT != "Helvetica" else 12)
-    c.drawString(28, page_h - 30, f"{project_name or '買い替えロードマップ'}（購入・売却）")
-    c.setFont(DEFAULT_FONT, 9)
-    c.drawRightString(page_w - 28, page_h - 30, datetime.now().strftime("%Y-%m-%d %H:%M"))
-
-    # 上段：購入
-    up_df = to_dataframe(st.session_state.roadmap["replace"]["up"])
-    draw_table_on_canvas(c, up_df, title="購入", x_margin=28, y_start=page_h - 80, row_h=20, font_size=9)
-
-    # 下段：売却
-    down_df = to_dataframe(st.session_state.roadmap["replace"]["down"])
-    draw_table_on_canvas(c, down_df, title="売却", x_margin=28, y_start=page_h - 280, row_h=20, font_size=9)
-
-    c.showPage()
-    c.save()
-
-# ==============================
-# 画面
-# ==============================
+# ========== 画面 ==========
 init_state_once()
 st.title(APP_TITLE)
 
-col_top1, col_top2 = st.columns([3, 2])
-with col_top1:
+left, right = st.columns([3,2])
+with left:
     project_name = st.text_input("案件名（PDFタイトルに使用）", value="")
-with col_top2:
-    st.caption("操作：ヘッダーに日付（例 9/5, 9/7, 9/10 …）を入力 → セルに「■」「10:00」など自由記入 → PDF出力")
+with right:
+    st.caption("ヘッダーに日付（例: 9/5, 9/7, 9/10…）を横に入力 → セルへ「■」「10:00」等を記入 → PDF出力")
 
-tab1, tab2, tab3 = st.tabs(["🏠 購入", "🏢 売却", "🔄 買い替え（上下2段）"])
+tab_p, tab_s, tab_r = st.tabs(["🏠 購入", "🏢 売却", "🔄 買い替え（上下2段）"])
 
 # --- 購入 ---
-with tab1:
+with tab_p:
     st.subheader("購入：横テーブル編集")
-    render_horizontal_table_editor(st.session_state.roadmap["purchase"], key_prefix="p")
-    pdf_name = f"{project_name or '購入ロードマップ'}_購入.pdf"
-    if st.button("📄 PDF出力（購入）", use_container_width=True, key="btn_pdf_purchase"):
-        tmp = Path(st.runtime.scriptrunner.script_run_context.get_script_run_ctx().session_id + "_purchase.pdf") if hasattr(st, "runtime") else Path("purchase.pdf")
-        filename = str(Path("purchase.pdf"))
-        export_pdf_purchase(st.session_state.roadmap, filename, project_name or "購入ロードマップ")
-        with open(filename, "rb") as f:
-            st.download_button("📥 ダウンロード（購入PDF）", data=f.read(), file_name=pdf_name, mime="application/pdf", use_container_width=True)
+    render_editor(st.session_state.roadmap["purchase"], key_prefix="p")
+    if st.button("📄 PDF出力（購入）", use_container_width=True, key="btn_pdf_p"):
+        df = to_dataframe(st.session_state.roadmap["purchase"])
+        pdf_data = pdf_bytes_single(df, (project_name or "購入ロードマップ（購入）"))
+        st.download_button("📥 ダウンロード（購入PDF）", data=pdf_data,
+                           file_name=f"{(project_name or '購入ロードマップ')}_購入.pdf",
+                           mime="application/pdf", use_container_width=True)
 
 # --- 売却 ---
-with tab2:
+with tab_s:
     st.subheader("売却：横テーブル編集")
-    render_horizontal_table_editor(st.session_state.roadmap["sale"], key_prefix="s")
-    pdf_name = f"{project_name or '売却ロードマップ'}_売却.pdf"
-    if st.button("📄 PDF出力（売却）", use_container_width=True, key="btn_pdf_sale"):
-        filename = str(Path("sale.pdf"))
-        export_pdf_sale(st.session_state.roadmap, filename, project_name or "売却ロードマップ")
-        with open(filename, "rb") as f:
-            st.download_button("📥 ダウンロード（売却PDF）", data=f.read(), file_name=pdf_name, mime="application/pdf", use_container_width=True)
+    render_editor(st.session_state.roadmap["sale"], key_prefix="s")
+    if st.button("📄 PDF出力（売却）", use_container_width=True, key="btn_pdf_s"):
+        df = to_dataframe(st.session_state.roadmap["sale"])
+        pdf_data = pdf_bytes_single(df, (project_name or "売却ロードマップ（売却）"))
+        st.download_button("📥 ダウンロード（売却PDF）", data=pdf_data,
+                           file_name=f"{(project_name or '売却ロードマップ')}_売却.pdf",
+                           mime="application/pdf", use_container_width=True)
 
-# --- 買い替え ---
-with tab3:
-    st.subheader("買い替え：上＝購入／下＝売却（別テーブル・同ページ）")
+# --- 買い替え（上下2段・別表を同一ページに配置） ---
+with tab_r:
+    st.subheader("買い替え：上＝購入／下＝売却（別テーブル・同一ページ）")
     st.markdown("**上段：購入**")
-    render_horizontal_table_editor(st.session_state.roadmap["replace"]["up"], key_prefix="r_up")
+    render_editor(st.session_state.roadmap["replace"]["up"], key_prefix="r_up")
     st.markdown("---")
     st.markdown("**下段：売却**")
-    render_horizontal_table_editor(st.session_state.roadmap["replace"]["down"], key_prefix="r_down")
-
-    pdf_name = f"{project_name or '買い替えロードマップ'}_購入_売却.pdf"
-    if st.button("📄 PDF出力（買い替え・上下2段）", use_container_width=True, key="btn_pdf_replace"):
-        filename = str(Path("replace.pdf"))
-        export_pdf_replace(st.session_state.roadmap, filename, project_name or "買い替えロードマップ")
-        with open(filename, "rb") as f:
-            st.download_button("📥 ダウンロード（買い替えPDF）", data=f.read(), file_name=pdf_name, mime="application/pdf", use_container_width=True)
+    render_editor(st.session_state.roadmap["replace"]["down"], key_prefix="r_down")
+    if st.button("📄 PDF出力（買い替え・上下2段）", use_container_width=True, key="btn_pdf_r"):
+        df_top    = to_dataframe(st.session_state.roadmap["replace"]["up"])
+        df_bottom = to_dataframe(st.session_state.roadmap["replace"]["down"])
+        pdf_data = pdf_bytes_two(df_top, "購入", df_bottom, "売却")
+        st.download_button("📥 ダウンロード（買い替えPDF）", data=pdf_data,
+                           file_name=f"{(project_name or '買い替えロードマップ')}_購入_売却.pdf",
+                           mime="application/pdf", use_container_width=True)
