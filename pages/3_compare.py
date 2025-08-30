@@ -848,7 +848,7 @@ for i, tab in enumerate(tabs):
             p["park"]    = st.selectbox("公園・緑地など子育て環境", ["充実","良い","普通","弱い"], index={"充実":0,"良い":1,"普通":2,"弱い":3}.get(p.get("park","普通"),2), key=f"park{i}")
             p["noise"]   = st.selectbox("騒音（線路・幹線道路・繁華街）", ["充実","良い","普通","弱い"], index={"充実":0,"良い":1,"普通":2,"弱い":3}.get(p.get("noise","普通"),2), key=f"noi{i}")
 
-       # —— 種別別 UI（マンション / 戸建て） ——
+# —— 種別別 UI（マンション / 戸建て） ——
 if p.get("type","マンション") == "マンション":
     st.subheader("スペック（専有部分）")
     with st.container(border=True):
@@ -859,64 +859,94 @@ if p.get("type","マンション") == "マンション":
                 for jdx, feat in enumerate(items):
                     col = cols[jdx % 3]
                     k = f"spec_{i}_{cat}_{jdx}"
-                    val = col.checkbox(feat, value=bool(p.get("spec",{}).get(cat,{}).get(feat, False)), key=k)
+                    val = col.checkbox(
+                        feat,
+                        value=bool(p.get("spec",{}).get(cat,{}).get(feat, False)),
+                        key=k
+                    )
                     p.setdefault("spec", {}).setdefault(cat, {})[feat] = val
                     spec_presence[feat] = val
 
+    # —— 管理・共用部・その他 ——（マンションのみ）
     st.subheader("管理・共用部・その他")
     with st.container(border=True):
         cpk, cpt, cpt2 = st.columns([1,1,1])
         with cpk:
             p["parking_type"] = st.selectbox(
-                "駐車場形態", M["parking_types"],
+                "駐車場形態",
+                M["parking_types"],
                 index=(M["parking_types"].index(p.get("parking_type","機械式"))
                        if p.get("parking_type") in M["parking_types"] else 1),
                 key=f"pt{i}"
             )
         with cpt:
-            p["elev_num"] = st.number_input("エレベーター台数（基数）", min_value=0, value=int(p.get("elev_num",1)), step=1, key=f"el{i}")
+            p["elev_num"] = st.number_input(
+                "エレベーター台数（基数）",
+                min_value=0, value=int(p.get("elev_num",1)), step=1, key=f"el{i}"
+            )
         with cpt2:
-            p["pet_ok"] = st.selectbox("ペット飼育可否", ["可","不可","不明"],
-                                       index={"可":0,"不可":1,"不明":2}.get(p.get("pet_ok","不明"),2), key=f"pet{i}")
+            p["pet_ok"] = st.selectbox(
+                "ペット飼育可否", ["可","不可","不明"],
+                index={"可":0,"不可":1,"不明":2}.get(p.get("pet_ok","不明"),2),
+                key=f"pet{i}"
+            )
+
         mg_presence: Dict[str,bool] = {}
         cols = st.columns(3)
         for m_idx, feat in enumerate(M["mgmt_shared_etc"]):
             col = cols[m_idx % 3]
             k = f"mg_{i}_{m_idx}"
-            val = col.checkbox(feat, value=bool(p.get("mgmt",{}).get(feat, False)), key=k)
+            val = col.checkbox(
+                feat,
+                value=bool(p.get("mgmt",{}).get(feat, False)),
+                key=k
+            )
             p.setdefault("mgmt", {})[feat] = val
             mg_presence[feat] = val
 
 else:
-    # —— 戸建て UI（管理費・修繕のUIは無し）——
+    # —— 戸建て UI ——（ここにはマンション用のブロックは入れない）
     st.subheader("基本スペック")
     with st.container(border=True):
         cA, cB, cC = st.columns(3)
+
         with cA:
-            p["price_man"] = st.number_input("売出価格（万円）", min_value=0, step=1, format="%d",
-                                             value=int(p.get("price_man", 0)), key=f"hp{i}_price")
-            p["lot_area_m2"] = st.number_input("土地面積（㎡）", min_value=0.0, step=0.01, format="%.2f",
-                                               value=float(p.get("lot_area_m2", p.get("lot_area", 0.0))), key=f"hp{i}_lot")
-            p["building_area_m2"] = st.number_input("建物面積（㎡）", min_value=0.0, step=0.01, format="%.2f",
-                                                    value=float(p.get("building_area_m2", p.get("area_m2", 0.0))), key=f"hp{i}_bld")
+            p["price_man"] = st.number_input(
+                "売出価格（万円）", min_value=0, step=1, format="%d",
+                value=int(p.get("price_man", 0)), key=f"hp{i}_price"
+            )
+            p["lot_area_m2"] = st.number_input(
+                "土地面積（㎡）", min_value=0.0, step=0.01, format="%.2f",
+                value=float(p.get("lot_area_m2", p.get("lot_area", 0.0))), key=f"hp{i}_lot"
+            )
+            p["building_area_m2"] = st.number_input(
+                "建物面積（㎡）", min_value=0.0, step=0.01, format="%.2f",
+                value=float(p.get("building_area_m2", p.get("area_m2", 0.0))), key=f"hp{i}_bld"
+            )
             land_tsubo = auto_tsubo_price(float(p["price_man"]), float(p["lot_area_m2"]))
             p["tsubo_price"] = land_tsubo
             st.caption(f"坪単価（万/坪・自動｜土地ベース）：{land_tsubo:.1f}")
+
         with cB:
             new_old = st.radio("築年の扱い", ["新築", "既存（西暦入力）"],
-                               index=(0 if str(p.get("year_built","")) in ["", "0", "新築"] else 1),
+                               index=(0 if bool(p.get("new_build", False)) else 1),
                                horizontal=True, key=f"hp{i}_yn")
             if new_old == "新築":
-                p["year_built"] = "新築"
+                p["new_build"] = True
+                p["year_built"] = 0
                 st.caption("表示：新築")
             else:
+                p["new_build"] = False
                 y = st.number_input("築年（西暦）", min_value=0, step=1, format="%d",
-                                    value=int(p.get("year_built") or 0 if str(p.get("year_built","")).isdigit() else 0),
-                                    key=f"hp{i}_y")
+                                    value=int(p.get("year_built") or 0), key=f"hp{i}_y")
                 p["year_built"] = int(y) if y else 0
                 st.caption(build_age_text(int(y)) if y else "—")
-            p["floors_total"] = st.number_input("何階建て", min_value=0, step=1, format="%d",
-                                                value=int(p.get("floors_total", p.get("floor", 0))), key=f"hp{i}_floors")
+
+            p["floors_total"] = st.number_input(
+                "何階建て", min_value=0, step=1, format="%d",
+                value=int(p.get("floors_total", p.get("floor", 0))), key=f"hp{i}_floors"
+            )
+
         with cC:
             p["structure"] = st.selectbox("構造", ["木造","鉄骨造","RC","その他"],
                                           index={"木造":0,"鉄骨造":1,"RC":2,"その他":3}.get(p.get("structure","木造"),0),
@@ -958,9 +988,13 @@ else:
     with st.container(border=True):
         p.setdefault("visit_check", {})
         p["visit_check"].setdefault("works", {})
-        works = ["キッチン","浴室","洗面","トイレ","クロス","フローリング","建具",
-                 "外壁","屋根","太陽光","蓄電池","網戸","カーテンレール","フロアコーティング",
-                 "間取り変更","電気工事","エアコン","光回線"]
+        works = [
+            "キッチン","浴室","洗面","トイレ",
+            "クロス","フローリング","建具",
+            "外壁","屋根","太陽光","蓄電池",
+            "網戸","カーテンレール","フロアコーティング",
+            "間取り変更","電気工事","エアコン","光回線"
+        ]
         cols = st.columns(3)
         for j, w in enumerate(works):
             col = cols[j % 3]
