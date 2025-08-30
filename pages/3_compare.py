@@ -565,19 +565,56 @@ for p in st.session_state.props:
 
 props: List[Dict[str,Any]] = st.session_state.props
 
+# --- 5件固定のため安全パディング／トリム ---
+def _default_prop(i: int) -> Dict[str, Any]:
+    return {
+        "name": f"物件{i+1}",
+        "type": "マンション",
+        "price_man": 0.0,
+        "year_built": 0,
+        "area_m2": 0.0,
+        "kanri": 0,
+        "shuzen": 0
+    }
+
+# 長さ不足なら埋める／多すぎれば切る（UIは常に5行）
+if not isinstance(props, list):
+    props = []
+if len(props) < 5:
+    props += [_default_prop(i) for i in range(len(props), 5)]
+elif len(props) > 5:
+    props = props[:5]
+
+# 必要キーの欠落を補完（後方互換）
+for i, p in enumerate(props):
+    if "name"   not in p: p["name"]   = f"物件{i+1}"
+    if "type"   not in p: p["type"]   = "マンション"
+    if "price_man"  not in p: p["price_man"]  = 0.0
+    if "year_built" not in p: p["year_built"] = 0
+    if "area_m2"    not in p: p["area_m2"]    = 0.0
+    if "kanri"      not in p: p["kanri"]      = 0
+    if "shuzen"     not in p: p["shuzen"]     = 0
+
+# st.session_state にも反映（次回保存用）
+st.session_state.props = props
+
 st.header("③ 5物件の基本情報（顧客別の下書き保存対応）")
+
 with st.container(border=True):
 
+    # 1) 一覧テーブル用ヘルパ（このブロックで一度だけ定義）
     def _to_int(s):
         try:
             return int(str(s).replace(",", "").strip())
-        except:
+        except Exception:
             return 0
+
     def _to_float(s):
         try:
             return float(str(s).replace(",", "").strip())
-        except:
+        except Exception:
             return 0.0
+
     def _blank(v):
         if v in (None, "", 0, 0.0):
             return ""
@@ -585,33 +622,82 @@ with st.container(border=True):
             return str(int(v))
         return str(v)
 
+    # 2) 列ヘッダ（固定順）
     cols = st.columns([1.1,1,1,1,1,1,1,1])
-    for i,h in enumerate(["名称","種別","価格（万円）","築：西暦","築表示","面積（㎡）","管理費（円/月）","修繕積立（円/月）"]):
+    for i, h in enumerate(["名称","種別","価格（万円）","築：西暦","築表示","面積（㎡）","管理費（円/月）","修繕積立（円/月）"]):
         cols[i].markdown(f"**{h}**")
 
+    # 3) 5行を固定インデックスで描画（列インデックスは常に不変）
     for idx in range(5):
         c0,cT,c1,c2,c3,c4,c5,c6 = st.columns([1.1,0.9,1,1,1,1,1,1], gap="small")
 
-        name_in   = c0.text_input("名称", value=props[idx].get("name", f"物件{idx+1}"), key=f"name{idx}")
-        # 種別（一覧でも切替可）
-        props[idx]["type"] = cT.selectbox("種別", ["マンション","戸建て"], index=0 if props[idx].get("type","マンション")=="マンション" else 1, key=f"type_list_{idx}")
+        # 名称
+        name_in = c0.text_input(
+            "名称",
+            value=props[idx].get("name", f"物件{idx+1}"),
+            key=f"name{idx}"
+        )
 
-        price_in  = c1.text_input("価格（万円）", value=_blank(props[idx].get("price_man", "")), key=f"p{idx}")
-        ybuilt_in = c2.text_input("築：西暦", value=_blank(props[idx].get("year_built", "")), key=f"y{idx}")
-        area_in   = c4.text_input("面積（㎡）", value=_blank(props[idx].get("area_m2", "")), key=f"a{idx}")
-        kanri_in  = c5.text_input("管理費（円/月）", value=_blank(props[idx].get("kanri", "")), key=f"k{idx}")
-        shuzen_in = c6.text_input("修繕積立（円/月）", value=_blank(props[idx].get("shuzen", "")), key=f"s{idx}")
+        # 種別（マンション/戸建て）
+        props[idx]["type"] = cT.selectbox(
+            "種別",
+            ["マンション","戸建て"],
+            index=0 if props[idx].get("type","マンション")=="マンション" else 1,
+            key=f"type_list_{idx}"
+        )
+        is_mansion = (props[idx]["type"] == "マンション")
 
-        ybuilt_int = _to_int(ybuilt_in)
-        c3.write(build_age_text(ybuilt_int) if ybuilt_int else "—")
+        # 価格
+        price_in = c1.text_input("価格（万円）", value=_blank(props[idx].get("price_man","")), key=f"p{idx}")
 
-        props[idx]["name"]       = name_in or f"物件{idx+1}"
-        props[idx]["price_man"]  = _to_int(price_in)
-        props[idx]["year_built"] = ybuilt_int
-        props[idx]["area_m2"]    = _to_float(area_in)
-        props[idx]["kanri"]      = _to_int(kanri_in)
-        props[idx]["shuzen"]     = _to_int(shuzen_in)
+        if is_mansion:
+            # ========= マンション：既存どおり =========
+            ybuilt_in = c2.text_input("築：西暦", value=_blank(props[idx].get("year_built","")), key=f"y{idx}")
+            ybuilt_int = _to_int(ybuilt_in)
+            c3.write(build_age_text(ybuilt_int) if ybuilt_int else "—")
 
+            area_in   = c4.text_input("面積（㎡）", value=_blank(props[idx].get("area_m2","")), key=f"a{idx}")
+
+            kanri_in  = c5.text_input("管理費（円/月）", value=_blank(props[idx].get("kanri","")), key=f"k{idx}")
+            shuzen_in = c6.text_input("修繕積立（円/月）", value=_blank(props[idx].get("shuzen","")), key=f"s{idx}")
+
+            # 反映
+            props[idx]["year_built"] = ybuilt_int
+            props[idx]["new_build"]  = False  # 統一のため持たせるが常に False
+            props[idx]["area_m2"]    = _to_float(area_in)
+            props[idx]["land_m2"]    = _to_float(props[idx].get("land_m2", 0))  # 将来互換用
+            props[idx]["kanri"]      = _to_int(kanri_in)
+            props[idx]["shuzen"]     = _to_int(shuzen_in)
+
+        else:
+            # ========= 戸建て：管理費・修繕は出さない =========
+            # 築：新築フラグ＋西暦（任意）
+            new_build = c2.checkbox("新築", value=bool(props[idx].get("new_build", False)), key=f"new{idx}")
+            ybuilt_in = c3.text_input("築：西暦（任意）", value=_blank(props[idx].get("year_built","")), key=f"yh{idx}", disabled=new_build)
+
+            # 階数（数値）
+            floors_in = c4.text_input("階数（数値）", value=_blank(props[idx].get("floors","")), key=f"floors{idx}")
+
+            # 面積：建物・土地
+            b_area_in = c5.text_input("建物面積（㎡）", value=_blank(props[idx].get("area_m2","")), key=f"ba{idx}")
+            l_area_in = c6.text_input("土地面積（㎡）", value=_blank(props[idx].get("land_m2","")), key=f"la{idx}")
+
+            # 反映
+            props[idx]["new_build"]  = bool(new_build)
+            props[idx]["year_built"] = (0 if new_build else _to_int(ybuilt_in))  # 新築は 0（年数表示は別で新築扱い）
+            props[idx]["floors"]     = _to_int(floors_in)
+            props[idx]["area_m2"]    = _to_float(b_area_in)   # 建物面積
+            props[idx]["land_m2"]    = _to_float(l_area_in)   # 土地面積
+
+            # 戸建てでは内部的にも 0 固定（キーは残すがUIに出さない）
+            props[idx]["kanri"]      = 0
+            props[idx]["shuzen"]     = 0
+
+        # 共通の最終反映
+        props[idx]["name"]      = name_in or f"物件{idx+1}"
+        props[idx]["price_man"] = _to_int(price_in)
+
+    # 4) ボタン行（保存/読込/クリア）
     b1,b2,b3,b4 = st.columns(4)
     with b1:
         if st.button("💾 下書き保存（このページ）", use_container_width=True):
@@ -621,17 +707,16 @@ with st.container(border=True):
                 st.session_state["__last_saved__"] = datetime.datetime.now().strftime("%H:%M:%S")
                 st.success(f"顧客 `{cid}` として保存しました。")
             else:
-                # 顧客ID未設定時は旧DRAFTへ（共有）※注意喚起
                 json.dump({"props": props}, open(DRAFT_JSON,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
                 st.session_state["__last_saved__"] = datetime.datetime.now().strftime("%H:%M:%S")
-                st.warning("顧客IDが未設定のため共有下書きに保存しました（他のお客様と混在する可能性があります）。")
+                st.warning("顧客IDが未設定のため共有下書きに保存しました（他のお客様と混在の可能性）。")
+
     with b2:
         if st.button("♻ 読み込み（このページ）", use_container_width=True):
             cid = _get_client_id_from_query()
             if cid:
                 loaded = load_compare_state(cid)
                 st.session_state.props = loaded.get("props", props)
-                # 後方互換で type を補完
                 for p in st.session_state.props:
                     if "type" not in p:
                         p["type"] = "マンション"
@@ -646,6 +731,7 @@ with st.container(border=True):
                 else:
                     st.info("共有下書きは存在しません。")
             st.rerun()
+
     with b3:
         if st.button("🗑 クリア（このページ）", use_container_width=True):
             st.session_state.props = [
@@ -654,10 +740,10 @@ with st.container(border=True):
             ]
             st.success("このページの入力をクリアしました。必要なら保存してください。")
             st.rerun()
+
     with b4:
         st.caption("※ 顧客ID固定＋自動保存ONで安全。手動保存は保険。")
-
-# ========== 各物件の詳細（タブ） ==========
+# ===== ③ ここまで（以降は # ========== 
 st.header("④ 各物件の詳細入力（タブ切替）")
 tabs = st.tabs([p["name"] for p in props])
 
@@ -776,7 +862,7 @@ for i, tab in enumerate(tabs):
             with st.container(border=True):
                 spec_presence: Dict[str,bool] = {}
                 for cat, items in M["spec_categories"].items():
-                    with st.expander(f""):
+                    with st.expander(cat):
                         cols = st.columns(3)
                         for jdx, feat in enumerate(items):
                             col = cols[jdx % 3]
@@ -805,132 +891,132 @@ for i, tab in enumerate(tabs):
                     val = col.checkbox(feat, value=bool(p.get("mgmt",{}).get(feat, False)), key=k)
                     p.setdefault("mgmt", {})[feat] = val
                     mg_presence[feat] = val
-        else:
-            # —— 戸建て UI ——（管理系は無し）
-            st.subheader("建物（構造・性能）")
-            with st.container(border=True):
-                c1,c2,c3,c4,c5 = st.columns(5)
-                with c1:
-                    p["quake"] = st.selectbox("耐震性", ["高い","普通","低い","不明"], index={"高い":0,"普通":1,"低い":2,"不明":3}.get(p.get("quake","普通"),1), key=f"qk{i}")
-                with c2:
-                    p["insulation"] = st.selectbox("断熱・気密", ["高い","普通","低い","不明"], index={"高い":0,"普通":1,"低い":2,"不明":3}.get(p.get("insulation","普通"),1), key=f"in{i}")
-                with c3:
-                    p["deterioration"] = st.selectbox("劣化対策（長期優良等）", ["高い","普通","低い","不明"], index={"高い":0,"普通":1,"低い":2,"不明":3}.get(p.get("deterioration","普通"),1), key=f"dt{i}")
-                with c4:
-                    p["defectfree"] = st.selectbox("白蟻・雨漏り等の瑕疵", ["良好","普通","不良","不明"], index={"良好":0,"普通":1,"不良":2,"不明":3}.get(p.get("defectfree","普通"),1), key=f"df{i}")
-                with c5:
-                    p["envelope"] = st.selectbox("屋根・外壁の状態", ["良好","普通","不良","不明"], index={"良好":0,"普通":1,"不良":2,"不明":3}.get(p.get("envelope","普通"),1), key=f"env{i}")
+else:
+    # —— 戸建て UI（管理費・修繕のUIは無し）——
 
-            st.subheader("間取り・収納・家事動線")
-            with st.container(border=True):
-                c1,c2,c3 = st.columns(3)
-                with c1:
-                    p["flow"] = st.selectbox("家事動線", ["良い","普通","弱い","不明"], index={"良い":0,"普通":1,"弱い":2,"不明":3}.get(p.get("flow","普通"),1), key=f"flw{i}")
-                with c2:
-                    p["storage"] = st.selectbox("収納量（WIC/SIC/パントリー）", ["多い","普通","少ない","不明"], index={"多い":0,"普通":1,"少ない":2,"不明":3}.get(p.get("storage","普通"),1), key=f"str{i}")
-                with c3:
-                    p["light_wind"] = st.selectbox("日当たり・通風", ["良い","普通","悪い","不明"], index={"良い":0,"普通":1,"悪い":2,"不明":3}.get(p.get("light_wind","普通"),1), key=f"lw{i}")
+    # 1) 基本スペック（価格・面積・築・階数・構造・省エネ等）
+    st.subheader("基本スペック")
+    with st.container(border=True):
+        cA, cB, cC = st.columns(3)
 
-            st.subheader("敷地・法規・外構")
-            with st.container(border=True):
-                c1,c2,c3,c4 = st.columns(4)
-                with c1:
-                    p["road"] = st.selectbox("接道状況（幅員等）", ["良好","普通","不良","不明"], index={"良好":0,"普通":1,"不良":2,"不明":3}.get(p.get("road","普通"),1), key=f"rdh{i}")
-                with c2:
-                    p["parking_spaces"] = st.number_input("駐車スペース（台数）", min_value=0, value=int(p.get("parking_spaces",1)), step=1, key=f"pkg{i}")
-                with c3:
-                    p["site_retaining"] = st.selectbox("高低差・擁壁・排水", ["適切","普通","不適切","不明"], index={"適切":0,"普通":1,"不適切":2,"不明":3}.get(p.get("site_retaining","普通"),1), key=f"ret{i}")
-                with c4:
-                    p["zoning_ok"] = st.selectbox("用途地域/建ぺい・容積の適合", ["合致","普通","不一致","不明"], index={"合致":0,"普通":1,"不一致":2,"不明":3}.get(p.get("zoning_ok","普通"),1), key=f"zn{i}")
-                p["border"] = st.selectbox("越境/筆界トラブル", ["無し","不明","有り"], index={"無し":0,"不明":1,"有り":2}.get(p.get("border","不明"),1), key=f"bdc{i}")
+        with cA:
+            # 価格（共通）
+            p["price_man"] = st.number_input(
+                "売出価格（万円）", min_value=0, step=1, format="%d",
+                value=int(p.get("price_man", 0)), key=f"hp{i}_price"
+            )
+            # 面積（戸建ては2本立て）
+            p["lot_area_m2"] = st.number_input(
+                "土地面積（㎡）", min_value=0.0, step=0.01, format="%.2f",
+                value=float(p.get("lot_area_m2", p.get("lot_area", 0.0))), key=f"hp{i}_lot"
+            )
+            p["building_area_m2"] = st.number_input(
+                "建物面積（㎡）", min_value=0.0, step=0.01, format="%.2f",
+                value=float(p.get("building_area_m2", p.get("area_m2", 0.0))), key=f"hp{i}_bld"
+            )
+            # 戸建ての坪単価は「土地面積」で計算
+            land_tsubo = auto_tsubo_price(float(p["price_man"]), float(p["lot_area_m2"]))
+            p["tsubo_price"] = land_tsubo
+            st.caption(f"坪単価（万/坪・自動｜土地ベース）：{land_tsubo:.1f}")
 
-            st.subheader("設備・配管")
-            with st.container(border=True):
-                c1,c2,c3,c4 = st.columns(4)
-                with c1:
-                    p["water"] = st.selectbox("水回り（キッチン/浴室/洗面/トイレ）", ["良好","普通","不良","不明"], index={"良好":0,"普通":1,"不良":2,"不明":3}.get(p.get("water","普通"),1), key=f"wt{i}")
-                with c2:
-                    p["pipes"] = st.selectbox("給排水配管の状態", ["良好","普通","不良","不明"], index={"良好":0,"普通":1,"不良":2,"不明":3}.get(p.get("pipes","普通"),1), key=f"pp{i}")
-                with c3:
-                    p["power_gas"] = st.selectbox("電気容量・ガス種別", ["十分","普通","不足","不明"], index={"十分":0,"普通":1,"不足":2,"不明":3}.get(p.get("power_gas","普通"),1), key=f"pg{i}")
-                with c4:
-                    p["renovation"] = st.selectbox("リフォーム履歴/必要工事の明確さ", ["明確","普通","不明"], index={"明確":0,"普通":1,"不明":2}.get(p.get("renovation","普通"),1), key=f"rv{i}")
-
-        # —— 内見チェック（採点非連動） ——
-        st.subheader("内見時チェックリスト（採点非連動）")
-        with st.container(border=True):
-            p.setdefault("visit_check", {})
-            # 種別に応じて項目分岐
-            if p.get("type","マンション") == "マンション":
-                check_items = {
-                    "リフォーム": [
-                        "バスルーム全部","バスルーム一部","キッチン全","キッチン一部",
-                        "洗面台","トイレ","給湯器","エアコン",
-                        "クロス","フローリング","建具","間取り変更",
-                        "外壁","屋根","太陽光蓄電池"
-                    ],
-                    "マンション管理": [
-                        "管理人　常勤","エントランス・共用廊下の清掃状態","掲示板の状況（管理組合の情報）",
-                        "エレベーターの老朽化","ゴミ置き場やメールボックスの衛生状態","駐輪場・駐車場の使いやすさ"
-                    ],
-                }
+        with cB:
+            # 築：新築/既存（西暦入力）
+            new_old = st.radio("築年の扱い", ["新築", "既存（西暦入力）"],
+                               index=(0 if str(p.get("year_built","")) in ["", "0", "新築"] else 1),
+                               horizontal=True, key=f"hp{i}_yn")
+            if new_old == "新築":
+                p["year_built"] = "新築"
+                st.caption("表示：新築")
             else:
-                check_items = {
-                    "リフォーム": [
-                        "バスルーム全部","バスルーム一部","キッチン全","キッチン一部",
-                        "洗面台","トイレ","給湯器","エアコン",
-                        "クロス","フローリング","建具","間取り変更",
-                        "外壁","屋根","太陽光蓄電池"
-                    ],
-                    "敷地・外構": [
-                        "境界確認","越境の有無","擁壁クラック","排水経路・集水状況","前面道路の交通量"
-                    ]
-                }
-            for cat, items in check_items.items():
-                with st.expander(f"", expanded=False):
-                    cols = st.columns(3)
-                    for j, label in enumerate(items):
-                        col = cols[j % 3]
-                        key = f"vc_{i}_{cat}_{j}"
-                        current = bool(p.get("visit_check", {}).get(cat, {}).get(label, False))
-                        val = col.checkbox(label, value=current, key=key)
-                        p.setdefault("visit_check", {}).setdefault(cat, {})[label] = val
+                y = st.number_input("築年（西暦）", min_value=0, step=1, format="%d",
+                                    value=int(p.get("year_built") or 0 if str(p.get("year_built","")).isdigit() else 0),
+                                    key=f"hp{i}_y")
+                p["year_built"] = int(y) if y else 0
+                st.caption(build_age_text(int(y)) if y else "—")
 
-        # ======== ブロック別適合度（種別で分岐） ========
-        labels_spec = labels_from_prefs("spec")
-        labels_mgmt = labels_from_prefs("mgmt")
+            # 何階建て（数字）
+            p["floors_total"] = st.number_input("何階建て", min_value=0, step=1, format="%d",
+                                                value=int(p.get("floors_total", p.get("floor", 0))), key=f"hp{i}_floors")
 
-        b_price = score_price_block(p.get("price_man",0.0), p.get("tsubo_price",0.0), prefs)
-        b_loc   = score_location_block(p, prefs)
-        b_size  = score_size_layout_block(p.get("area_m2",0.0), "", prefs)
+        with cC:
+            # 構造・省エネ表示
+            p["structure"] = st.selectbox("構造", ["木造","鉄骨造","RC","その他"],
+                                          index={"木造":0,"鉄骨造":1,"RC":2,"その他":3}.get(p.get("structure","木造"),0),
+                                          key=f"hp{i}_struct")
+            p["energy_saving"] = st.checkbox("省エネ基準適合", value=bool(p.get("energy_saving", False)), key=f"hp{i}_es")
+            p["zeh"] = st.checkbox("ZEH", value=bool(p.get("zeh", False)), key=f"hp{i}_zeh")
+            p["long_term"] = st.checkbox("長期優良住宅", value=bool(p.get("long_term", False)), key=f"hp{i}_lth")
+            p["envelope"] = st.selectbox("屋根・外壁の状態", ["良い","普通","悪い","不明"],
+                                         index={"良い":0,"普通":1,"悪い":2,"不明":3}.get(p.get("envelope","不明"),3),
+                                         key=f"hp{i}_env")
 
-        if p.get("type","マンション") == "マンション":
-            # マンション
-            spec_presence = {}
-            for cat, items in M["spec_categories"].items():
-                for feat in items:
-                    spec_presence[feat] = bool(p.get("spec",{}).get(cat,{}).get(feat, False))
-            mg_presence = {}
-            for feat in M["mgmt_shared_etc"]:
-                mg_presence[feat] = bool(p.get("mgmt",{}).get(feat, False))
+    # 2) 敷地・外構
+    st.subheader("敷地・外構")
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            p["road_dirs"] = st.multiselect("接道（方位）", ["北","東","南","西"],
+                                            default=p.get("road_dirs", []), key=f"hp{i}_dirs")
+            p["road_width"] = st.selectbox("接道（幅員）", ["4m未満","4m","6m以上","不明"],
+                                           index={"4m未満":0,"4m":1,"6m以上":2,"不明":3}.get(p.get("road_width","不明"),3),
+                                           key=f"hp{i}_rw")
+        with c2:
+            p["land_shape"] = st.selectbox("土地型", ["整形地","敷地延長","変形地","不明"],
+                                           index={"整形地":0,"敷地延長":1,"変形地":2,"不明":3}.get(p.get("land_shape","不明"),3),
+                                           key=f"hp{i}_shape")
+            p["parking_spaces"] = st.number_input("駐車スペース（台数）", min_value=0, step=1,
+                                                  value=int(p.get("parking_spaces",1)), key=f"hp{i}_pkg")
+        with c3:
+            p["site_retaining"] = st.selectbox("高低差・擁壁・排水", ["適切","普通","不適切","不明"],
+                                               index={"適切":0,"普通":1,"不適切":2,"不明":3}.get(p.get("site_retaining","不明"),3),
+                                               key=f"hp{i}_ret")
 
-            b_spec  = score_spec_block(spec_presence, labels_spec)
-            b_mgmt  = score_mgmt_block(mg_presence, labels_mgmt, p.get("parking_type","なし/不明"), bool(prefs.get("parking_must", False)))
-        else:
-            # 戸建て
-            b_spec = score_house_spec(p)
-            b_mgmt = score_house_management_like(p)
+    # 3) 設備
+    st.subheader("設備")
+    with st.container(border=True):
+        p["power_gas_type"] = st.selectbox("電気・ガス", ["オール電化","都市ガス","プロパン","不明"],
+                                           index={"オール電化":0,"都市ガス":1,"プロパン":2,"不明":3}.get(p.get("power_gas_type","不明"),3),
+                                           key=f"hp{i}_pgtype")
 
-        blocks = {"price":b_price, "location":b_loc, "size_layout":b_size, "spec":b_spec, "management":b_mgmt}
-        fit_cand = to_fit_score(blocks, weights)
+    # 4) リフォーム・追加工事必要箇所（個別）
+    st.subheader("リフォーム・追加工事必要箇所")
+    with st.container(border=True):
+        p.setdefault("visit_check", {})
+        p["visit_check"].setdefault("works", {})
+        works = [
+            "キッチン","浴室","洗面","トイレ",
+            "クロス","フローリング","建具",
+            "外壁","屋根",
+            "太陽光","蓄電池",
+            "網戸","カーテンレール","フロアコーティング",
+            "間取り変更","電気工事","エアコン","光回線"
+        ]
+        cols = st.columns(3)
+        for j, w in enumerate(works):
+            col = cols[j % 3]
+            key_w = f"hp{i}_w_{j}"
+            current = bool(p["visit_check"]["works"].get(w, False))
+            val = col.checkbox(w, value=current, key=key_w)
+            p["visit_check"]["works"][w] = val
 
-        abs_score = to_hensachi_abs(fit_cand)
-        rel_score = to_hensachi_rel(fit_cand, cur_fit)
-
-        st.success(f"適合度：**{abs_score:.1f} 点**（希望充足率ベース）｜偏差値（現住=50）：**{rel_score:.1f}**")
-        with st.expander("採点内訳（ブロック別）"):
-            st.write({k: round(v,3) for k,v in blocks.items()})
-            st.caption(f"重要度重み：{weights}")
+    # 5) 境界関係
+    st.subheader("境界関係")
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            p["boundary_confirm"] = st.selectbox("境界確認", ["済","未","不明"],
+                                                 index={"済":0,"未":1,"不明":2}.get(p.get("boundary_confirm","不明"),2),
+                                                 key=f"hp{i}_bconf")
+        with c2:
+            p["boundary_encroachment"] = st.selectbox("越境の有無", ["無し","有り","不明"],
+                                                      index={"無し":0,"有り":1,"不明":2}.get(p.get("boundary_encroachment","不明"),2),
+                                                      key=f"hp{i}_benc")
+        with c3:
+            # 互換のため border と連動（= 筆界トラブル）
+            p["boundary_dispute"] = st.selectbox("筆界トラブル", ["無し","有り","不明"],
+                                                 index={"無し":0,"有り":1,"不明":2}.get(p.get("boundary_dispute", p.get("border","不明")),2),
+                                                 key=f"hp{i}_bdis")
+            p["border"] = p["boundary_dispute"]  # 旧キー互換
 
 # ========== 比較表 ==========
 st.header("⑤ 比較サマリー")
@@ -976,10 +1062,13 @@ st.caption("※ 適合度=希望充足率を0–100に線形マップ。偏差�
 # ========== 自動保存（変更検知で即保存） ==========
 client_id_final = _get_client_id_from_query()
 if client_id_final and st.session_state.get("__autosave__", False):
-    cur_state = {"props": props}
-    cur_hash = _hash_dict(cur_state)
+    prev = load_compare_state(client_id_final)
+    prev["props"] = props
+    if "curhome" in st.session_state:
+        prev["current_home"] = st.session_state["curhome"]
+    cur_hash = _hash_dict(prev)
     if st.session_state.get("__last_hash__") != cur_hash:
-        save_compare_state(client_id_final, cur_state)
+        save_compare_state(client_id_final, prev)
         st.session_state["__last_hash__"] = cur_hash
         st.session_state["__last_saved__"] = datetime.datetime.now().strftime("%H:%M:%S")
         st.toast(f"自動保存しました（顧客: {client_id_final}）", icon="💾")
