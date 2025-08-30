@@ -1,12 +1,4 @@
 # pages/compare.py
-# 5W2H
-# Why: 物件比較が「マスタ共有」になり、顧客別の下書きが消える問題を解消するため。
-# What: URLの ?client=XXXX を顧客IDとして認識。顧客ごとに data/clients/<ID>/compare.json へ自動保存・自動復元。
-# Who: 管理者が①で発行した顧客ID（またはヒアリング②のID）をそのまま使用。各お客様専用URLを共有。
-# When: 本ファイルを上書き後すぐ有効。
-# Where: /compare ページ。①②のページは変更不要（prefsの読み込みは顧客別ファイルがあれば自動で優先）。
-# How: st.query_params から client を取得し、props 等をJSON保存。自動保存ON時は変更検知で即保存。手動保存も併設。
-# How much: 追加ファイルは data/clients/<client_id>/ 以下に自動生成。既存の DRAFT_JSON は「顧客ID未設定時のみ」後方互換。
 
 import streamlit as st
 import json, os, datetime, hashlib
@@ -920,16 +912,19 @@ else:
             st.caption(f"坪単価（万/坪・自動｜土地ベース）：{land_tsubo:.1f}")
 
         with cB:
-            # 築：新築/既存（西暦入力）
+                        # 築：新築/既存（西暦入力）
             new_old = st.radio("築年の扱い", ["新築", "既存（西暦入力）"],
-                               index=(0 if str(p.get("year_built","")) in ["", "0", "新築"] else 1),
+                               index=(0 if bool(p.get("new_build", False)) else 1),
                                horizontal=True, key=f"hp{i}_yn")
+
             if new_old == "新築":
-                p["year_built"] = "新築"
+                p["new_build"] = True
+                p["year_built"] = 0  # ← 数値で統一（文字列を入れない）
                 st.caption("表示：新築")
             else:
+                p["new_build"] = False
                 y = st.number_input("築年（西暦）", min_value=0, step=1, format="%d",
-                                    value=int(p.get("year_built") or 0 if str(p.get("year_built","")).isdigit() else 0),
+                                    value=int(p.get("year_built") or 0),
                                     key=f"hp{i}_y")
                 p["year_built"] = int(y) if y else 0
                 st.caption(build_age_text(int(y)) if y else "—")
@@ -1047,7 +1042,7 @@ for p in props:
         "種別": p.get("type","マンション"),
         "価格(万円)": p.get("price_man",0),
         "面積(㎡)": p.get("area_m2",0),
-        "築": build_age_text(int(p.get("year_built",0))) if p.get("year_built") else "—",
+     "築": ("新築" if p.get("new_build") else (build_age_text(int(p.get("year_built",0))) if int(p.get("year_built",0)) else "—")),
         "駅徒歩(分)": p.get("dist_station", None),
         "通勤(分)": p.get("access_work", None),
         "坪単価(万/坪)": round(tsubo,1),
