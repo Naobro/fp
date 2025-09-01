@@ -41,6 +41,34 @@ def calc_monthly_payment(principal, annual_rate, years):
     return principal * r / (1 - (1 + r) ** -n)
 # 今月の基準金利（%）を共通モジュールから取得
 BASE_THIS_MONTH = get_base_rates_for_current_month()
+# ========= 手動基準金利の永続保存（JSON） =========
+import os, json
+SAVE_DIR = "data"
+SAVE_PATH = os.path.join(SAVE_DIR, "manual_rates.json")
+
+def load_manual_rates():
+    # 既存の保存があれば読む。なければ None を返す
+    try:
+        if os.path.exists(SAVE_PATH):
+            with open(SAVE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # 今年今月の銀行構成と揃える（欠けは今月基準で補完、余分は捨てる）
+            fixed = {}
+            for b in BASE_THIS_MONTH.keys():
+                fixed[b] = float(data.get(b, BASE_THIS_MONTH[b]))
+            return fixed
+    except Exception:
+        pass
+    return None
+
+def save_manual_rates(d):
+    try:
+        os.makedirs(SAVE_DIR, exist_ok=True)
+        with open(SAVE_PATH, "w", encoding="utf-8") as f:
+            json.dump({k: float(v) for k, v in d.items()}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
 
 # ========= 入力UI ==========
 st.title("住宅ローン 提案シミュレーター")
@@ -62,19 +90,33 @@ years = st.slider("返済期間 (年)", 1, max_year, min(35, max_year))
 st.markdown(f"### {month_label()} 基準金利（初期値）")
 
 # ========= 銀行・金利設定（初期値＝今月分の辞書） =========
-# BASE_THIS_MONTH は % 表記。以降、UI では自由に微修正可能。
-rates = BASE_THIS_MONTH.copy()
+# 1) JSONから復元 → なければ今月基準で初期化
+if "manual_rates" not in st.session_state:
+    loaded = load_manual_rates()
+    st.session_state.manual_rates = loaded if loaded else BASE_THIS_MONTH.copy()
+
+# 2) 以後、基準は常にセッションの manual_rates を正本とする
+rates = st.session_state.manual_rates.copy()
+bank_order = list(rates.keys())  # ← keysも正本から取る（再描画で順番ズレ防止）
 
 # 物件価格概算・LTVに応じた住信SBIの帯調整（従来ロジックを維持）
 property_price_guess = (principal + self_fund) / 1.07
 ltv = principal / property_price_guess if property_price_guess else 1
-# ※ BASE_THIS_MONTH の住信値は「標準帯」。LTVで上書きする。
+# 基準金利は固定（BASE_THIS_MONTH の値）
+base_rate_sbi = float(BASE_THIS_MONTH["住信SBI銀行"])
+
+# LTVで差分を計算
+property_price_guess = (principal + self_fund) / 1.07
+ltv = principal / property_price_guess if property_price_guess else 1
+
+delta = 0.0
 if ltv <= 0.8:
-    rates["住信SBI銀行"] = 0.649
-elif ltv <= 1.0:
-    rates["住信SBI銀行"] = 0.739
-else:
-    rates["住信SBI銀行"] = 0.809
+    delta = -0.09
+elif ltv > 1.0:
+    delta = +0.07
+
+# 計算に使うのは「基準金利＋差分」
+effective_rate_sbi = base_rate_sbi + delta
 
 # 団信・付帯の金利差（％）
 rate_diff = {
@@ -95,15 +137,27 @@ special_notes = {
 bank_order = list(rates.keys())
 plans_order = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
-# ========= 金利修正欄（営業担当用：今月基準から微調整） =========
+# ========= 金利修正欄（営業担当用：今月基準から微修正＋保存） =========
 st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当用）", expanded=False):
     cols = st.columns(len(rates))
-    for i, bank in enumerate(rates.keys()):
-        rates[bank] = cols[i].number_input(
-            f"{bank} (%)", value=float(rates[bank]), key=f"rate_input_{bank}", format="%.3f"
+    for i, bank in enumerate(list(rates.keys())):
+        new_val = cols[i].number_input(
+            f"{bank} (%)",
+            value=float(st.session_state.manual_rates[bank]),
+            key=f"rate_input_{bank}",
+            format="%.3f",
         )
+        st.session_state.manual_rates[bank] = new_val  # セッション正本を更新
 
+    csave1, csave2 = st.columns([1, 3])
+    with csave1:
+        if st.button("💾 基準金利を保存（永続）", use_container_width=True):
+            ok = save_manual_rates(st.session_state.manual_rates)
+            st.success("保存しました。") if ok else st.error("保存に失敗しました。権限/書込先を確認。")
+
+# 以後の計算は常に最新の正本を使用
+rates = st.session_state.manual_rates.copy()
 # ========= 借入上限額（10万円単位切り捨て・右揃え）==========
 def calc_borrowing_limit(income, exam_rate, limit_ratio, age):
     exam_years = min(35, 79 - age)
@@ -151,26 +205,46 @@ st.markdown(table_html, unsafe_allow_html=True)
 # ========= テーブル計算（Web/PDF 共通） =========
 def make_table_data_and_highlight():
     rows, highlights = [], []
+
     for plan in plans_order:
         row, row_vals = [], []
+
         for bank in bank_order:
+            # 借入上限で弾く
             if principal > limit_amounts[bank]:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
+
+            # プランが利用可能か
             available = (plan == "一般団信" or plan in rate_diff.get(bank, {}))
-            if available:
-                base_rate = float(rates[bank]) / 100
-                add = rate_diff.get(bank, {}).get(plan, 0) / 100
-                calc_years = min(79 - age, years)
-                if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
-                    calc_years = min(calc_years, 35)
-                if bank not in ["SBI新生銀行", "三菱UFJ銀行"] and calc_years > 35:
-                    base_rate += 0.001  # 36年以上は+0.1bp 想定
-                monthly = calc_monthly_payment(principal, base_rate + add, calc_years)
-                row.append({"rate": base_rate + add, "monthly": monthly, "years": calc_years})
-                row_vals.append((len(row)-1, monthly))
-            else:
+            if not available:
                 row.append({"rate": None, "monthly": None, "years": None})
+                continue
+
+            # 返済年数の上限（従来仕様維持）
+            calc_years = min(79 - age, years)
+            if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
+                calc_years = min(calc_years, 35)
+
+            # ── 基準金利は“上書き禁止”。住信のみ「差分」で調整 ──
+            if bank == "住信SBI銀行":
+                # effective_rate_sbi は関数外で算出済（基準＋自己資金によるΔ）
+                base_rate = effective_rate_sbi / 100
+            else:
+                # それ以外は手動入力（rates）をそのまま使用
+                base_rate = float(rates[bank]) / 100
+
+            # 36年以上は +0.001%（従来仕様のまま）
+            if bank not in ["SBI新生銀行", "三菱UFJ銀行"] and calc_years > 35:
+                base_rate += 0.001  # 36年以上は+0.1bp 想定
+
+            # 団信・付帯の加算（％ → 実数へ）
+            add = rate_diff.get(bank, {}).get(plan, 0) / 100
+
+            monthly = calc_monthly_payment(principal, base_rate + add, calc_years)
+            row.append({"rate": base_rate + add, "monthly": monthly, "years": calc_years})
+            row_vals.append((len(row) - 1, monthly))
+
         # 最小返済額ハイライト
         min_idxs = set()
         if row_vals:
@@ -178,22 +252,35 @@ def make_table_data_and_highlight():
             for col_idx, v in row_vals:
                 if abs(v - minval) < 0.5:
                     min_idxs.add(col_idx)
-        rows.append(row); highlights.append(min_idxs)
 
-    # 最長50年（一般団信の下段）
+        rows.append(row)
+        highlights.append(min_idxs)
+
+    # ── 最長50年（一般団信の下段） ──
     row_50, row_50_vals = [], []
     for bank in bank_order:
         if principal > limit_amounts[bank] or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row_50.append({"rate": None, "monthly": None, "years": None})
+            continue
+
+        # 最長は 50年 or (79 - age) の小さい方
+        current_bank_max_years = min(79 - age, 50)
+
+        # 基準金利は上書き禁止。住信のみ「差分」で調整
+        if bank == "住信SBI銀行":
+            base_rate = effective_rate_sbi / 100
         else:
             base_rate = float(rates[bank]) / 100
-            add = rate_diff.get(bank, {}).get("一般団信", 0) / 100
-            current_bank_max_years = min(79 - age, 50)
-            if current_bank_max_years > 35:
-                base_rate += 0.001
-            monthly_longest = calc_monthly_payment(principal, base_rate + add, current_bank_max_years)
-            row_50.append({"rate": base_rate + add, "monthly": monthly_longest, "years": current_bank_max_years})
-            row_50_vals.append((len(row_50)-1, monthly_longest))
+
+        # 36年以上は +0.001%（従来仕様のまま）
+        if current_bank_max_years > 35:
+            base_rate += 0.001
+
+        add = rate_diff.get(bank, {}).get("一般団信", 0) / 100
+
+        monthly_longest = calc_monthly_payment(principal, base_rate + add, current_bank_max_years)
+        row_50.append({"rate": base_rate + add, "monthly": monthly_longest, "years": current_bank_max_years})
+        row_50_vals.append((len(row_50) - 1, monthly_longest))
 
     min_idxs_50 = set()
     if row_50_vals:
@@ -203,7 +290,6 @@ def make_table_data_and_highlight():
                 min_idxs_50.add(col_idx)
 
     return rows, highlights, row_50, min_idxs_50
-
 table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight()
 
 # ========= 金利比較HTMLテーブル（Web UI）==========
