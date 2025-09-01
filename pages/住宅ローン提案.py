@@ -10,6 +10,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
+from utils.rates import get_base_rates_for_current_month, month_label
 
 # ========= フォント ==========
 FONT_PATH = "NotoSansJP-Regular.ttf"
@@ -38,24 +39,8 @@ def calc_monthly_payment(principal, annual_rate, years):
     if r == 0:
         return principal / n
     return principal * r / (1 - (1 + r) ** -n)
-
-# ========= 月次の基準金利（ここだけ毎月更新） =========
-# キーは "YYYY-MM"、値は「%（実数）」で3桁程度。
-BASE_RATES = {
-    "2025-08": {"SBI新生銀行": 0.590, "三菱UFJ銀行": 0.595, "PayPay銀行": 0.599, "じぶん銀行": 0.780, "住信SBI銀行": 0.739},
-    "2025-09": {"SBI新生銀行": 0.600, "三菱UFJ銀行": 0.605, "PayPay銀行": 0.610, "じぶん銀行": 0.770, "住信SBI銀行": 0.740},
-    # 次月以降はここに追記 → 例:
-    # "2025-10": {"SBI新生銀行": 0.605, "三菱UFJ銀行": 0.610, "PayPay銀行": 0.615, "じぶん銀行": 0.775, "住信SBI銀行": 0.745},
-}
-
-# 今月キー／表示用
-_now = datetime.now()
-MONTH_KEY = _now.strftime("%Y-%m")
-MONTH_LABEL = _now.strftime("%Y年%m月")
-
-# デフォルト月（万一キーがない場合は最後の項目を使う）
-_DEFAULT_MONTH_KEY = list(BASE_RATES.keys())[-1]
-BASE_THIS_MONTH = BASE_RATES.get(MONTH_KEY, BASE_RATES[_DEFAULT_MONTH_KEY]).copy()
+# 今月の基準金利（%）を共通モジュールから取得
+BASE_THIS_MONTH = get_base_rates_for_current_month()
 
 # ========= 入力UI ==========
 st.title("住宅ローン 提案シミュレーター")
@@ -74,7 +59,7 @@ max_year = max(1, 79 - age)
 years = st.slider("返済期間 (年)", 1, max_year, min(35, max_year))
 
 # ========= 今月の基準金利 見出し =========
-st.markdown(f"### {MONTH_LABEL} 基準金利（初期値）")
+st.markdown(f"### {month_label()} 基準金利（初期値）")
 
 # ========= 銀行・金利設定（初期値＝今月分の辞書） =========
 # BASE_THIS_MONTH は % 表記。以降、UI では自由に微修正可能。
