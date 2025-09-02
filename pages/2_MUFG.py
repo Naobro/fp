@@ -1,6 +1,8 @@
 # pages/2_MUFG.py
 import streamlit as st
 from pathlib import Path
+from utils.rates import month_label
+from utils.rates import get_base_rates_for_current_month
 
 st.set_page_config(page_title="三菱UFJ銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
@@ -23,14 +25,22 @@ def load_bytes(p: Path) -> bytes:
 
 st.title("三菱UFJ銀行｜住宅ローン")
 
-# 三菱UFJ銀行
-mufj_rate = st.session_state.manual_rates.get("三菱UFJ銀行", None)
+# 三菱UFJ銀行（手動値を最優先／無ければ当月の基準値にフォールバック）
+manual = st.session_state.get("manual_rates", {})
+base = get_base_rates_for_current_month()
+
+mufj_rate = (
+    manual.get("三菱UFJ銀行")
+    if isinstance(manual, dict) and "三菱UFJ銀行" in manual
+    else base.get("三菱UFJ銀行")
+)
+
 if mufj_rate is not None:
     st.markdown(
         f"""
         <div class="rate-banner">
           <div class="label">🗓 {month_label()} の基準金利（三菱UFJ銀行）</div>
-          <div class="value">{mufj_rate:.3f}%</div>
+          <div class="value">{float(mufj_rate):.3f}%</div>
           <div class="note">三大疾病団信など条件で加算</div>
         </div>
         """,
