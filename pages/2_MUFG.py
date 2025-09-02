@@ -1,46 +1,68 @@
 # pages/2_MUFG.py
 import streamlit as st
 from pathlib import Path
-from utils.rates import month_label
-from utils.rates import get_base_rates_for_current_month
+from utils.rates import month_label, get_base_rates_for_current_month
 
 st.set_page_config(page_title="三菱UFJ銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
-# タイトルが切れない最小余白
+# 余白・バナーCSS（SBIページと同じ見た目）
 st.markdown("""
 <style>
 .block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
+.rate-banner {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid #e5e7eb; border-radius: 12px;
+  background: #fff; padding: 14px 16px; margin: 4px 0 14px 0;
+}
+.rate-banner .label { font-size: 1.0rem; color: #374151; }
+.rate-banner .value { font-size: 2.2rem; font-weight: 800; color: #1b232a; line-height: 1.1; }
+.rate-banner .note  { font-size: 0.95rem; color: #4b5563; }
 </style>
 """, unsafe_allow_html=True)
 
 # ローカルPDFパス
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets" / "mufg"
-
 PDF_DESC   = ASSETS / "商品説明.pdf"
 PDF_NOTICE = ASSETS / "入力時の注意点.pdf"
 
 def load_bytes(p: Path) -> bytes:
-    return p.read_bytes()
+    try:
+        return p.read_bytes()
+    except Exception:
+        st.warning(f"ファイルが見つかりません：{p}")
+        return b""
 
 st.title("三菱UFJ銀行｜住宅ローン")
 
-# 三菱UFJ銀行（手動値を最優先／無ければ当月の基準値にフォールバック）
-manual = st.session_state.get("manual_rates", {})
+# ========= 基準金利の参照（統一フォーマット）=========
+# 1) セッションの manual_rates を見る（なければ空dict）
+manual = st.session_state.get("manual_rates")
+if manual is None or not isinstance(manual, dict):
+    # 2) JSONがあれば読む（シミュレーターで自動保存されている想定）
+    manual = {}
+    try:
+        from json import loads
+        json_path = Path("data/manual_rates.json")
+        if json_path.exists():
+            manual = loads(json_path.read_text(encoding="utf-8"))
+    except Exception:
+        manual = {}
+
+# 3) 今月の基準（金庫の初期値）
 base = get_base_rates_for_current_month()
 
-mufj_rate = (
-    manual.get("三菱UFJ銀行")
-    if isinstance(manual, dict) and "三菱UFJ銀行" in manual
-    else base.get("三菱UFJ銀行")
-)
+# 4) 表示する金利：手動 > 今月基準
+mufg_rate = (manual.get("三菱UFJ銀行")
+             if isinstance(manual, dict) and "三菱UFJ銀行" in manual
+             else base.get("三菱UFJ銀行"))
 
-if mufj_rate is not None:
+if mufg_rate is not None:
     st.markdown(
         f"""
         <div class="rate-banner">
           <div class="label">🗓 {month_label()} の基準金利（三菱UFJ銀行）</div>
-          <div class="value">{float(mufj_rate):.3f}%</div>
+          <div class="value">{float(mufg_rate):.3f}%</div>
           <div class="note">三大疾病団信など条件で加算</div>
         </div>
         """,

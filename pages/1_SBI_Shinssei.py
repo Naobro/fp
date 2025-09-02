@@ -25,7 +25,7 @@ st.markdown("""
   vertical-align: top;
 }
 
-/* 今月の基準金利バナー（PayPayページ準拠） */
+/* 今月の基準金利バナー */
 .rate-banner {
   display: flex; flex-direction: column; gap: 6px;
   border: 1px solid #e5e7eb; border-radius: 12px;
@@ -55,21 +55,24 @@ def load_bytes(p: Path) -> bytes:
 # タイトル
 st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 
-# ===== 今月の金利（最上段）=====
-# JSON / セッションから修正後の金利を表示するよう変更
-sbi_rate = st.session_state.manual_rates.get("SBI新生銀行", None)  # 修正後の%を参照
+# ===== 今月の基準金利（最上段）=====
+base_rates = get_base_rates_for_current_month()
+manual = st.session_state.get("manual_rates", {})
+
+sbi_rate = manual.get("SBI新生銀行", base_rates.get("SBI新生銀行"))
 if sbi_rate is not None:
     st.markdown(
         f"""
         <div class="rate-banner">
           <div class="label">🗓 {month_label()} の基準金利（SBI新生銀行）</div>
-          <div class="value">{sbi_rate:.3f}%</div>
+          <div class="value">{float(sbi_rate):.3f}%</div>
           <div class="note">ガン団信　+0.1%</div>
         </div>
         """,
         unsafe_allow_html=True
     )
-# ===== 事前審査用紙（今月の金利の直下）=====
+
+# ===== 事前審査用紙 =====
 st.subheader("事前審査用紙（ダウンロード）")
 st.markdown("""
 事前審査は **紙面での記入** になります。  
@@ -112,14 +115,14 @@ st.markdown("""
 - 永住権無：単身 or 夫婦のどちらかが永住権あれば可、連保は日本国籍/永住権者、日/英で対話可能であること
 """)
 
-# ===== デメリット（指定どおり）=====
+# ===== デメリット =====
 st.subheader("デメリット")
 st.markdown("""
 - **125%・5年ルールなし**  
 - **団信が弱い（一般・がん100%のみ）**
 """)
 
-# ─ 特殊項目（横長テーブル：横スクロール対応） ─
+# ===== 特殊項目テーブル =====
 st.subheader("特殊項目")
 st.markdown("""
 <div class="table-wrap">

@@ -1,8 +1,7 @@
 # pages/3_PayPay.py
 import streamlit as st
 from pathlib import Path
-from utils.rates import month_label, get_base_rates_for_current_month
-
+from utils.rates import month_label  # ← フォールバックしないので month_label のみ
 
 st.set_page_config(page_title="PayPay銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
@@ -14,7 +13,7 @@ st.markdown("""
 .table-wrap { overflow-x: auto; }
 th, td { font-size: .98rem; }
 
-/* 追加：今月の基準金利バナー */
+/* 今月の基準金利バナー */
 .rate-banner {
   display: flex; flex-direction: column; gap: 6px;
   border: 1px solid #e5e7eb; border-radius: 12px;
@@ -22,7 +21,7 @@ th, td { font-size: .98rem; }
 }
 .rate-banner .label { font-size: 1.0rem; color: #374151; }
 .rate-banner .value { font-size: 2.2rem; font-weight: 800; color: #1b232a; line-height: 1.1; }
-.rate-banner .note { font-size: 0.95rem; color: #4b5563; }
+.rate-banner .note  { font-size: 0.95rem; color: #4b5563; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -43,27 +42,36 @@ def load_bytes(p: Path) -> bytes:
 # ========== Title ==========
 st.title("PayPay銀行｜住宅ローン")
 
-# PayPay銀行（手動値を最優先／無ければ当月の基準値にフォールバック）
-manual = st.session_state.get("manual_rates", {})
-base = get_base_rates_for_current_month()
+# ========== 基準金利の参照（手入力のみ／フォールバックなし） ==========
+manual = st.session_state.get("manual_rates")
+if manual is None or not isinstance(manual, dict):
+    # セッションに無ければ JSON を読む（シミュレーターが自動保存したもの）
+    try:
+        import json
+        json_path = Path("data/manual_rates.json")
+        if json_path.exists():
+            manual = json.loads(json_path.read_text(encoding="utf-8"))
+        else:
+            manual = None
+    except Exception:
+        manual = None
 
-paypay_rate = (
-    manual.get("PayPay銀行")
-    if isinstance(manual, dict) and "PayPay銀行" in manual
-    else base.get("PayPay銀行")
+if not manual or "PayPay銀行" not in manual:
+    st.error("基準金利が未設定です。先にホーム（シミュレーター）で金利を入力・保存してください。")
+    st.stop()
+
+paypay_rate = float(manual["PayPay銀行"])
+
+st.markdown(
+    f"""
+    <div class="rate-banner">
+      <div class="label">🗓 {month_label()} の基準金利（PayPay銀行）</div>
+      <div class="value">{paypay_rate:.3f}%</div>
+      <div class="note">がん団信など条件で加算</div>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
-
-if paypay_rate is not None:
-    st.markdown(
-        f"""
-        <div class="rate-banner">
-          <div class="label">🗓 {month_label()} の基準金利（PayPay銀行）</div>
-          <div class="value">{float(paypay_rate):.3f}%</div>
-          <div class="note">がん団信など金利上乗せ</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 # 提携住宅ローン｜事前審査
 st.subheader("提携住宅ローン｜事前審査")
@@ -89,7 +97,7 @@ st.markdown(
       【参考】個人で直接申込する場合の条件
     </div>
     <div class="big-link">
-      👉 <a href="https://www.paypay-bank.co.jp/mortgage/index.html?utm_source=chatgpt.com" target="_blank">
+      👉 <a href="https://www.paypay-bank.co.jp/mortgage/index.html" target="_blank">
       PayPay銀行 住宅ローン公式サイト
       </a>
     </div>
@@ -101,21 +109,13 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ③ 事前審査｜入力方法（PDF）＋ 基本必要書類
+# ③ 事前審査｜入力方法（PDF）
 st.subheader("③ 事前審査｜入力方法（PDF）")
 st.download_button(
     "📥 事前審査の入力方法（PDF）",
     data=load_bytes(PDF_PREEXAM),
     file_name="PayPay_事前審査_入力方法.pdf",
     mime="application/pdf"
-)
-st.markdown(
-    """
-    #### 基本必要書類（私に送ってください）
-    - 源泉徴収票
-    - 健康保険証（表・裏）
-    """,
-    unsafe_allow_html=True
 )
 
 # ④ 商品説明（PDF）
