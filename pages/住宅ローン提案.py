@@ -80,9 +80,9 @@ c1, c2, c3, c4 = st.columns(4)
 with c1:
     principal = st.number_input("借入額 (万円)", 500, 100000, 5000) * 10000
 with c2:
-    self_fund = st.number_input("自己資金 (万円)", 0, 100000, 500) * 10000
+    self_fund = st.number_input("自己資金 (万円)", 0, 100000, 200) * 10000
 with c3:
-    annual_income = st.number_input("年収 (万円)", 100, 10000, 600) * 10000
+    annual_income = st.number_input("年収 (万円)", 100, 10000, 1000) * 10000
 with c4:
     age = st.number_input("年齢", 18, 80, 35)
 
@@ -142,7 +142,7 @@ special_notes = {
 bank_order = list(rates.keys())
 plans_order = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
-# ========= 金利修正欄（営業担当用：今月基準から微修正＋保存） =========
+# ========= 金利修正欄（営業担当用：今月基準から微修正・自動保存） =========
 st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当用）", expanded=False):
     cols = st.columns(len(rates))
@@ -153,13 +153,11 @@ with st.expander("🔧 金利を修正する（営業担当用）", expanded=Fal
             key=f"rate_input_{bank}",
             format="%.3f",
         )
-        st.session_state.manual_rates[bank] = new_val  # セッション正本を更新
+        # セッションを更新
+        st.session_state.manual_rates[bank] = new_val
 
-    csave1, csave2 = st.columns([1, 3])
-    with csave1:
-        if st.button("💾 基準金利を保存（永続）", use_container_width=True):
-            ok = save_manual_rates(st.session_state.manual_rates)
-            st.success("保存しました。") if ok else st.error("保存に失敗しました。権限/書込先を確認。")
+    # 🔄 入力があれば即保存
+    save_manual_rates(st.session_state.manual_rates)
 
 # 以後の計算は常に最新の正本を使用
 rates = st.session_state.manual_rates.copy()
