@@ -41,18 +41,19 @@ def calc_monthly_payment(principal, annual_rate, years):
     return principal * r / (1 - (1 + r) ** -n)
 # 今月の基準金利（%）を共通モジュールから取得
 BASE_THIS_MONTH = get_base_rates_for_current_month()
-# ========= 手動基準金利の永続保存（JSON） =========
+# ========= 手動基準金利の永続保存（JSON：初回自動作成＋即保存対応） =========
 import os, json
 SAVE_DIR = "data"
 SAVE_PATH = os.path.join(SAVE_DIR, "manual_rates.json")
+os.makedirs(SAVE_DIR, exist_ok=True)  # フォルダを必ず作成
 
 def load_manual_rates():
-    # 既存の保存があれば読む。なければ None を返す
+    """保存済み基準金利を読み込む。存在しなければ None を返す。"""
     try:
         if os.path.exists(SAVE_PATH):
             with open(SAVE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # 今年今月の銀行構成と揃える（欠けは今月基準で補完、余分は捨てる）
+            # BASE_THIS_MONTH とキーを揃える（欠けは基準値で補完、余分は捨てる）
             fixed = {}
             for b in BASE_THIS_MONTH.keys():
                 fixed[b] = float(data.get(b, BASE_THIS_MONTH[b]))
@@ -62,10 +63,12 @@ def load_manual_rates():
     return None
 
 def save_manual_rates(d):
+    """現在の金利辞書 d を JSON に保存。成功→True, 失敗→False"""
     try:
         os.makedirs(SAVE_DIR, exist_ok=True)
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump({k: float(v) for k, v in d.items()}, f, ensure_ascii=False, indent=2)
+            json.dump({k: float(v) for k, v in d.items()},
+                      f, ensure_ascii=False, indent=2)
         return True
     except Exception:
         return False
@@ -89,16 +92,18 @@ years = st.slider("返済期間 (年)", 1, max_year, min(35, max_year))
 # ========= 今月の基準金利 見出し =========
 st.markdown(f"### {month_label()} 基準金利（初期値）")
 
-# ========= 銀行・金利設定（初期値＝今月分の辞書） =========
-# 1) JSONから復元 → なければ今月基準で初期化
+# ========= 銀行・金利設定（初期値） =========
 if "manual_rates" not in st.session_state:
+    # JSONがあれば復元、なければ初期化
     loaded = load_manual_rates()
-    st.session_state.manual_rates = loaded if loaded else BASE_THIS_MONTH.copy()
+    if loaded:
+        st.session_state.manual_rates = loaded
+    else:
+        st.session_state.manual_rates = BASE_THIS_MONTH.copy()
+        save_manual_rates(st.session_state.manual_rates)  # 初回だけ即保存
 
-# 2) 以後、基準は常にセッションの manual_rates を正本とする
+# この後は必ずセッションの manual_rates を使う
 rates = st.session_state.manual_rates.copy()
-bank_order = list(rates.keys())  # ← keysも正本から取る（再描画で順番ズレ防止）
-
 # 物件価格概算・LTVに応じた住信SBIの帯調整（従来ロジックを維持）
 property_price_guess = (principal + self_fund) / 1.07
 ltv = principal / property_price_guess if property_price_guess else 1
