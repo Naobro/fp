@@ -229,34 +229,29 @@ def make_table_data_and_highlight():
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
-            # 返済年数の上限（従来仕様維持）
+            # 返済年数上限：SBI新生・三菱は35年、それ以外は79-年齢の範囲内
             calc_years = min(79 - age, years)
             if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
                 calc_years = min(calc_years, 35)
 
-                       # ── 基準金利は“上書き禁止”。住信は手入力基準に LTV＋年数の段階加算 ──
+            # ── 基準金利：住信は「手入力基準％」に LTV＋年数の段階加算、他行は手入力％ ──
             if bank == "住信SBI銀行":
-                # base_rate_sbi_percent は ％、関数も ％で返す → 計算用に実数へ
-                eff_percent = sbi_effective_rate_percent(base_rate_sbi_percent, ltv, calc_years)
+                eff_percent = sbi_effective_rate_percent(base_rate_sbi_percent, ltv, calc_years)  # ％
                 base_rate = eff_percent / 100.0
             else:
                 base_rate = float(rates[bank]) / 100.0
-                # 36年以上は +0.001%（住信SBI・SBI新生・三菱は除外）
-                if bank not in ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"] and calc_years > 35:
-                    base_rate += 0.001 / 100.0
+                # 長期加算：PayPay/じぶん は 36年以上 +0.10%（住信/新生/MUFGは適用しない）
+                if bank in ["PayPay銀行", "じぶん銀行"] and calc_years > 35:
+                    base_rate += 0.10 / 100.0
 
-            # 36年以上は +0.001%（従来仕様のまま）
-            if bank not in ["SBI新生銀行", "三菱UFJ銀行"] and calc_years > 35:
-                base_rate += 0.001  # 36年以上は+0.1bp 想定
-
-            # 団信・付帯の加算（％ → 実数へ）
-            add = rate_diff.get(bank, {}).get(plan, 0) / 100
+            # 団信・付帯の加算（％ → 実数）
+            add = rate_diff.get(bank, {}).get(plan, 0) / 100.0
 
             monthly = calc_monthly_payment(principal, base_rate + add, calc_years)
             row.append({"rate": base_rate + add, "monthly": monthly, "years": calc_years})
             row_vals.append((len(row) - 1, monthly))
 
-        # 最小返済額ハイライト
+        # 最小返済額セルのハイライト
         min_idxs = set()
         if row_vals:
             minval = min(v for _, v in row_vals)
@@ -267,26 +262,26 @@ def make_table_data_and_highlight():
         rows.append(row)
         highlights.append(min_idxs)
 
-        # ── 最長50年（一般団信の下段） ──
+    # ── 最長50年（一般団信の下段） ──
     row_50, row_50_vals = [], []
     for bank in bank_order:
+        # SBI新生・三菱は 35年までなので最長行は空欄
         if principal > limit_amounts[bank] or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row_50.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        # 最長は 50年 or (79 - age) の小さい方
+        # 各行の最長年数：50年または(79-年齢) の小さい方
         current_bank_max_years = min(79 - age, 50)
 
-        # ── 住信は「手入力の基準％」に LTV ＋ 年数の段階加算を適用 ──
+        # 基準金利の取り方（住信は段階加算を％で適用）
         if bank == "住信SBI銀行":
             eff_percent = sbi_effective_rate_percent(base_rate_sbi_percent, ltv, current_bank_max_years)  # ％
-            base_rate = eff_percent / 100.0  # 実数へ
+            base_rate = eff_percent / 100.0
         else:
-            # それ以外の銀行は手入力の基準％をそのまま使用
             base_rate = float(rates[bank]) / 100.0
-            # 36年以上は +0.001%（住信SBI・SBI新生・三菱は除外）
-            if bank not in ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"] and current_bank_max_years > 35:
-                base_rate += 0.001 / 100.0
+            # 長期加算：PayPay/じぶん は 36年以上 +0.10%
+            if bank in ["PayPay銀行", "じぶん銀行"] and current_bank_max_years > 35:
+                base_rate += 0.10 / 100.0
 
         add = rate_diff.get(bank, {}).get("一般団信", 0) / 100.0
 
@@ -302,6 +297,9 @@ def make_table_data_and_highlight():
                 min_idxs_50.add(col_idx)
 
     return rows, highlights, row_50, min_idxs_50
+
+# ← 関数のすぐ下にこの1行（順序必須）
+table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight()
 # ========= 金利比較HTMLテーブル（Web UI）==========
 def make_html_cell(rate_data, is_min_monthly, width_css):
     rate = rate_data["rate"]; monthly = rate_data["monthly"]; years = rate_data["years"]
