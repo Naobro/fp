@@ -1,5 +1,6 @@
 # pages/7_ロードマップ.py
-# 縦=項目 / 横=日付セル（各セルがカレンダー）— 購入(20行) / 売却(30行) / 買い替え(30行×2段)
+# 縦=項目 / 横=日付セル（セル=カレンダーのみ／クリアボタンなし）
+# 購入(20行) / 売却(30行) / 買い替え(30行×2段)
 # 依存: streamlit, pandas, matplotlib
 from pathlib import Path
 from datetime import datetime, date
@@ -53,7 +54,7 @@ PURCHASE_ITEMS_DEFAULT_20 = [
     "アフター手続き",
 ]
 
-# 売却：あなたの指示（28）＋ 予備2件 ＝ 30行
+# 売却：指示（28）＋ 予備2件 ＝ 30行
 SALE_ITEMS_DEFAULT_30 = [
     "相談",
     "物件情報整理　",
@@ -88,12 +89,10 @@ SALE_ITEMS_DEFAULT_30 = [
 ]
 
 # 買い替え：上段=購入30行、下段=売却30行
-# 上段 購入30行（購入20行＋予備10行）
 REPLACE_PURCHASE_ITEMS_DEFAULT_30 = PURCHASE_ITEMS_DEFAULT_20 + [
     "（予備）21", "（予備）22", "（予備）23", "（予備）24", "（予備）25",
     "（予備）26", "（予備）27", "（予備）28", "（予備）29", "（予備）30",
 ]
-# 下段 売却30行（上の売却30行を流用）
 REPLACE_SALE_ITEMS_DEFAULT_30 = SALE_ITEMS_DEFAULT_30.copy()
 
 DEFAULT_COLS = 13      # 横の“日付枠”デフォルト
@@ -173,7 +172,7 @@ def render_editor(block: Dict, key_prefix: str, note: str = ""):
             resize_columns(block, desired)
             st.rerun()
     with c3:
-        st.caption(note or "各セルをクリック→カレンダーで日付選択。×でクリア。")
+        st.caption(note or "各セルをクリック→カレンダーで日付を選ぶ（×は表示しません）。")
 
     st.write("---")
 
@@ -185,26 +184,21 @@ def render_editor(block: Dict, key_prefix: str, note: str = ""):
     with a2:
         st.caption("行末の🗑で削除")
 
-    # 本体（セル=カレンダー）
+    # 本体（セル= date_input のみ）
     for r_idx, row in enumerate(block["rows"]):
         cols = st.columns([2] + [1] * block["col_count"] + [0.6])
         # 左端：項目名
         row["項目"] = cols[0].text_input(" ", value=row["項目"], key=f"{key_prefix}_item_{r_idx}")
 
-        # 右側：セル= date_input + クリア
+        # 右側：各セル= date_input（クリアボタンなし）
         for c_idx in range(block["col_count"]):
             with cols[c_idx + 1]:
-                cur = parse_iso(row["cells"][c_idx])  # Noneなら空欄（内部保持は空文字）
+                cur = parse_iso(row["cells"][c_idx])  # Noneなら空欄（内部は空文字）
                 picked = st.date_input(
                     " ", value=cur, key=f"{key_prefix}_cell_date_{r_idx}_{c_idx}",
                     format="YYYY-MM-DD"
                 )
                 row["cells"][c_idx] = iso_or_empty(picked)
-                if st.button("×", key=f"{key_prefix}_cell_clear_{r_idx}_{c_idx}"):
-                    row["cells"][c_idx] = ""
-                    # ✨ None代入ではなく「削除」で初期化（エラー回避）
-                    st.session_state.pop(f"{key_prefix}_cell_date_{r_idx}_{c_idx}", None)
-                    st.rerun()
 
         # 行削除
         if cols[-1].button("🗑", key=f"{key_prefix}_delrow_{r_idx}"):
@@ -296,7 +290,7 @@ left, right = st.columns([3, 2])
 with left:
     project_name = st.text_input("案件名（PDFタイトル）", value="")
 with right:
-    st.caption("購入=20行／売却=30行／買い替え=30行×2段。各セルをクリック→カレンダーで入力。")
+    st.caption("購入=20行／売却=30行／買い替え=30行×2段。セルは日付入力のみ（×なし）。")
 
 tab_p, tab_s, tab_r = st.tabs(["🏠 購入（20行）", "🏢 売却（30行）", "🔄 買い替え（30行×2段）"])
 
