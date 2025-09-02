@@ -42,9 +42,8 @@ def load_bytes(p: Path) -> bytes:
 # ========== Title ==========
 st.title("PayPay銀行｜住宅ローン")
 
-# ========== 追加：ページ最上段に今月の基準金利（PayPay銀行） ==========
-_base = get_base_rates_for_current_month()              # 今月の%を取得（utils/rates.py）
-paypay_rate = _base.get("PayPay銀行", None)             # PayPay銀行の当月レート（%）
+# PayPay銀行
+paypay_rate = st.session_state.manual_rates.get("PayPay銀行", None)
 if paypay_rate is not None:
     st.markdown(
         f"""

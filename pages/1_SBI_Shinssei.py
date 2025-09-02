@@ -56,8 +56,8 @@ def load_bytes(p: Path) -> bytes:
 st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 
 # ===== 今月の金利（最上段）=====
-_base = get_base_rates_for_current_month()
-sbi_rate = _base.get("SBI新生銀行", None)  # 当月の%（utils/rates.py由来）
+# JSON / セッションから修正後の金利を表示するよう変更
+sbi_rate = st.session_state.manual_rates.get("SBI新生銀行", None)  # 修正後の%を参照
 if sbi_rate is not None:
     st.markdown(
         f"""
@@ -69,7 +69,6 @@ if sbi_rate is not None:
         """,
         unsafe_allow_html=True
     )
-
 # ===== 事前審査用紙（今月の金利の直下）=====
 st.subheader("事前審査用紙（ダウンロード）")
 st.markdown("""

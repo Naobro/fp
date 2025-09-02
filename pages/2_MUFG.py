@@ -23,6 +23,20 @@ def load_bytes(p: Path) -> bytes:
 
 st.title("三菱UFJ銀行｜住宅ローン")
 
+# 三菱UFJ銀行
+mufj_rate = st.session_state.manual_rates.get("三菱UFJ銀行", None)
+if mufj_rate is not None:
+    st.markdown(
+        f"""
+        <div class="rate-banner">
+          <div class="label">🗓 {month_label()} の基準金利（三菱UFJ銀行）</div>
+          <div class="value">{mufj_rate:.3f}%</div>
+          <div class="note">三大疾病団信など条件で加算</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 # ─ 商品説明（PDF 配布）
 st.subheader("商品説明（PDF）")
 st.download_button(
