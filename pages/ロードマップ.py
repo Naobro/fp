@@ -194,7 +194,7 @@ def render_editor(block: Dict, key_prefix: str, note: str = ""):
         # 右側：セル= date_input + クリア
         for c_idx in range(block["col_count"]):
             with cols[c_idx + 1]:
-                cur = parse_iso(row["cells"][c_idx])  # Noneなら空欄表示
+                cur = parse_iso(row["cells"][c_idx])  # Noneなら空欄（内部保持は空文字）
                 picked = st.date_input(
                     " ", value=cur, key=f"{key_prefix}_cell_date_{r_idx}_{c_idx}",
                     format="YYYY-MM-DD"
@@ -202,7 +202,8 @@ def render_editor(block: Dict, key_prefix: str, note: str = ""):
                 row["cells"][c_idx] = iso_or_empty(picked)
                 if st.button("×", key=f"{key_prefix}_cell_clear_{r_idx}_{c_idx}"):
                     row["cells"][c_idx] = ""
-                    st.session_state[f"{key_prefix}_cell_date_{r_idx}_{c_idx}"] = None
+                    # ✨ None代入ではなく「削除」で初期化（エラー回避）
+                    st.session_state.pop(f"{key_prefix}_cell_date_{r_idx}_{c_idx}", None)
                     st.rerun()
 
         # 行削除
