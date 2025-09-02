@@ -107,21 +107,26 @@ rates = st.session_state.manual_rates.copy()
 # 物件価格概算・LTVに応じた住信SBIの帯調整（従来ロジックを維持）
 property_price_guess = (principal + self_fund) / 1.07
 ltv = principal / property_price_guess if property_price_guess else 1
-# 基準金利は固定（BASE_THIS_MONTH の値）
-base_rate_sbi = float(BASE_THIS_MONTH["住信SBI銀行"])
+base_rate_sbi_percent = float(rates["住信SBI銀行"])
 
-# LTVで差分を計算
-property_price_guess = (principal + self_fund) / 1.07
-ltv = principal / property_price_guess if property_price_guess else 1
 
-delta = 0.0
-if ltv <= 0.8:
-    delta = -0.09
-elif ltv > 1.0:
-    delta = +0.07
+# ── 住信SBI：LTV帯＋返済年数の段階加算（％単位で返す）──
+def sbi_effective_rate_percent(base_percent, ltv_value, years_value):
+    rate = float(base_percent)  # ％
 
-# 計算に使うのは「基準金利＋差分」
-effective_rate_sbi = base_rate_sbi + delta
+    # LTV帯：基準は 80%〜100%
+    if ltv_value <= 0.80:
+        rate += -0.09   # 80%以下
+    elif ltv_value > 1.00:
+        rate += 0.07    # 100%超（諸費用まで借入）
+
+    # 返済年数の加算（36〜40年／41〜50年）
+    if 36 <= years_value <= 40:
+        rate += 0.07
+    elif years_value >= 41:
+        rate += 0.15
+
+    return rate  # ％
 
 # 団信・付帯の金利差（％）
 rate_diff = {
@@ -229,13 +234,16 @@ def make_table_data_and_highlight():
             if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
                 calc_years = min(calc_years, 35)
 
-            # ── 基準金利は“上書き禁止”。住信のみ「差分」で調整 ──
+                       # ── 基準金利は“上書き禁止”。住信は手入力基準に LTV＋年数の段階加算 ──
             if bank == "住信SBI銀行":
-                # effective_rate_sbi は関数外で算出済（基準＋自己資金によるΔ）
-                base_rate = effective_rate_sbi / 100
+                # base_rate_sbi_percent は ％、関数も ％で返す → 計算用に実数へ
+                eff_percent = sbi_effective_rate_percent(base_rate_sbi_percent, ltv, calc_years)
+                base_rate = eff_percent / 100.0
             else:
-                # それ以外は手動入力（rates）をそのまま使用
-                base_rate = float(rates[bank]) / 100
+                base_rate = float(rates[bank]) / 100.0
+                # 36年以上は +0.001%（住信SBI・SBI新生・三菱は除外）
+                if bank not in ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"] and calc_years > 35:
+                    base_rate += 0.001 / 100.0
 
             # 36年以上は +0.001%（従来仕様のまま）
             if bank not in ["SBI新生銀行", "三菱UFJ銀行"] and calc_years > 35:
@@ -259,7 +267,7 @@ def make_table_data_and_highlight():
         rows.append(row)
         highlights.append(min_idxs)
 
-    # ── 最長50年（一般団信の下段） ──
+        # ── 最長50年（一般団信の下段） ──
     row_50, row_50_vals = [], []
     for bank in bank_order:
         if principal > limit_amounts[bank] or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
@@ -269,17 +277,18 @@ def make_table_data_and_highlight():
         # 最長は 50年 or (79 - age) の小さい方
         current_bank_max_years = min(79 - age, 50)
 
-        # 基準金利は上書き禁止。住信のみ「差分」で調整
+        # ── 住信は「手入力の基準％」に LTV ＋ 年数の段階加算を適用 ──
         if bank == "住信SBI銀行":
-            base_rate = effective_rate_sbi / 100
+            eff_percent = sbi_effective_rate_percent(base_rate_sbi_percent, ltv, current_bank_max_years)  # ％
+            base_rate = eff_percent / 100.0  # 実数へ
         else:
-            base_rate = float(rates[bank]) / 100
+            # それ以外の銀行は手入力の基準％をそのまま使用
+            base_rate = float(rates[bank]) / 100.0
+            # 36年以上は +0.001%（住信SBI・SBI新生・三菱は除外）
+            if bank not in ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"] and current_bank_max_years > 35:
+                base_rate += 0.001 / 100.0
 
-        # 36年以上は +0.001%（従来仕様のまま）
-        if current_bank_max_years > 35:
-            base_rate += 0.001
-
-        add = rate_diff.get(bank, {}).get("一般団信", 0) / 100
+        add = rate_diff.get(bank, {}).get("一般団信", 0) / 100.0
 
         monthly_longest = calc_monthly_payment(principal, base_rate + add, current_bank_max_years)
         row_50.append({"rate": base_rate + add, "monthly": monthly_longest, "years": current_bank_max_years})
@@ -293,8 +302,6 @@ def make_table_data_and_highlight():
                 min_idxs_50.add(col_idx)
 
     return rows, highlights, row_50, min_idxs_50
-table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight()
-
 # ========= 金利比較HTMLテーブル（Web UI）==========
 def make_html_cell(rate_data, is_min_monthly, width_css):
     rate = rate_data["rate"]; monthly = rate_data["monthly"]; years = rate_data["years"]
