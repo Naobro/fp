@@ -1,7 +1,8 @@
 # pages/3_PayPay.py
 import streamlit as st
 from pathlib import Path
-from utils.rates import get_base_rates_for_current_month, month_label  # ← 追加
+from utils.rates import month_label, get_base_rates_for_current_month
+
 
 st.set_page_config(page_title="PayPay銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
@@ -42,14 +43,22 @@ def load_bytes(p: Path) -> bytes:
 # ========== Title ==========
 st.title("PayPay銀行｜住宅ローン")
 
-# PayPay銀行
-paypay_rate = st.session_state.manual_rates.get("PayPay銀行", None)
+# PayPay銀行（手動値を最優先／無ければ当月の基準値にフォールバック）
+manual = st.session_state.get("manual_rates", {})
+base = get_base_rates_for_current_month()
+
+paypay_rate = (
+    manual.get("PayPay銀行")
+    if isinstance(manual, dict) and "PayPay銀行" in manual
+    else base.get("PayPay銀行")
+)
+
 if paypay_rate is not None:
     st.markdown(
         f"""
         <div class="rate-banner">
           <div class="label">🗓 {month_label()} の基準金利（PayPay銀行）</div>
-          <div class="value">{paypay_rate:.3f}%</div>
+          <div class="value">{float(paypay_rate):.3f}%</div>
           <div class="note">がん団信など金利上乗せ</div>
         </div>
         """,
