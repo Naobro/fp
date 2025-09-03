@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-from fpdf2 import FPDF  # ✅ 正しい
+from fpdf import FPDF
 
 # ============================================
 # デバッグ情報（起動確認用）
