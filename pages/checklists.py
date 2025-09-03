@@ -5,6 +5,7 @@
 #  - 右端チェック欄がズレない固定幅3列テーブル
 #  - フォント優先度: ローカルNotoSansJP → オンラインDL → 内蔵HeiseiKakuGo-W5（ReportLab）
 #  - 住民票表記は「マイナンバー省略・本籍省略」に統一
+#  - 左列（必要なもの）幅を30mmに拡大 → 二段落ち防止
 #  - Python 3.13 / Streamlit Cloud 対応
 
 import io
@@ -31,13 +32,12 @@ CANDIDATE_TTF = [
     Path("assets/fonts/NotoSansJP-Regular.ttf"),
 ]
 
-FONT_NAME = "AppJPFont"  # アプリ内で使うフォント登録名
+FONT_NAME = "AppJPFont"
 FONT_READY = False
 FALLBACK_USED = False
 
 def ensure_jp_font():
-    """NotoSansJPがあれば使う。無ければDL。最後は内蔵HeiseiKakuGo-W5にフォールバック。"""
-    global FONT_NAME, FONT_READY, FALLBACK_USED  # ← 先頭で宣言（SyntaxError対策）
+    global FONT_NAME, FONT_READY, FALLBACK_USED
 
     # 1) ローカル探索
     for p in CANDIDATE_TTF:
@@ -46,11 +46,10 @@ def ensure_jp_font():
             FONT_READY = True
             return
 
-    # 2) オンラインDL（Streamlit Cloud等で動作; 失敗してもOK）
+    # 2) オンラインDL（失敗してもOK）
     try:
         import requests
         urls = [
-            # NotoSansJP Regular の一般的ミラー（OTF）
             "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansJP-Regular.otf",
             "https://github.com/notofonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansJP-Regular.otf",
         ]
@@ -70,13 +69,13 @@ def ensure_jp_font():
 
     # 3) フォールバック（内蔵CIDフォント）
     pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
-    FONT_NAME = "HeiseiKakuGo-W5"  # 以降のParagraphStyleで使用
+    FONT_NAME = "HeiseiKakuGo-W5"
     FONT_READY = True
     FALLBACK_USED = True
 
 ensure_jp_font()
 
-CHECK = "□"  # チェック枠
+CHECK = "□"
 
 def build_styles():
     styles = getSampleStyleSheet()
@@ -94,7 +93,7 @@ def build_styles():
         fontSize=16,
         leading=22,
         spaceAfter=6,
-        alignment=1,  # 中央
+        alignment=1,
     )
     h1 = ParagraphStyle(
         "h1",
@@ -104,40 +103,40 @@ def build_styles():
         spaceBefore=6,
         spaceAfter=4,
     )
-    cell_left = ParagraphStyle("cell_left", parent=base, alignment=0)     # 左
-    cell_center = ParagraphStyle("cell_center", parent=base, alignment=1) # 中央
-    cell_right = ParagraphStyle("cell_right", parent=base, alignment=2)   # 右
+    cell_left  = ParagraphStyle("cell_left",  parent=base, alignment=0)
+    cell_center= ParagraphStyle("cell_center",parent=base, alignment=1)
+    cell_right = ParagraphStyle("cell_right", parent=base, alignment=2)
     return dict(base=base, title=title, h1=h1,
                 cell_left=cell_left, cell_center=cell_center, cell_right=cell_right)
 
 def make_table(data_rows: List[str], doc_width, styles, add_header=True):
     """3列固定幅テーブル（左□ / 中央テキスト / 右□）で右端チェックを綺麗に縦揃え。"""
-    left_w = 14 * mm
-    right_w = 14 * mm
+    left_w  = 30 * mm   # 必要なもの
+    right_w = 18 * mm   # チェック
     middle_w = doc_width - left_w - right_w
 
     table_data = []
     if add_header:
         table_data.append([
             Paragraph("必要なもの", styles["cell_center"]),
-            Paragraph("書類", styles["cell_left"]),
-            Paragraph("チェック", styles["cell_right"]),
+            Paragraph("書類",       styles["cell_left"]),
+            Paragraph("チェック",   styles["cell_right"]),
         ])
 
     for txt in data_rows:
         table_data.append([
-            Paragraph(CHECK, styles["cell_center"]),   # 左（必要なもの）
-            Paragraph(txt, styles["cell_left"]),       # 中央（左寄せ）
-            Paragraph(CHECK, styles["cell_right"]),    # 右（右寄せ）
+            Paragraph(CHECK, styles["cell_center"]),
+            Paragraph(txt,   styles["cell_left"]),
+            Paragraph(CHECK, styles["cell_right"]),
         ])
 
     tbl = Table(table_data, colWidths=[left_w, middle_w, right_w], repeatRows=1 if add_header else 0)
     cmds = [
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONT", (0, 0), (-1, -1), FONT_NAME, 11),
+        ("FONT",   (0, 0), (-1, -1), FONT_NAME, 11),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2E3A59")) if add_header else (),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white) if add_header else (),
-        ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#444444")) if add_header else (),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white) if add_header else (),
+        ("LINEBELOW",  (0, 0), (-1, 0), 1, colors.HexColor("#444444")) if add_header else (),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#BBBBBB")),
         ("ALIGN", (0, 1 if add_header else 0), (0, -1), "CENTER"),
         ("ALIGN", (2, 1 if add_header else 0), (2, -1), "RIGHT"),
@@ -153,7 +152,6 @@ def add_section(flow, title, rows, styles, doc_width):
     flow.append(Spacer(1, 4 * mm))
 
 def build_pdf() -> bytes:
-    """PDFバイナリを返す（5ページ構成）"""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -254,7 +252,7 @@ with col1:
 
 with col2:
     st.markdown("**テーブル仕様**")
-    st.write("固定幅3列（左14mm / 中央残り / 右14mm）。右端チェック欄は右寄せで整列。")
+    st.write("固定幅3列（左30mm / 中央残り / 右18mm）。右端チェック欄は右寄せで整列。")
 
 if st.button("PDFを作成する", type="primary"):
     pdf = build_pdf()
