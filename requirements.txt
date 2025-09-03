@@ -1,27 +1,24 @@
-pip==25.2
-setuptools==75.1.0
-wheel==0.44.0
+pip>=25.2
+setuptools>=75.1.0
+wheel>=0.44.0
 
 streamlit==1.36.0
-# 科学計算（他ページが使うため保持・相性固定）
-numpy==1.26.4
-pandas==2.1.4
-matplotlib==3.8.2
-numpy-financial==1.0.0
-# PDF
-reportlab==3.6.13
-# HTTP
-requests==2.31.0
-# supabase を使う場合のみ。使っていなければ **この行を削除**
-supabase==2.6.7
 
-# ── matplotlib / pandas のサブ依存も固定（ホイール取得を優先してビルド失敗を防止）
-pillow==10.2.0
-kiwisolver==1.4.5
-cycler==0.12.1
-contourpy==1.2.0
-fonttools==4.47.2
-pyparsing==3.1.2
-python-dateutil==2.8.2
-packaging==23.2
-tzdata==2024.1
+# 科学計算（Py3.13対応の安定レンジ）
+numpy>=2.1,<3
+pandas>=2.2.3,<3
+matplotlib>=3.9,<3.10
+numpy-financial==1.0.0
+
+# PDF（3.x系はPy3.13非対応のため4系へ）
+reportlab>=4.2,<5
+
+# HTTP
+requests>=2.31,<3
+
+# supabase を使う場合のみ。使っていなければ **この行自体を削除**
+# 使うなら存在する範囲に変更（uv/pipが解決できるようピンを緩める）
+# supabase>=2.6.6,<3
+
+# ── サブ依存は固定しない（Py3.13向けホイールを解決させる）
+# pillow / kiwisolver / contourpy / fonttools / pyparsing / python-dateutil / packaging / tzdata などは削除
