@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 # ファイル: pages/checklists.py
-# 目的: 「購入4＋売却1」のチェックリストPDFをStreamlitで生成（日本語フォントが無くても落ちない実装）
+# 目的: 「購入4＋売却1」のチェックリストPDFをStreamlitで生成（フォント自動フォールバック）
 # 仕様:
 #  - 右端チェック欄がズレない固定幅3列テーブル
 #  - フォント優先度: ローカルNotoSansJP → オンラインDL → 内蔵HeiseiKakuGo-W5（ReportLab）
 #  - 住民票表記は「マイナンバー省略・本籍省略」に統一
+#  - Python 3.13 / Streamlit Cloud 対応
 
 import io
 from pathlib import Path
@@ -18,28 +19,25 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-
-# 内蔵日本語フォント用
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont  # 内蔵日本語フォント
 
 # ========= 画面設定 =========
 st.set_page_config(page_title="チェックリストPDF", page_icon="✅", layout="wide")
 st.title("購入・売却チェックリスト（PDF出力）")
 
 # ========= フォント設定 =========
-# 探すTTFパス（プロジェクト直下 or assets/fonts）
 CANDIDATE_TTF = [
     Path("NotoSansJP-Regular.ttf"),
     Path("assets/fonts/NotoSansJP-Regular.ttf"),
 ]
 
-FONT_NAME = "AppJPFont"  # アプリ内の統一名
+FONT_NAME = "AppJPFont"  # アプリ内で使うフォント登録名
 FONT_READY = False
 FALLBACK_USED = False
 
 def ensure_jp_font():
     """NotoSansJPがあれば使う。無ければDL。最後は内蔵HeiseiKakuGo-W5にフォールバック。"""
-    global FONT_READY, FALLBACK_USED
+    global FONT_NAME, FONT_READY, FALLBACK_USED  # ← 先頭で宣言（SyntaxError対策）
 
     # 1) ローカル探索
     for p in CANDIDATE_TTF:
@@ -51,9 +49,8 @@ def ensure_jp_font():
     # 2) オンラインDL（Streamlit Cloud等で動作; 失敗してもOK）
     try:
         import requests
-        # Google Fontsの直リンクは変わることがあるため、汎用的なNotoSansJPのttfミラーを2つ試す
         urls = [
-            # NotoSansJP Regular TTF（一般的な配布ミラーの例）
+            # NotoSansJP Regular の一般的ミラー（OTF）
             "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansJP-Regular.otf",
             "https://github.com/notofonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansJP-Regular.otf",
         ]
@@ -63,7 +60,6 @@ def ensure_jp_font():
                 r = requests.get(url, timeout=15)
                 if r.status_code == 200 and r.content:
                     save_to.write_bytes(r.content)
-                    # ReportLabのTTFontはOTFもOK
                     pdfmetrics.registerFont(TTFont(FONT_NAME, str(save_to)))
                     FONT_READY = True
                     return
@@ -73,12 +69,8 @@ def ensure_jp_font():
         pass
 
     # 3) フォールバック（内蔵CIDフォント）
-    #    ※ これならフォントファイル不要で日本語表示可
     pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
-    # フォント名は統一のためFONT_NAMEにマッピングする
-    # ParagraphStyleでFONT_NAME指定を使うので、ここで上書き
-    global FONT_NAME
-    FONT_NAME = "HeiseiKakuGo-W5"
+    FONT_NAME = "HeiseiKakuGo-W5"  # 以降のParagraphStyleで使用
     FONT_READY = True
     FALLBACK_USED = True
 
