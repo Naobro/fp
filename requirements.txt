@@ -4,7 +4,6 @@ pandas
 matplotlib
 numpy-financial
 fpdf
-reportlab
 requests
 fpdf2
 supabase>=2.6
