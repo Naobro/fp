@@ -262,4 +262,163 @@ if st.button("PDFを作成する", type="primary"):
         file_name="チェックリスト_購入4＋売却1.pdf",
         mime="application/pdf",
     )
-    st.success("PDFを生成しました。右のボタンからダウンロードできます。")
+    st.success("PDFを生成しました。右のボタンからダウンロードできます。")# -*- coding: utf-8 -*-
+# ファイル: pages/checklists.py
+# 目的:
+#   1) Streamlit画面に「購入／売却チェックリスト」をそのまま表示
+#   2) 仲介側が左欄をクリック（チェック）→ PDF出力時に反映
+#   3) 右欄はお客様用チェック欄（常に空欄 □）
+#   4) フォント通知など余計なメッセージは一切非表示
+
+import io
+from pathlib import Path
+import streamlit as st
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+# ========= フォント準備（通知なし） =========
+FONT_NAME = "AppJPFont"
+def ensure_jp_font():
+    global FONT_NAME
+    try:
+        path = Path("NotoSansJP-Regular.ttf")
+        if path.exists():
+            pdfmetrics.registerFont(TTFont(FONT_NAME, str(path)))
+            return
+    except Exception:
+        pass
+    pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
+    FONT_NAME = "HeiseiKakuGo-W5"
+ensure_jp_font()
+
+# ========= データ構造 =========
+SECTIONS = {
+    "① 事前審査": [
+        "運転免許証（表・裏）",
+        "健康保険証（表・裏）",
+        "源泉徴収票（会社員）",
+        "確定申告書（自営業）",
+        "返済予定表（その他借入あり）",
+        "職務経歴書（転職1年未満）",
+        "雇用契約書／労働条件通知書（転職1年未満）",
+        "給与明細（直近3か月分）",
+        "賞与明細（転職1年未満／支給分）",
+        "満額時の源泉徴収票（産休・育休中）",
+        "満額時源泉徴収票＋復帰後給与明細1か月＋賞与明細1年分（産休復帰1年未満）",
+        "在留カード または 特別永住者証明書（外国籍）",
+        "建築工事請負契約書＋建築見積書（注文住宅）",
+        "諸費用明細（諸費用借入／仲介準備）",
+        "リフォーム見積書（リフォーム借入）",
+    ],
+    "② 売買契約・住宅ローン本申込": [
+        "身分証明書",
+        "実印",
+        "住民票（世帯全員・マイナンバー省略・本籍省略）",
+        "印鑑証明書",
+        "住民税決定通知書 または 課税証明書",
+    ],
+    "③ 金消契約（金融機関契約）": [
+        "新住所の住民票（世帯全員・マイナンバー省略・本籍省略）",
+        "（旧住所の場合 → 媒介契約書／賃貸借契約書 等 住所証明）",
+    ],
+    "④ 決済時": [
+        "身分証明書",
+        "実印",
+        "住民票（マイナンバー省略・本籍省略）",
+        "印鑑証明書",
+        "通帳・銀行印（必要に応じて）",
+    ],
+    "媒介契約前": [
+        "建築時の資料（設計図・確認申請書 など）",
+        "リフォーム履歴",
+        "間取り図",
+    ],
+    "売買契約前確認": [
+        "登記識別情報（権利証）の有無",
+        "固定資産税納税通知書（年税額確認）",
+        "評価証明書（媒介契約で代理取得可）",
+        "測量・解体の有無と費用負担",
+    ],
+    "決済時（売却）": [
+        "登記識別情報（原本）",
+        "印鑑証明書",
+    ],
+}
+
+# ========= UI：画面に一覧をそのまま表示 =========
+st.set_page_config(page_title="必要書類チェックリスト", page_icon="✅", layout="wide")
+st.title("🏠 購入時 必要書類チェックリスト")
+
+selected_flags = {}
+for section, items in SECTIONS.items():
+    st.markdown("⸻")
+    st.subheader(section)
+    for item in items:
+        key = f"{section}-{item}"
+        selected_flags[item] = st.checkbox(item, key=key, value=False)
+
+st.markdown("⸻")
+st.title("🏡 売却時 必要書類チェックリスト")
+
+# ========= PDF生成 =========
+def build_pdf(flags: dict) -> bytes:
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=12*mm, rightMargin=12*mm,
+        topMargin=12*mm, bottomMargin=12*mm,
+    )
+    styles = getSampleStyleSheet()
+    base = ParagraphStyle("base", parent=styles["Normal"], fontName=FONT_NAME, fontSize=11, leading=15)
+    h1   = ParagraphStyle("h1", parent=base, fontSize=13, leading=18, spaceBefore=6, spaceAfter=4)
+    title= ParagraphStyle("title", parent=base, fontSize=16, leading=22, spaceAfter=6, alignment=1)
+    cell_left   = ParagraphStyle("left",  parent=base, alignment=0)
+    cell_center = ParagraphStyle("center",parent=base, alignment=1)
+    cell_right  = ParagraphStyle("right", parent=base, alignment=2)
+
+    def make_table(items, section_name):
+        left_w, right_w = 30*mm, 18*mm
+        middle_w = doc.width - left_w - right_w
+        data = [[Paragraph("必要", cell_center), Paragraph("書類", cell_left), Paragraph("チェック", cell_right)]]
+        for item in items:
+            mark = "☑" if flags.get(item, False) else "□"
+            data.append([Paragraph(mark, cell_center), Paragraph(item, cell_left), Paragraph("□", cell_right)])
+        tbl = Table(data, colWidths=[left_w, middle_w, right_w], repeatRows=1)
+        tbl.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("FONT", (0,0), (-1,-1), FONT_NAME, 11),
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2E3A59")),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
+            ("ALIGN", (0,1), (0,-1), "CENTER"),
+            ("ALIGN", (2,1), (2,-1), "RIGHT"),
+        ]))
+        return [Paragraph(section_name, h1), Spacer(1,2*mm), tbl, Spacer(1,6*mm)]
+
+    flow = []
+    flow.append(Paragraph("購入・売却チェックリスト", title))
+    for section, items in SECTIONS.items():
+        flow += make_table(items, section)
+        flow.append(PageBreak())
+    if flow and isinstance(flow[-1], PageBreak):
+        flow.pop()
+    doc.build(flow)
+    pdf = buf.getvalue()
+    buf.close()
+    return pdf
+
+# ========= PDF作成ボタン =========
+if st.button("📄 PDFを作成"):
+    pdf_bytes = build_pdf(selected_flags)
+    st.download_button(
+        "チェックリストPDFをダウンロード",
+        pdf_bytes,
+        file_name="必要書類チェックリスト.pdf",
+        mime="application/pdf",
+    )
