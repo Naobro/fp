@@ -1,11 +1,19 @@
+from io import BytesIO
+import requests
+from PIL import Image
 import os
 from datetime import datetime
 import tempfile
 from pathlib import Path
 
 import streamlit as st
-from fpdf import FPDF
+from fpdf2 import FPDF  # ✅ 正しい
 
+# ============================================
+# デバッグ情報（起動確認用）
+# ============================================
+st.write("✅ Streamlit バージョン:", st.__version__)
+st.write("✅ App loaded at:", datetime.now().isoformat())
 # ============================================
 # 0) URLにclientがあれば直接お客様ページへ（PINは見ない）
 # ============================================
@@ -31,15 +39,45 @@ if not os.path.exists(FONT_PATH):
     st.error(f"フォント {FONT_PATH} が見つかりません。'fonts' フォルダに NotoSansJP-Regular.ttf を配置してください。")
     st.stop()
 
-def gh_raw(url: str) -> str:
-    """GitHubの blob URL → raw URL 変換"""
-    return url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
+import re
+from pathlib import Path  # 既に上でimportしていれば重複OK
 
+def gh_raw(path: str) -> str:
+    """
+    st.image / st.video に渡せるURLまたはローカルパスへ整形するユーティリティ。
+
+    - https://github.com/{owner}/{repo}/blob/{branch}/{path} 形式 → raw.githubusercontent へ変換
+    - {owner}/{repo}/{branch}/{path} 形式 → raw.githubusercontent へ変換
+    - http(s) 以外でローカル相対パスなら実ファイルの存在を確認して返す
+    """
+    if not path:
+        raise ValueError("空のパスが渡されました")
+
+    # 1) すでに http(s) の場合
+    if re.match(r"^https?://", path):
+        m = re.match(r"^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.*)$", path)
+        if m:
+            owner, repo, branch, rest = m.groups()
+            return f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{rest}"
+        return path  # そのまま利用
+
+    # 2) owner/repo/branch/path 形式を raw に
+    m = re.match(r"^([^/]+)/([^/]+)/([^/]+)/(.*)$", path)
+    if m:
+        owner, repo, branch, rest = m.groups()
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{rest}"
+
+    # 3) ローカル相対パスを解決
+    p = (Path(__file__).parent / path).resolve()
+    if p.exists():
+        return str(p)
+
+    raise FileNotFoundError(f"画像/動画が見つかりません: {path}")
 # ============================================
 # 3) ヒーロー
 # ============================================
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
-st.image(gh_raw(top_img), use_container_width=True)
+st.image(gh_raw(top_img), use_column_width=True)
 
 st.title("不動産エージェント NAOKI")
 
@@ -83,7 +121,7 @@ st.divider()
 st.subheader("phase①　不安の解消")
 
 huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
-st.image(gh_raw(huan_img), use_container_width=True)
+st.image(gh_raw(huan_img), use_column_width=True)
 
 st.markdown("## 🏠 不動産購入時の不安ランキング（調査対象：500人）")
 
@@ -149,7 +187,7 @@ st.info("“不安の解消は可視化して、専門家　データで解消�
 st.subheader("phase②　ライフプラン　予算")
 
 fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
-st.image(gh_raw(fp_img), use_container_width=True)
+st.image(gh_raw(fp_img), use_column_width=True)
 
 st.divider()
 st.header("フェーズ② ライフプラン／予算")
@@ -195,7 +233,7 @@ neage_imgs = [
 ]
 cols = st.columns(len(neage_imgs))
 for col, url in zip(cols, neage_imgs):
-    col.image(url, use_container_width=True)
+    col.image(url, use_column_width=True)
 
 st.markdown(
     """
@@ -245,7 +283,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.image("https://github.com/Naobro/fp/blob/main/assets/danshin.PNG?raw=1", use_container_width=True)
+st.image("https://github.com/Naobro/fp/blob/main/assets/danshin.PNG?raw=1", use_column_width=True)
 
 st.markdown(
     """
@@ -292,7 +330,7 @@ st.markdown(
 
 st.markdown("アジア主要都市の都心マンション価格と比較しても、東京はまだ割安感があるという見方")
 try:
-    st.image(asia_img, use_container_width=True)
+    st.image(asia_img, use_column_width=True)
 except Exception:
     pass
 
