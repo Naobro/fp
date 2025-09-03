@@ -10,6 +10,16 @@ import streamlit as st
 from fpdf import FPDF
 
 # ============================================
+# 1) ページ設定（このページで1回だけ）
+# ============================================
+st.set_page_config(
+    page_title="不動産エージェント NAOKI",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+
+# ============================================
 # デバッグ情報（起動確認用）
 # ============================================
 st.write("✅ Streamlit バージョン:", st.__version__)
@@ -21,14 +31,6 @@ q = st.query_params
 if q.get("client"):
     st.switch_page("pages/2_client_portal.py")  # ← 実ファイル名に合わせる（今はこれでOK）
 
-# ============================================
-# 1) ページ設定（このページで1回だけ）
-# ============================================
-st.set_page_config(
-    page_title="不動産エージェント NAOKI",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 # ============================================
 # 2) 共通ユーティリティ／前提チェック
