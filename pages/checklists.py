@@ -1,14 +1,7 @@
 # -*- coding: utf-8 -*-
-# 目的：
-#  - 画面で「購入」と「売却」を分けて一覧表示（左=あなたの選定/右=お客様用）
-#  - PDFは「購入PDF」「売却PDF」を別々に作成
-# デザイン：
-#  - ヘッダー：薄い黄色（#FFF7CC）× 黒文字
-#  - 記号：■（選定済）/ □（未選定・お客様用） ※フォント依存の✅は不使用
-#  - 列幅：左30mm / 右26mm / 中央は残り（「チェック」が折返さない）
-# 安定化：
-#  - フォントDLなし。ローカル NotoSansJP-Regular.ttf があれば使用、無ければ内蔵 HeiseiKakuGo-W5
-#  - 追加依存なし（requests等 未使用）
+# 画面で「購入」「売却」を分けて一覧表示（左=あなたの選定 / 右=お客様用）
+# PDFは「購入PDF」「売却PDF」を別々に作成
+# 依存は streamlit / reportlab のみ（requests/numpy/pandas 不使用）
 
 import io
 from pathlib import Path
@@ -29,26 +22,24 @@ st.set_page_config(page_title="チェックリストPDF", page_icon="✅", layou
 
 # ========== フォント（ローカル→内蔵。DLしない） ==========
 FONT_NAME = "AppJPFont"
-def ensure_jp_font():
+def ensure_font():
     global FONT_NAME
-    local_ttf = Path("NotoSansJP-Regular.ttf")
-    if local_ttf.exists():
-        pdfmetrics.registerFont(TTFont(FONT_NAME, str(local_ttf)))
+    ttf = Path("NotoSansJP-Regular.ttf")
+    if ttf.exists():
+        pdfmetrics.registerFont(TTFont(FONT_NAME, str(ttf)))
     else:
         pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
         FONT_NAME = "HeiseiKakuGo-W5"
-ensure_jp_font()
+ensure_font()
 
-# 記号
+# 記号・配色
 BOX_EMPTY = "□"
 BOX_FULL  = "■"
-
-# ヘッダー色
 HEADER_BG = colors.HexColor("#FFF7CC")  # 薄い黄色
 HEADER_FG = colors.black
 
-# ========== マスタ（文言・順序・要望反映） ==========
-# 購入：①は「基本書類」「追加書類」に分割。④は注記（提出不要）を明記。
+# ========== 文言マスタ ==========
+# ① 事前審査：基本と追加を分離。追加は「状況→必要書類」を見出し＋1行空白で明確化
 PURCHASE_MASTER: Dict[str, Dict[str, List[str]]] = {
     "① 事前審査": {
         "基本書類": [
@@ -58,17 +49,33 @@ PURCHASE_MASTER: Dict[str, Dict[str, List[str]]] = {
             "確定申告書（自営業）",
         ],
         "追加書類": [
-            "返済予定表（その他借入あり）",
-            "職務経歴書（転職1年未満）",
-            "雇用契約書／労働条件通知書（転職1年未満）",
+            "【借入がある場合】",
+            "返済予定表",
+            "",
+
+            "【転職1年未満】",
+            "職務経歴書",
+            "雇用契約書／労働条件通知書",
             "給与明細（直近3か月分）",
-            "賞与明細（転職1年未満／支給分）",
-            "満額時の直近源泉徴収票（産休・育休中）",
-            "満額時の直近源泉徴収票＋復帰後給与明細1か月＋賞与明細1年分（産休復帰1年未満）",
-            "在留カード または 特別永住者証明書（外国籍）",
-            "建築工事請負契約書＋建築見積書（注文住宅）",
+            "賞与明細（支給分）",
+            "",
+
+            "【産休・育休中】",
+            "満額時の直近源泉徴収票・給与明細等（金融機関による）",
+            "",
+
+            "【産休復帰1年未満】",
+            "満額時源泉徴収票＋復帰後給与明細1か月＋賞与明細1年分",
+            "",
+
+            "【外国籍】",
+            "在留カード または 特別永住者証明書",
+            "",
+
+            "【諸費用借入・リフォーム費用・注文住宅】",
             "諸費用明細（諸費用借入／仲介準備）",
             "リフォーム見積書（リフォーム借入）",
+            "建築工事請負契約書＋建築見積書（注文住宅）",
         ],
     },
     "② 売買契約・住宅ローン本申込": {
@@ -97,9 +104,6 @@ PURCHASE_MASTER: Dict[str, Dict[str, List[str]]] = {
     },
 }
 
-# 売却：要望を追加
-#  - 媒介契約前：不具合など伝達事項
-#  - 売買契約前確認：抵当権抹消書類（準備期間の確認：今日の明日では不可）
 SALE_MASTER: Dict[str, Dict[str, List[str]]] = {
     "媒介契約前": {
         "確認項目": [
@@ -126,65 +130,83 @@ SALE_MASTER: Dict[str, Dict[str, List[str]]] = {
     },
 }
 
-# ========== 共通：PDFスタイル & テーブル ==========
+# ========== PDFスタイル ==========
 def build_styles():
-    s = getSampleStyleSheet()
-    base = ParagraphStyle("base", parent=s["Normal"], fontName=FONT_NAME, fontSize=11, leading=15, textColor=colors.black)
+    ss = getSampleStyleSheet()
+    base = ParagraphStyle("base", parent=ss["Normal"], fontName=FONT_NAME, fontSize=11, leading=15, textColor=colors.black)
     h_title = ParagraphStyle("h_title", parent=base, fontSize=16, leading=22, alignment=1, spaceAfter=8)
     h_group = ParagraphStyle("h_group", parent=base, fontSize=13, leading=18, spaceBefore=6, spaceAfter=4)
     h_sub   = ParagraphStyle("h_sub",   parent=base, fontSize=11.5, leading=16, spaceBefore=2, spaceAfter=2)
-    cell_left   = ParagraphStyle("cell_left",   parent=base, alignment=0)
-    cell_center = ParagraphStyle("cell_center", parent=base, alignment=1)
-    cell_right  = ParagraphStyle("cell_right",  parent=base, alignment=2)
-    return dict(base=base, h_title=h_title, h_group=h_group, h_sub=h_sub,
-                cell_left=cell_left, cell_center=cell_center, cell_right=cell_right)
+    h_head  = ParagraphStyle("h_head",  parent=base, fontSize=11.5, leading=16, spaceBefore=2, spaceAfter=2, textColor=colors.HexColor("#333333"),)
+    cell_l  = ParagraphStyle("cell_l",  parent=base, alignment=0)
+    cell_c  = ParagraphStyle("cell_c",  parent=base, alignment=1)
+    cell_r  = ParagraphStyle("cell_r",  parent=base, alignment=2)
+    return dict(base=base, h_title=h_title, h_group=h_group, h_sub=h_sub, h_head=h_head,
+                cell_l=cell_l, cell_c=cell_c, cell_r=cell_r)
 
-def make_table(rows: List[str], flags: Dict[int, bool], doc_width: float, stl: dict) -> Table:
+def is_heading(txt: str) -> bool:
+    return txt.startswith("【") and txt.endswith("】")
+
+def is_blank(txt: str) -> bool:
+    return txt.strip() == ""
+
+def make_table(rows: List[str], flags: Dict[int, bool], width: float, stl: dict) -> Table:
     left_w  = 30 * mm
-    right_w = 26 * mm  # 「チェック」が折返さない幅
-    middle_w = doc_width - left_w - right_w
-    data = [[Paragraph("必要なもの", stl["cell_center"]),
-             Paragraph("書類",       stl["cell_left"]),
-             Paragraph("チェック",   stl["cell_right"])]]
+    right_w = 26 * mm
+    middle_w = width - left_w - right_w
+    data = [[Paragraph("必要なもの", stl["cell_c"]),
+             Paragraph("書類",       stl["cell_l"]),
+             Paragraph("チェック",   stl["cell_r"])]]
     for i, txt in enumerate(rows):
+        if is_blank(txt):
+            # 空行（3列とも空）
+            data.append(["", Paragraph(" ", stl["cell_l"]), ""])
+            continue
+        if is_heading(txt):
+            # 見出し行（選択不可・3列のうち中央に見出し）
+            data.append(["", Paragraph(txt, stl["h_head"]), ""])
+            continue
+        # 通常行：左は選定（■/□）、右はお客様用（□）
         left_mark = BOX_FULL if flags.get(i, False) else BOX_EMPTY
         data.append([
-            Paragraph(left_mark, stl["cell_center"]),
-            Paragraph(txt, stl["cell_left"]),
-            Paragraph(BOX_EMPTY, stl["cell_right"]),  # 右はお客様用の空欄
+            Paragraph(left_mark, stl["cell_c"]),
+            Paragraph(txt, stl["cell_l"]),
+            Paragraph(BOX_EMPTY, stl["cell_r"]),
         ])
     t = Table(data, colWidths=[left_w, middle_w, right_w], repeatRows=1)
     t.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
         ("FONT", (0,0), (-1,-1), FONT_NAME, 11),
-        # ヘッダー：薄い黄色×黒文字
         ("BACKGROUND", (0,0), (-1,0), HEADER_BG),
         ("TEXTCOLOR", (0,0), (-1,0), HEADER_FG),
         ("LINEBELOW", (0,0), (-1,0), 0.8, colors.HexColor("#555555")),
-        # 罫線：薄いグレー
         ("GRID", (0,0), (-1,-1), 0.25, colors.HexColor("#CCCCCC")),
-        # 揃え
         ("ALIGN", (0,1), (0,-1), "CENTER"),
         ("ALIGN", (2,1), (2,-1), "RIGHT"),
     ]))
     return t
 
-# ========== 画面UI：購入 ==========
+# ========== 画面UI ==========
+# 購入
 st.markdown("## 🏠 購入時 必要書類チェックリスト")
 purchase_flags: Dict[str, Dict[str, Dict[int, bool]]] = {}
-
-for big_group, sub_groups in PURCHASE_MASTER.items():
-    st.markdown("⸻")
-    st.markdown(f"**{big_group}**")
-    purchase_flags[big_group] = {}
-    for sub_name, items in sub_groups.items():
-        st.write("")  # 空白（見やすさ）
-        st.caption(sub_name)
-        purchase_flags[big_group][sub_name] = {}
+for big, subs in PURCHASE_MASTER.items():
+    st.markdown("⸻"); st.markdown(f"**{big}**")
+    purchase_flags[big] = {}
+    for sub, items in subs.items():
+        st.write("")  # 空白
+        st.caption(sub)
+        purchase_flags[big][sub] = {}
         for i, text in enumerate(items):
-            cols = st.columns([0.06, 0.86, 0.08])  # 左□ / テキスト / 右□
+            if is_blank(text):
+                st.write("")  # 空白行
+                continue
+            if is_heading(text):
+                st.markdown(f"*{text}*")  # 見出し（選択不可）
+                continue
+            cols = st.columns([0.06, 0.86, 0.08])
             with cols[0]:
-                purchase_flags[big_group][sub_name][i] = st.checkbox("", key=f"p-{big_group}-{sub_name}-{i}")
+                purchase_flags[big][sub][i] = st.checkbox("", key=f"p-{big}-{sub}-{i}")
             with cols[1]:
                 st.write(text)
             with cols[2]:
@@ -192,21 +214,20 @@ for big_group, sub_groups in PURCHASE_MASTER.items():
 
 st.divider()
 
-# ========== 画面UI：売却 ==========
+# 売却
 st.markdown("## 🏡 売却時 必要書類チェックリスト")
 sale_flags: Dict[str, Dict[str, Dict[int, bool]]] = {}
-for big_group, sub_groups in SALE_MASTER.items():
-    st.markdown("⸻")
-    st.markdown(f"**{big_group}**")
-    sale_flags[big_group] = {}
-    for sub_name, items in sub_groups.items():
+for big, subs in SALE_MASTER.items():
+    st.markdown("⸻"); st.markdown(f"**{big}**")
+    sale_flags[big] = {}
+    for sub, items in subs.items():
         st.write("")  # 空白
-        st.caption(sub_name)
-        sale_flags[big_group][sub_name] = {}
+        st.caption(sub)
+        sale_flags[big][sub] = {}
         for i, text in enumerate(items):
             cols = st.columns([0.06, 0.86, 0.08])
             with cols[0]:
-                sale_flags[big_group][sub_name][i] = st.checkbox("", key=f"s-{big_group}-{sub_name}-{i}")
+                sale_flags[big][sub][i] = st.checkbox("", key=f"s-{big}-{sub}-{i}")
             with cols[1]:
                 st.write(text)
             with cols[2]:
@@ -214,59 +235,49 @@ for big_group, sub_groups in SALE_MASTER.items():
 
 st.divider()
 
-# ========== PDF生成（購入 / 売却 別々） ==========
-def build_styles_and_doc():
+# ========== PDF生成 ==========
+def new_doc():
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=12*mm, rightMargin=12*mm,
-        topMargin=12*mm, bottomMargin=12*mm,
-    )
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=12*mm, rightMargin=12*mm,
+                            topMargin=12*mm, bottomMargin=12*mm)
     return buf, doc, build_styles()
 
 def build_purchase_pdf() -> bytes:
-    buf, doc, stl = build_styles_and_doc()
+    buf, doc, stl = new_doc()
     w = doc.width
-    flow = []
-    flow.append(Paragraph("購入時 必要書類チェックリスト", stl["h_title"]))
-    for big_group, sub_groups in PURCHASE_MASTER.items():
-        flow.append(Spacer(1, 3*mm))
-        flow.append(Paragraph(big_group, stl["h_group"]))
-        for sub_name, items in sub_groups.items():
-            flow.append(Spacer(1, 2*mm))  # 空白
-            flow.append(Paragraph(sub_name, stl["h_sub"]))
-            flow.append(Spacer(1, 1*mm))
-            flags = purchase_flags.get(big_group, {}).get(sub_name, {})
+    flow = [Paragraph("購入時 必要書類チェックリスト", stl["h_title"])]
+    for big, subs in PURCHASE_MASTER.items():
+        flow += [Spacer(1, 3*mm), Paragraph(big, stl["h_group"])]
+        for sub, items in subs.items():
+            flow += [Spacer(1, 2*mm), Paragraph(sub, stl["h_sub"]), Spacer(1, 1*mm)]
+            flags = purchase_flags.get(big, {}).get(sub, {})
             flow.append(make_table(items, flags, w, stl))
-            flow.append(Spacer(1, 5*mm))  # グループ間の空白
+            flow.append(Spacer(1, 5*mm))
     doc.build(flow)
     pdf = buf.getvalue(); buf.close(); return pdf
 
 def build_sale_pdf() -> bytes:
-    buf, doc, stl = build_styles_and_doc()
+    buf, doc, stl = new_doc()
     w = doc.width
-    flow = []
-    flow.append(Paragraph("売却時 必要書類チェックリスト", stl["h_title"]))
-    for big_group, sub_groups in SALE_MASTER.items():
-        flow.append(Spacer(1, 3*mm))
-        flow.append(Paragraph(big_group, stl["h_group"]))
-        for sub_name, items in sub_groups.items():
-            flow.append(Spacer(1, 2*mm))
-            flow.append(Paragraph(sub_name, stl["h_sub"]))
-            flow.append(Spacer(1, 1*mm))
-            flags = sale_flags.get(big_group, {}).get(sub_name, {})
+    flow = [Paragraph("売却時 必要書類チェックリスト", stl["h_title"])]
+    for big, subs in SALE_MASTER.items():
+        flow += [Spacer(1, 3*mm), Paragraph(big, stl["h_group"])]
+        for sub, items in subs.items():
+            flow += [Spacer(1, 2*mm), Paragraph(sub, stl["h_sub"]), Spacer(1, 1*mm)]
+            flags = sale_flags.get(big, {}).get(sub, {})
             flow.append(make_table(items, flags, w, stl))
             flow.append(Spacer(1, 5*mm))
     doc.build(flow)
     pdf = buf.getvalue(); buf.close(); return pdf
 
 # ========== ダウンロード ==========
-col1, col2 = st.columns(2)
-with col1:
+c1, c2 = st.columns(2)
+with c1:
     if st.button("購入PDFを作成", type="primary"):
         pdf = build_purchase_pdf()
         st.download_button("購入PDFをダウンロード", data=pdf, file_name="チェックリスト_購入.pdf", mime="application/pdf")
-with col2:
+with c2:
     if st.button("売却PDFを作成", type="primary"):
         pdf = build_sale_pdf()
         st.download_button("売却PDFをダウンロード", data=pdf, file_name="チェックリスト_売却.pdf", mime="application/pdf")
