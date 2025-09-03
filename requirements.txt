@@ -19,3 +19,4 @@ requests>=2.31,<3
 
 # supabase を使う場合のみ
 # supabase>=2.6.6,<3
+fpdf2>=2.7,<3
