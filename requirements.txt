@@ -10,15 +10,12 @@ pandas>=2.2.3,<3
 matplotlib>=3.9,<3.10
 numpy-financial==1.0.0
 
-# PDF（3.x系はPy3.13非対応のため4系へ）
+# PDF
 reportlab>=4.2,<5
+fpdf2>=2.7,<3
 
 # HTTP
 requests>=2.31,<3
 
-# supabase を使う場合のみ。使っていなければ **この行自体を削除**
-# 使うなら存在する範囲に変更（uv/pipが解決できるようピンを緩める）
+# supabase を使う場合のみ
 # supabase>=2.6.6,<3
-
-# ── サブ依存は固定しない（Py3.13向けホイールを解決させる）
-# pillow / kiwisolver / contourpy / fonttools / pyparsing / python-dateutil / packaging / tzdata などは削除
