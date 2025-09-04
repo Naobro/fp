@@ -123,7 +123,8 @@ PURCHASE_MASTER: Dict[str, Dict[str, List[str]]] = {
 SALE_MASTER: Dict[str, Dict[str, List[str]]] = {
     "媒介契約前": {
         "確認項目": [
-            "建築時の資料（設計図・確認申請書 など）",
+            "販売計画",
+             "建築時の資料（設計図・確認申請書 など）",
             "リフォーム履歴",
             "間取り図",
             "不具合など伝達事項",
