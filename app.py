@@ -7,10 +7,10 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-from fpdf import FPDF
+from fpdf2 import FPDF  # ✅ 正しい
 
 # ============================================
-# 1) ページ設定（このページで1回だけ）
+# 1) ページ設定（このページで1回だけ・最初に必ず実行）
 # ============================================
 st.set_page_config(
     page_title="不動産エージェント NAOKI",
@@ -19,15 +19,33 @@ st.set_page_config(
 )
 
 # ============================================
-# 0) URLにclientがあれば直接お客様ページへ（PINは見ない）
+# 2) デバッグ情報（起動確認用）
+# ============================================
+st.write("✅ Streamlit バージョン:", st.__version__)
+st.write("✅ App loaded at:", datetime.now().isoformat())
+
+# ============================================
+# 3) URLにclientがあれば直接お客様ページへ（PINは見ない）
+#    ※ set_page_config より前に st.* を置かないこと
 # ============================================
 q = st.query_params
 if q.get("client"):
     st.switch_page("pages/2_client_portal.py")  # ← 実ファイル名に合わせる（今はこれでOK）
 
+# ============================================
+# 4) Keep-Alive機能（UptimeRobotと連携）
+# ============================================
+st.markdown("""
+<script>
+// ブラウザが開いている間のスリープ防止（軽量版）
+setInterval(() => {
+    fetch(window.location.href, {method: 'HEAD'}).catch(() => {});
+}, 900000); // 15分ごと（UptimeRobotの5分間隔と重複しないように）
+</script>
+""", unsafe_allow_html=True)
 
 # ============================================
-# 2) 共通ユーティリティ／前提チェック
+# 5) 共通ユーティリティ／前提チェック
 # ============================================
 # フォント（日本語TTF）の存在確認
 FONT_PATH = os.path.join("fonts", "NotoSansJP-Regular.ttf")
@@ -51,7 +69,7 @@ def gh_raw(path: str) -> str:
 
     # 1) すでに http(s) の場合
     if re.match(r"^https?://", path):
-        m = re.match(r"^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.*)$", path)
+        m = re.match(r"^https://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.*)$", path)
         if m:
             owner, repo, branch, rest = m.groups()
             return f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{rest}"
@@ -69,8 +87,9 @@ def gh_raw(path: str) -> str:
         return str(p)
 
     raise FileNotFoundError(f"画像/動画が見つかりません: {path}")
+
 # ============================================
-# 3) ヒーロー
+# 6) ヒーロー
 # ============================================
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
 st.image(gh_raw(top_img), use_column_width=True)
@@ -112,7 +131,7 @@ st.markdown("[不動産売却資料](https://naobro.github.io/fp/pages/sale.pdf)
 st.divider()
 
 # ============================================
-# 4) phase① 不安の解消
+# 7) phase① 不安の解消
 # ============================================
 st.subheader("phase①　不安の解消")
 
@@ -178,7 +197,7 @@ st.markdown("[📄 近隣調査　トナリスク](https://naobro.github.io/fp/p
 st.info("“不安の解消は可視化して、専門家　データで解消　Next：**ライフプラン　予算** 。")
 
 # ============================================
-# 5) phase② ライフプラン／予算
+# 8) phase② ライフプラン／予算
 # ============================================
 st.subheader("phase②　ライフプラン　予算")
 
@@ -293,7 +312,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# （※ set_page_config の重複はここ以外に置かない）
 st.title("🎬 富裕層の考え方")
 st.video("https://raw.githubusercontent.com/Naobro/fp/main/assets/huyu.MP4")
 
@@ -345,7 +363,7 @@ st.markdown(
 
 st.divider()
 # ============================================
-# 6) phase③ 条件整理
+# 9) phase③ 条件整理
 # ============================================
 st.subheader("phase③ 条件整理")
 st.divider()
@@ -387,7 +405,7 @@ for name, url in tools.items():
 st.divider()
 
 # ============================================
-# 8) 孫子の兵法 × 不動産購入・売却
+# 10) 孫子の兵法 × 不動産購入・売却
 # ============================================
 st.divider()
 st.subheader("📌 孫子の兵法 × 不動産購入・売却")
@@ -414,11 +432,11 @@ st.markdown(
 - **「勝兵は先ず勝ちて而（しか）る後に戦い、敗兵は先ず戦いて而（しか）る後に勝ちを求む」**  
 　→ ライフプランニング・資金計画やローン事前審査を整えてから動く人は勝つ。準備なく探すと負ける。  
 
-- **「勢いは弩（ど）を引き絃（つる）を発つが若（も）し」**  
+- **「其の疾きこと風の如く、其の徐（おもむ）ろかなること林の如く」**  
 　→ 市場の流れに乗る。人気エリア・低金利のチャンスは一瞬で決断。  
 
-- **「其の疾きこと風の如く、其の徐（おもむ）ろかなること林の如く」**  
-　→ 良い物件は事前準備して即断即決（風）、売却戦略はじっくり準備（林）。  
+- **「勢いは弩（ど）を引き絃（つる）を発つが若（も）し」**  
+　→ 市場の流れに乗る。人気エリア・低金利のチャンスは一瞬で決断。  
     """,
     unsafe_allow_html=True
 )
