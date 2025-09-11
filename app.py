@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-from fpdf2 import FPDF  # ✅ 正しい
+from fpdf import FPDF  # fpdf2（パッケージ名）の正しいインポート名は「fpdf」
 
 # ============================================
 # 1) ページ設定（このページで1回だけ・最初に必ず実行）
