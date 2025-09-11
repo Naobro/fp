@@ -1,21 +1,156 @@
 # fp/pages/2_client_portal.py
 # -*- coding: utf-8 -*-
-import os, json, tempfile, secrets, string
+"""
+【このページの方針】
+- 起動時に DB を初期化しない（init_db() を自動では呼ばない）
+- admin.py と同じ DB 関数・スキーマを使用（互換性100%）
+- 書き込み時のみ Lazy でスキーマ作成（読み取りは作らない）
+- 管理UIに「手動でDB初期化」ボタンを用意（押した時だけ CREATE TABLE IF NOT EXISTS）
+"""
+import os, json, tempfile, secrets, string, io
+import sqlite3
 from datetime import datetime
 from pathlib import Path
+from contextlib import contextmanager
 
 import streamlit as st
 from fpdf import FPDF
-# ==== PDF用 日本語フォント入手・解決（NotoSansJP）====
+
+# ==== PDF用 日本語フォント（NotoSansJP） ====
 from urllib import request as _urlreq
 import tempfile as _tmp
 from pathlib import Path as _Path
-import json as _json
 
 # =========================================================
-# ① set_page_config は最初の Streamlit コマンドである必要あり
+# set_page_config は最初に
 # =========================================================
 st.set_page_config(page_title="理想の住まいへのロードマップ", layout="wide")
+
+# =========================================================
+# データベース（admin.pyと完全互換）
+# =========================================================
+DB_PATH = "clients.db"
+
+@contextmanager
+def get_db():
+    """データベース接続（admin.pyと同形）"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def init_db():
+    """データベース初期化（admin.pyと同形：IF NOT EXISTS）"""
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                client_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                name TEXT,
+                phone TEXT,
+                email TEXT,
+                memo TEXT,
+                data TEXT NOT NULL  -- JSON文字列として全データを保存
+            )
+        """)
+        conn.commit()
+
+# ★ここでは init_db() を呼ばない（＝起動時自動初期化しない）
+
+# --- スキーマ存在チェック（読み取りでは作らない） ---
+def _table_exists(conn, table_name: str) -> bool:
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,))
+    return cur.fetchone() is not None
+
+def _ensure_schema_if_writable(conn):
+    """書き込み時のみテーブル作成（読み取りでは呼ばない）"""
+    if not _table_exists(conn, "clients"):
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                client_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                name TEXT,
+                phone TEXT,
+                email TEXT,
+                memo TEXT,
+                data TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+
+def save_client(client_id: str, payload: dict):
+    """クライアント保存（admin同名）。書き込み時のみスキーマ用意。"""
+    meta = payload.get("meta", {})
+    with get_db() as conn:
+        _ensure_schema_if_writable(conn)
+        conn.execute("""
+            INSERT OR REPLACE INTO clients 
+            (client_id, created_at, name, phone, email, memo, data)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            client_id,
+            meta.get("created_at", datetime.now().isoformat()),
+            meta.get("name"),
+            meta.get("phone"),
+            meta.get("email"),
+            meta.get("memo"),
+            json.dumps(payload, ensure_ascii=False)
+        ))
+        conn.commit()
+
+def load_client(client_id: str) -> dict | None:
+    """特定顧客読み込み（テーブル無ければ作らない＝None）"""
+    with get_db() as conn:
+        if not _table_exists(conn, "clients"):
+            return None
+        row = conn.execute("SELECT data FROM clients WHERE client_id = ?", (client_id,)).fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row["data"])
+        except Exception:
+            return None
+
+def load_all_clients():
+    """全顧客メタ一覧（テーブル無ければ空配列）"""
+    with get_db() as conn:
+        if not _table_exists(conn, "clients"):
+            return []
+        rows = conn.execute("""
+            SELECT client_id, created_at, name, phone, email, memo, data
+            FROM clients
+            ORDER BY created_at DESC
+        """).fetchall()
+        items = []
+        for row in rows:
+            try:
+                created = datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+            except Exception:
+                created = None
+            items.append({
+                "id": row["client_id"],
+                "name": row["name"] or "(無名)",
+                "created": created,
+                "phone": row["phone"],
+                "email": row["email"],
+                "memo": row["memo"],
+                "raw": json.loads(row["data"]) if row["data"] else {}
+            })
+        return items
+
+def delete_client(client_id: str) -> bool:
+    """削除（テーブル無ければ何もしない/False）"""
+    try:
+        with get_db() as conn:
+            if not _table_exists(conn, "clients"):
+                return False
+            cur = conn.execute("DELETE FROM clients WHERE client_id = ?", (client_id,))
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception:
+        return False
 
 # =========================================================
 # 0) 新旧クエリAPI 互換ヘルパ + client自動発行
@@ -23,14 +158,11 @@ st.set_page_config(page_title="理想の住まいへのロードマップ", layo
 def _get_query_param(name: str, default=None):
     """st.query_params と experimental_* の両対応で取得"""
     try:
-        # 新API
         v = st.query_params.get(name, default)
-        # streamlit の実装差で list のことがあるため補正
         if isinstance(v, list):
             return v[0] if v else default
         return v if v not in [None, ""] else default
     except Exception:
-        # 旧API
         qp = st.experimental_get_query_params()
         v = qp.get(name, [default])
         return v[0] if isinstance(v, list) else v
@@ -41,7 +173,6 @@ def _set_query_param(name: str, value):
         st.query_params[name] = value
     except Exception:
         now = st.experimental_get_query_params()
-        # value を list ではなく値で入れてOK
         now[name] = value
         st.experimental_set_query_params(**now)
 
@@ -53,24 +184,19 @@ def _gen_client_id(n: int = 6) -> str:
 # 1) クライアントID確定 & セッション分離
 # =========================================================
 client_id = _get_query_param("client", None)
-
-# ① URLにclientが無い → 自動発行してURLに反映
 if not client_id:
     client_id = _gen_client_id()
     _set_query_param("client", client_id)
 
-# ② クライアント切替時はセッション全消去（混線防止）
-#    （同じブラウザ・同じタブで別IDを開いたとき、前の入力が残らないようにする）
 if st.session_state.get("_active_client") != client_id:
     st.session_state.clear()
     st.session_state["_active_client"] = client_id
 
-# ③ セッションキー用の名前空間ヘルパ
 def ns(key: str) -> str:
     return f"{client_id}::{key}"
 
 # =========================================================
-# ⑤ PDF用フォント（NotoSansJP）を用意
+# PDF用フォント（NotoSansJP）
 # =========================================================
 _REG_NAME = "NotoSansJP-Regular.ttf"
 _BLD_NAME = "NotoSansJP-Bold.ttf"
@@ -78,20 +204,17 @@ _RAW_REG = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Re
 _RAW_BLD = "https://raw.githubusercontent.com/Naobro/fp/main/fonts/NotoSansJP-Bold.ttf"
 
 def _ensure_jp_fonts() -> Path:
-    """NotoSansJP をローカル候補 or ダウンロードで用意してフォルダPathを返す"""
     candidates = [
         Path(__file__).resolve().parent / "fonts",
         Path.cwd() / "fonts",
         Path("/mount/src/fp/fonts"),
         Path("/app/fonts"),
     ]
-    # 既存フォントを探す
     for d in candidates:
         reg = d / _REG_NAME
         bld = d / _BLD_NAME
         if reg.exists() and bld.exists():
             return d.resolve()
-    # 片方だけある場合はコピーで両方揃える
     for d in candidates:
         reg = d / _REG_NAME
         bld = d / _BLD_NAME
@@ -105,29 +228,18 @@ def _ensure_jp_fonts() -> Path:
             if not reg.exists():
                 reg.write_bytes(bld.read_bytes())
             return d.resolve()
-    # どこにも無ければ一時ディレクトリへダウンロード
     tmpdir = Path(_tmp.mkdtemp(prefix="fonts_"))
     _urlreq.urlretrieve(_RAW_REG, str(tmpdir / _REG_NAME))
     try:
         _urlreq.urlretrieve(_RAW_BLD, str(tmpdir / _BLD_NAME))
     except Exception:
-        # 片方落ちたら同じものを複製
         (tmpdir / _BLD_NAME).write_bytes((tmpdir / _REG_NAME).read_bytes())
     return tmpdir.resolve()
 
-# --- バルコニー方位：マスター ↔ UI 変換ユーティリティ ---
+# --- バルコニー方位ユーティリティ ---
 def _load_master_balcony_pairs():
-    p = _Path("data/master_options.json")
-    if not p.exists():
-        # 予備（日本語表示 / 英字コード）
-        return [["北","N"],["北東","NE"],["東","E"],["南東","SE"],
-                ["南","S"],["南西","SW"],["西","W"],["北西","NW"]]
-    try:
-        m = _json.loads(p.read_text(encoding="utf-8"))
-        return m.get("balcony_facings", [])
-    except Exception:
-        return [["北","N"],["北東","NE"],["東","E"],["南東","SE"],
-                ["南","S"],["南西","SW"],["西","W"],["北西","NW"]]
+    return [["北","N"],["北東","NE"],["東","E"],["南東","SE"],
+            ["南","S"],["南西","SW"],["西","W"],["北西","NW"]]
 
 def _code_to_disp(code: str) -> str:
     for disp, c in _load_master_balcony_pairs():
@@ -139,96 +251,36 @@ def _disp_to_code(disp: str) -> str:
     for d, code in _load_master_balcony_pairs():
         if d == disp:
             return code
-    return "S"  # 既定値（南）
+    return "S"
 
 # =========================
-# データ入出力ユーティリティ
+# 互換ユーティリティ
 # =========================
-# === compare.py 用の最小 prefs 書き出し（types だけでもOK） ===
-from pathlib import Path as _Pth
-
 def export_compare_prefs_min(cid: str, mode_label: str):
-    """
-    compare.py が参照する data/clients/<cid>/client_prefs.json を生成/更新。
-    mode_label は "マンション" or "戸建て" を想定（「土地」は戸建カテゴリに含める）。
-    """
-    _dir = _Pth("data/clients") / cid
+    _dir = _Path("data/clients") / cid
     _dir.mkdir(parents=True, exist_ok=True)
     types = ["マンション"] if mode_label == "マンション" else ["戸建て"]
     data = {"types": types}
     (_dir / "client_prefs.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-DATA_DIR = Path("data/clients")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-MASTER_FILE = DATA_DIR / "_master.json"  # あれば新規作成時の雛形に使う
-
-def _client_path(cid: str) -> Path:
-    return DATA_DIR / f"{cid}.json"
 
 def _blank_payload(cid: str) -> dict:
-    """完全な白紙データ"""
-    return {"meta": {"id": cid, "name": ""}}
-
-def _save_json(p: Path, data: dict):
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-def _load_json(p: Path) -> dict:
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    return {
+        "meta": {
+            "client_id": cid,
+            "created_at": datetime.now().isoformat(),
+            "name": ""
+        }
+    }
 
 def load_or_init_client(cid: str) -> dict:
-    """
-    client_id のJSONがあれば読み込み。
-    無ければ _master.json があればそれを雛形にして作成、
-    それも無ければ白紙で作成して返す。
-    """
-    fp = _client_path(cid)
-    if fp.exists():
-        data = _load_json(fp)
-        if data:
-            return data
-        # 壊れていたら白紙で再作成
-        data = _blank_payload(cid)
-        _save_json(fp, data)
+    data = load_client(cid)
+    if data:
         return data
-
-    # 既存なし → マスター雛形優先
-    if MASTER_FILE.exists():
-        base = _load_json(MASTER_FILE) or {}
-        base.setdefault("meta", {})
-        base["meta"]["id"] = cid
-        base["meta"]["name"] = base["meta"].get("name", "") or ""
-        _save_json(fp, base)
-        return base
-
-    # マスターも無ければ白紙
     data = _blank_payload(cid)
-    _save_json(fp, data)
+    save_client(cid, data)  # ← 初回書込み時のみテーブル作成が走る
     return data
 
-def save_client(cid: str, data: dict):
-    _save_json(_client_path(cid), data)
-
-def reset_client(cid: str, use_master: bool = False) -> dict:
-    """
-    この client_id のデータを作り直す。
-    use_master=True なら _master.json を雛形に、False なら完全白紙。
-    返り値は保存後のデータ。
-    """
-    if use_master and MASTER_FILE.exists():
-        base = _load_json(MASTER_FILE) or {}
-        base.setdefault("meta", {})
-        base["meta"]["id"] = cid
-        base["meta"]["name"] = base["meta"].get("name", "") or ""
-        save_client(cid, base)
-        return base
-    blank = _blank_payload(cid)
-    save_client(cid, blank)
-    return blank
-
-# ========= サニタイズ（admin作成の None 対策） =========
+# ========= サニタイズ =========
 def _coerce_int(val, default):
     return int(val) if isinstance(val, (int, float)) else default
 
@@ -243,7 +295,7 @@ def _coerce_float(val, default):
 # =========================
 payload = load_or_init_client(client_id)
 
-# --- Baseline が admin 側から None のまま来ても落ちないよう補正 ---
+# Baseline 補正
 if "baseline" in payload and isinstance(payload["baseline"], dict):
     btmp = payload["baseline"]
     payload["baseline"] = {
@@ -268,11 +320,14 @@ else:
         "wife_commute_min": 40,
     }
 
+# =========================================================
+# Header
+# =========================================================
 st.title("理想の住まいへのロードマップ")
 header_name = payload.get("meta",{}).get("name") or "お客様"
 st.success(f"{header_name} 専用ページ（ID: {client_id}）")
 
-# === 画面上のクライアントID切替UI（右側） ===
+# === クライアントID切替 ===
 c_left, c_right = st.columns([1,1])
 with c_right:
     st.caption("クライアント切替")
@@ -285,25 +340,40 @@ with c_right:
             st.session_state["_active_client"] = _new_id
             st.rerun()
 
-# === 管理：このIDの初期化/マスター操作 ===
-with st.expander("管理（このIDの初期化・マスター操作）", expanded=False):
-    st.caption(f"現在の client_id: **{client_id}**  ｜ データパス: data/clients/{client_id}.json")
-    c1, c2, c3 = st.columns(3)
+# === 管理：初期化・削除・バックアップ ===
+with st.expander("管理（このIDの初期化・削除・バックアップ）", expanded=False):
+    st.caption(f"現在の client_id: **{client_id}** ｜ 保存先: `{DB_PATH}`（SQLite）")
+
+    c0, c1, c2, c3 = st.columns(4)
+
+    # 手動初期化（押した時だけテーブル作成、既存データ不削除）
+    with c0:
+        if st.button("🛠️ 手動でDB初期化", key=ns("btn_manual_initdb")):
+            init_db()
+            st.success("clients テーブルを作成/確認しました（既存データは保持）。")
+
     with c1:
-        if st.button("🧹 このIDを白紙で初期化", key=ns("btn_reset_blank")):
-            payload = reset_client(client_id, use_master=False)
+        if st.button("🧹 白紙で初期化（このID）", key=ns("btn_reset_blank")):
+            payload = _blank_payload(client_id)
+            save_client(client_id, payload)
             st.success("このIDを白紙データで作り直しました。")
             st.rerun()
+
     with c2:
-        if st.button("🧱 このIDをマスターから再作成", key=ns("btn_reset_from_master")):
-            payload = reset_client(client_id, use_master=True)
-            st.success("_master.json を雛形にして、このIDを作り直しました。")
-            st.rerun()
+        if st.button("🗑️ このIDをDBから削除", key=ns("btn_delete_client")):
+            ok = delete_client(client_id)
+            if ok:
+                st.success("このIDのレコードをDBから削除しました。新しいIDに切替えます。")
+                _set_query_param("client", _gen_client_id())
+                st.session_state.clear()
+                st.rerun()
+            else:
+                st.warning("テーブル未作成 or レコード未存在のため削除対象なし。")
+
     with c3:
-        if st.button("⭐ 今の内容をマスターに保存", key=ns("btn_save_master")):
-            # id はマスター名に付け替えて保存
-            _save_json(MASTER_FILE, {**payload, "meta": {**payload.get("meta", {}), "id": "_master"}})
-            st.success("現在の内容を data/clients/_master.json に保存しました。")
+        # 軽いバックアップ：このIDのJSON
+        if st.button("🧪 このIDのJSONを表示", key=ns("show_this_json")):
+            st.json(payload)
 
 # ============================================
 # ① ヒアリング（5W2H）＋ PDF出力
@@ -315,21 +385,11 @@ base_defaults = {
     "name": payload.get("meta",{}).get("name",""),
     "now_area": "", "now_years": 5, "is_owner": "賃貸",
     "now_rent": 10, "family": "",
-
-    # 家計・勤務
-    "self_fund_man": 0,
-    "other_debt": "",
-    "husband_company": "",
-    "husband_service_years": 3,
-    "husband_workplace": "",
-    "husband_income": 0,
-    "husband_holidays": "",
-    "wife_company": "",
-    "wife_service_years": 3,
-    "wife_workplace": "",
-    "wife_income": 0,
-    "wife_holidays": "",
-
+    "self_fund_man": 0, "other_debt": "",
+    "husband_company": "", "husband_service_years": 3, "husband_workplace": "",
+    "husband_income": 0, "husband_holidays": "",
+    "wife_company": "", "wife_service_years": 3, "wife_workplace": "",
+    "wife_income": 0, "wife_holidays": "",
     "sat_point": "", "search_status": "", "why_buy": "", "task": "",
     "anxiety": "", "rent_vs_buy": "", "other_trouble": "", "effect": "",
     "forecast": "", "event_effect": "", "missed_timing": "", "ideal_life": "",
@@ -340,17 +400,15 @@ base_defaults = {
     "sat_price": 3, "sat_location": 3, "sat_size": 3, "sat_age": 3, "sat_spec": 3,
     "dissat_free": "",
     "self_fund": "", "gift_support": "",
-    "w_why": "", "w_when": "", "w_where": "", "w_who": "", "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
-    # トレードオフ（大カテゴリー5本）
+    "w_why": "", "w_when": "", "w_where": "", "w_who": "",
+    "w_what": "", "w_how": "", "w_howmuch": "", "w_free": "",
     "prio_price": 3, "prio_location": 3, "prio_size_layout": 3, "prio_spec": 3, "prio_mgmt": 3,
-    # 任意チェック
     "spec_parking": False, "spec_bicycle": False, "spec_ev": False, "spec_pet": False,
-    "spec_barrierfree": False, "spec_security": False, "spec_disaster": False,
-    "spec_mgmt_good": False, "spec_fee_ok": False, "spec_free": "",
+    "spec_barrierfree": False, "spec_security": False,
+    "spec_disaster": False, "spec_mgmt_good": False, "spec_fee_ok": False, "spec_free": "",
     "contact_pref": "", "share_method": "", "pdf_recipient": TO_EMAIL_DEFAULT,
 }
 
-# セッション（編集しながら保持）— クライアント名で名前空間化
 if ns("hearing_data") not in st.session_state:
     st.session_state[ns("hearing_data")] = payload.get("hearing", base_defaults.copy())
 else:
@@ -404,7 +462,7 @@ with st.form("hearing_form", clear_on_submit=False):
     with sc4: hearing["sat_age"]      = st.slider("満足度：築年数", 1, 5, _coerce_int(hearing["sat_age"],3), key=ns("h_sat_age"))
     with sc5: hearing["sat_spec"]     = st.slider("満足度：スペック", 1, 5, _coerce_int(hearing["sat_spec"],3), key=ns("h_sat_spec"))
     sat_total = int(hearing["sat_price"]) + int(hearing["sat_location"]) + int(hearing["sat_size"]) + int(hearing["sat_age"]) + int(hearing["sat_spec"])
-    st.caption(f"満足度スコア合計：**{sat_total} / 25**")
+    st.caption(f"満足度合計：**{sat_total} / 25**")
     hearing["dissat_free"] = st.text_area("不満な点（自由入力）", value=hearing["dissat_free"], key=ns("h_dissat_free"))
 
     st.divider()
@@ -446,7 +504,7 @@ if 'save_and_pdf' in locals() and save_and_pdf:
     st.session_state[ns("hearing_data")] = dict(payload["hearing"])
     st.success("ヒアリング内容を保存しました。PDFを生成します。")
 
-    # === フォント準備（ここで呼ぶ） ===
+    # === フォント準備 ===
     font_dir = _ensure_jp_fonts()
     reg_path = font_dir / _REG_NAME
     bld_path = font_dir / _BLD_NAME
@@ -455,12 +513,9 @@ if 'save_and_pdf' in locals() and save_and_pdf:
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-
-    # 重要：ファイルパス文字列でOK
     pdf.add_font("NotoSansJP", "", str(reg_path), uni=True)
     pdf.add_font("NotoSansJP", "B", str(bld_path), uni=True)
 
-    # ページ幅（マージン控除後）を常に使うヘルパ
     def _page_w(pdf_obj):
         return pdf_obj.w - pdf_obj.l_margin - pdf_obj.r_margin
 
@@ -480,7 +535,6 @@ if 'save_and_pdf' in locals() and save_and_pdf:
         pdf.multi_cell(w, 7, txt)
         pdf.ln(1)
 
-    # ヘッダー
     pdf.set_font("NotoSansJP", "B", 16)
     pdf.set_x(pdf.l_margin)
     pdf.cell(0, 10, "不動産ヒアリングシート", 0, 1, "C")
@@ -489,7 +543,6 @@ if 'save_and_pdf' in locals() and save_and_pdf:
     pdf.cell(0, 6, f"作成日時：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "R")
     pdf.ln(2)
 
-    # 本文
     title("基本情報")
     pair("お名前", hearing["name"])
     pair("現在の居住エリア・駅", hearing["now_area"])
@@ -523,7 +576,6 @@ if 'save_and_pdf' in locals() and save_and_pdf:
     pair("資料共有", hearing["share_method"])
     pair("PDF送付先", hearing["pdf_recipient"])
 
-    # 出力
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         pdf.output(tmp_file.name)
         pdf_bytes = Path(tmp_file.name).read_bytes()
@@ -594,7 +646,7 @@ if "current_home" not in payload:
         "w_multi": False, "w_low_e": False, "w_double_sash": False, "w_premium_doors": False,
         "s_allrooms": False, "s_wic": False, "s_sic": False, "s_pantry": False, "s_linen": False,
         "sec_tvphone": False, "sec_sensor": False, "net_ftth": False,
-        # 管理・共用（デフォルトは全て未チェック）
+        # 管理・共用
         "c_box": False, "c_parking": "なし", "c_gomi24": False,
         "c_seismic": False, "c_security": False,
         "c_design_level": "普通",
@@ -623,53 +675,18 @@ with st.expander("広さ・間取り", expanded=True):
     with c1:
         cur["area_m2"] = st.number_input("専有面積（㎡）", 0.0, 300.0, _coerce_float(cur["area_m2"],60.0), key=ns("cur_area_m2"))
         cur["living_jyo"] = st.number_input("リビングの広さ（帖）", 0.0, 50.0, _coerce_float(cur["living_jyo"],12.0), key=ns("cur_living_jyo"))
-        cur["layout_type"] = st.selectbox(
-            "間取りタイプ",
-            ["田の字","ワイドスパン","センターイン","その他"],
-            index=["田の字","ワイドスパン","センターイン","その他"].index(cur["layout_type"]),
-            key=ns("cur_layout_type")
-        )
+        cur["layout_type"] = st.selectbox("間取りタイプ", ["田の字","ワイドスパン","センターイン","その他"], index=["田の字","ワイドスパン","センターイン","その他"].index(cur["layout_type"]), key=ns("cur_layout_type"))
     with c2:
-        cur["storage_level"] = st.selectbox(
-            "収納量（WIC・SIC含む総合）",
-            ["多い","普通","少ない"],
-            index=["多い","普通","少ない"].index(cur["storage_level"]),
-            key=ns("cur_storage_level")
-        )
-        cur["ceiling_level"] = st.selectbox(
-            "天井高",
-            ["高い","普通","低い"],
-            index=["高い","普通","低い"].index(cur["ceiling_level"]),
-            key=ns("cur_ceiling_level")
-        )
-        # 方位：日本語表示→コード保存
+        cur["storage_level"] = st.selectbox("収納量（WIC・SIC含む総合）", ["多い","普通","少ない"], index=["多い","普通","少ない"].index(cur["storage_level"]), key=ns("cur_storage_level"))
+        cur["ceiling_level"] = st.selectbox("天井高", ["高い","普通","低い"], index=["高い","普通","低い"].index(cur["ceiling_level"]), key=ns("cur_ceiling_level"))
         opts2 = [d for d,_ in _load_master_balcony_pairs()]
         cur_disp2 = _code_to_disp(cur.get("balcony_aspect","S"))
-        sel_disp2 = st.selectbox(
-            "バルコニー向き",
-            opts2,
-            index=opts2.index(cur_disp2) if cur_disp2 in opts2 else 4,
-            key=ns("cur_balcony_aspect")
-        )
+        sel_disp2 = st.selectbox("バルコニー向き", opts2, index=opts2.index(cur_disp2) if cur_disp2 in opts2 else 4, key=ns("cur_balcony_aspect"))
         cur["balcony_aspect"] = _disp_to_code(sel_disp2)
     with c3:
-        cur["balcony_depth_m"] = st.number_input(
-            "バルコニー奥行（m）",
-            0.0, 5.0, _coerce_float(cur.get("balcony_depth_m",1.5),1.5),
-            step=0.1, key=ns("cur_balcony_depth_m")
-        )
-        cur["sun_wind_level"] = st.selectbox(
-            "採光・通風",
-            ["良い","普通","悪い"],
-            index=["良い","普通","悪い"].index(cur["sun_wind_level"]),
-            key=ns("cur_sun_wind_level")
-        )
-        cur["hall_flow_level"] = st.selectbox(
-            "廊下幅・家事動線効率",
-            ["良い","普通","悪い"],
-            index=["良い","普通","悪い"].index(cur["hall_flow_level"]),
-            key=ns("cur_hall_flow_level")
-        )
+        cur["balcony_depth_m"] = st.number_input("バルコニー奥行（m）", 0.0, 5.0, _coerce_float(cur.get("balcony_depth_m",1.5),1.5), step=0.1, key=ns("cur_balcony_depth_m"))
+        cur["sun_wind_level"] = st.selectbox("採光・通風", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["sun_wind_level"]), key=ns("cur_sun_wind_level"))
+        cur["hall_flow_level"] = st.selectbox("廊下幅・家事動線効率", ["良い","普通","悪い"], index=["良い","普通","悪い"].index(cur["hall_flow_level"]), key=ns("cur_hall_flow_level"))
 
 with st.expander("専有部分スペック（ある/ない）", expanded=False):
     st.caption("【キッチン】")
@@ -738,7 +755,7 @@ if st.button("💾 現状スコアリングを上書き保存", key=ns("save_cur
 st.divider()
 
 # ============================================
-# ③.5 基本の希望条件（マスト項目：④の前に入れる）
+# ③.5 基本の希望条件（マスト）
 # ============================================
 st.header("基本の希望条件（マスト項目）")
 
@@ -796,7 +813,7 @@ if submitted_basic:
     st.success("基本の希望条件を上書き保存しました。")
     st.rerun()
 
-# ========= 重要度（1=最優先〜5）重複なし UI（「1番」表記） =========
+# ========= 重要度（1=最優先〜5）重複なし UI =========
 st.subheader("重要度のトレードオフ（1=最優先〜5）")
 st.caption("※ 各カテゴリに 1番,2番,3番,4番,5番 を一度ずつ割当て（重複不可）。")
 
@@ -810,7 +827,6 @@ CATS = [
 LABEL_MAP = {1:"1番", 2:"2番", 3:"3番", 4:"4番", 5:"5番"}
 
 def _normalize_importance(imp: dict) -> dict:
-    # 1..5 を各カテゴリに一意に割当て（不足/重複を解消）
     imp = dict(imp or {})
     cur = {k: int(v) for k, v in imp.items() if v in [1,2,3,4,5]}
     used = []
@@ -825,7 +841,6 @@ def _normalize_importance(imp: dict) -> dict:
             out[k] = free.pop(0)
     return out
 
-# 初期化（basic_prefs → セッション）
 if ns("imp_state") not in st.session_state:
     st.session_state[ns("imp_state")] = _normalize_importance(bp.get("importance", {"price":1,"location":2,"size_layout":3,"spec":4,"management":5}))
 
@@ -838,7 +853,8 @@ def _available_for(cat_key: str):
 
 def _on_change(cat_key: str, widget_key: str):
     new_val = st.session_state.get(widget_key, None)
-    if new_val is None: return
+    if new_val is None:
+        return
     new_val = int(new_val)
     cur_all = dict(st.session_state[ns("imp_state")])
     old_self = cur_all.get(cat_key)
@@ -862,7 +878,6 @@ for idx, (k, label) in enumerate(CATS):
                   key=key, on_change=_on_change, args=(k, key,), format_func=_fmt,
                   help="各カテゴリに 1番〜5番 を重複なく割当て")
 
-# [IMP-SAVE] 重要度のトレードオフ 保存ボタン
 c1, c2 = st.columns(2)
 with c1:
     if st.button("↺ リセット（1番→価格, 2番→立地 ...）", use_container_width=True, key=ns("imp_reset")):
@@ -873,181 +888,24 @@ with c2:
         bp["importance"] = dict(st.session_state[ns("imp_state")])
         payload["basic_prefs"] = bp
         save_client(client_id, payload)
-        st.success("重要度を保存しました（重複なし・1番〜5番）。")
+        st.success("重要度を上書き保存しました。")
         st.rerun()
-
-st.header("希望条件（◎=必要／○=あったほうがよい／△=どちらでもよい／×=なくてよい）")
-
-# ---- 物件モードのタブ（マンション / 戸建て・土地） ----
-tabs = st.tabs(["🏢 マンション", "🏠 戸建て・土地"])
-mode_label = "マンション"  # 既定
-if ns("wish_mode") not in st.session_state:
-    # 既存の basic_prefs.types から初期モード推定
-    _types = [str(t) for t in payload.get("basic_prefs", {}).get("types", [])]
-    st.session_state[ns("wish_mode")] = "戸建て" if any(("戸建" in t or "土地" in t) for t in _types) else "マンション"
-mode_label = st.session_state[ns("wish_mode")]
-
-def _set_mode(new_mode: str):
-    st.session_state[ns("wish_mode")] = new_mode
-    # basic_prefs.types を同期（マルチ選でもOKだが compare 側は types に "戸建て" を含むかで判定）
-    bp_types = payload.get("basic_prefs", {}).get("types", [])
-    if new_mode == "マンション":
-        bp_types = ["マンション"]
-    else:
-        bp_types = ["戸建て", "注文住宅（土地）"]  # ユーザーの語彙に合わせて並記
-    payload.setdefault("basic_prefs", {})["types"] = bp_types
-    save_client(client_id, payload)
-    # compare.py 用の最小 prefs を書き出し
-    export_compare_prefs_min(client_id, new_mode)
-
-# どちらのタブが選ばれたかでモード確定
-with tabs[0]:
-    if st.button("このモードで設定する", key=ns("wish_tab_mansion_set")):
-        _set_mode("マンション")
-with tabs[1]:
-    if st.button("このモードで設定する", key=ns("wish_tab_house_set")):
-        _set_mode("戸建て")
-
-mode_label = st.session_state[ns("wish_mode")]
-st.caption(f"現在のモード：**{mode_label}**（compare も自動追従）")
-
-# ---- ラベル定義 & ショートハンド ----
-CHO = {
-    "◎ 必要":"must",
-    "○ あったほうがよい":"want",
-    "△ どちらでもよい":"neutral",
-    "× なくてよい":"no_need"
-}
-if "wish" not in payload: 
-    payload["wish"] = {}
-wish = payload["wish"]
-
-def wish_select(label, key):
-    current = wish.get(key, "neutral")
-    current_label = next((k for k,v in CHO.items() if v == current), "△ どちらでもよい")
-    sel = st.selectbox(label, list(CHO.keys()), index=list(CHO.keys()).index(current_label), key=ns(f"wish-{key}"))
-    wish[key] = CHO[sel]
-
-# ---- モード別 UI（マンション / 戸建て・土地） ----
-if mode_label == "マンション":
-    with st.expander("立地（資産性）", expanded=True):
-        wish_select("最寄駅まで近いこと", "loc_walk")
-        wish_select("複数路線利用できること", "loc_lines")
-        wish_select("職場アクセスが良いこと", "loc_access")
-        wish_select("商業施設の充実", "loc_shop")
-        wish_select("教育環境の良さ", "loc_edu")
-        wish_select("医療アクセスの良さ", "loc_med")
-        wish_select("治安の良さ", "loc_security")
-        wish_select("災害リスクが低いこと", "loc_hazard_low")
-        wish_select("公園・緑地の充実", "loc_park")
-        wish_select("静かな環境", "loc_silent")
-
-    with st.expander("広さ・間取り", expanded=False):
-        wish_select("専有面積の広さ", "sz_area")
-        wish_select("リビングの広さ", "sz_living")
-        wish_select("優れた間取り（ワイドスパン等）", "sz_layout")
-        wish_select("収納量（WIC/SIC等）の充実", "sz_storage")
-        wish_select("天井高が高い", "sz_ceiling")
-        wish_select("日当たり（向き）の良さ", "sz_aspect")
-        wish_select("バルコニー奥行の余裕", "sz_balcony_depth")
-        wish_select("採光・通風の良さ", "sz_sun_wind")
-        wish_select("廊下幅・家事動線の良さ", "sz_flow")
-
-    with st.expander("スペック（専有部分）", expanded=False):
-        st.caption("【キッチン】")
-        for k, lbl in [("k_dishwasher","食洗機"),("k_purifier","浄水器／整水器"),("k_disposer","ディスポーザー"),
-                       ("k_highend_cooktop","高機能コンロ（IH/高火力）"),("k_bi_oven","ビルトインオーブン")]:
-            wish_select(lbl, k)
-        st.caption("【バスルーム】")
-        for k, lbl in [("b_dryer","浴室暖房乾燥機"),("b_reheating","追い焚き機能"),("b_mist_sauna","ミストサウナ"),
-                       ("b_tv","浴室テレビ"),("b_window","浴室に窓")]:
-            wish_select(lbl, k)
-        st.caption("【暖房・空調】")
-        for k, lbl in [("h_floorheat","床暖房"),("h_aircon_built","エアコン（備付）")]:
-            wish_select(lbl, k)
-        st.caption("【窓・建具】")
-        for k, lbl in [("w_multi","複層ガラス"),("w_low_e","Low-Eガラス"),("w_double_sash","二重サッシ"),
-                       ("w_premium_doors","建具ハイグレード（鏡面等）")]:
-            wish_select(lbl, k)
-        st.caption("【収納】")
-        for k, lbl in [("s_allrooms","全居室収納"),("s_wic","WIC"),("s_sic","SIC"),("s_pantry","パントリー"),("s_linen","リネン庫")]:
-            wish_select(lbl, k)
-        st.caption("【セキュリティ・通信】")
-        for k, lbl in [("sec_tvphone","TVモニター付インターホン"),("sec_sensor","玄関センサーライト"),("net_ftth","光配線方式（各戸まで）")]:
-            wish_select(lbl, k)
-
-    # マンション”だけ”に存在するブロック
-    with st.expander("管理・共用部・その他", expanded=False):
-        for key, label in [
-            ("c_concierge","コンシェルジュサービス"), ("c_box","宅配ボックス"), ("c_guest","ゲストルーム"),
-            ("c_lounge_kids","ラウンジ/キッズルーム"), ("c_gym_pool","ジム/プール"),
-            ("c_parking_type","駐車場形態（平置き等）"), ("c_gomi24","24時間ゴミ出し"), ("c_seismic","免震・制震構造"),
-            ("c_security","強いセキュリティ（有人/カメラ等）"), ("c_design","外観・エントランスのデザイン"),
-            ("c_ev_enough","エレベーター台数の十分さ"), ("c_brand_tower","ブランド/タワーの属性"),
-            ("c_pet_ok","ペット可"), ("c_ltp_plan","長期修繕/資金計画の良さ"), ("c_fee_reasonable","修繕積立金の妥当性"),
-            ("c_mgmt","管理体制の良さ"), ("c_history","共用部修繕履歴の良さ"), ("c_yield","収益性（将来の利回り）")
-        ]:
-            wish_select(label, key)
-
-else:
-    # 戸建て・土地用（管理系は出さない）
-    with st.expander("立地（資産性）", expanded=True):
-        wish_select("最寄駅まで近いこと", "loc_walk")
-        wish_select("職場アクセスが良いこと", "loc_access")
-        wish_select("商業施設の充実", "loc_shop")
-        wish_select("教育環境の良さ", "loc_edu")
-        wish_select("医療アクセスの良さ", "loc_med")
-        wish_select("治安の良さ", "loc_security")
-        wish_select("災害リスクが低いこと", "loc_hazard_low")
-        wish_select("公園・緑地の充実", "loc_park")
-        wish_select("静かな環境", "loc_silent")
-
-    with st.expander("建物（構造・性能）", expanded=False):
-        wish_select("耐震性（評点/補強含む）が高い", "kd_quake")
-        wish_select("断熱・気密（UA/C値等）が高い", "kd_insulation")
-        wish_select("劣化対策（長期優良/劣化対策等級）", "kd_deterioration")
-        wish_select("白蟻・雨漏り等の瑕疵がない", "kd_defectfree")
-        wish_select("屋根・外壁の状態が良好", "kd_envelope_good")
-
-    with st.expander("間取り・収納・家事動線", expanded=False):
-        wish_select("延床面積の十分さ", "kd_floor_area")
-        wish_select("家事動線が良い", "kd_flow")
-        wish_select("収納量（WIC/SIC/パントリー等）の充実", "kd_storage")
-        wish_select("天井高・日当たり・通風が良い", "kd_light_wind")
-
-    with st.expander("敷地・法規・外構", expanded=False):
-        wish_select("接道（幅員/位置指定等）が良好", "kd_road")
-        wish_select("駐車スペース（台数/サイズ）が十分", "kd_parking")
-        wish_select("高低差・擁壁・排水が適切", "kd_site_retaining")
-        wish_select("用途地域/建ぺい率・容積率がニーズに合う", "kd_zoning")
-        wish_select("越境/筆界等のトラブルがない", "kd_border")
-
-    with st.expander("設備・配管", expanded=False):
-        wish_select("水回り（キッチン/浴室/洗面/トイレ）が良好", "kd_water")
-        wish_select("給排水配管の状態が良好", "kd_pipes")
-        wish_select("電気容量・ガス種別が要件に合う", "kd_power_gas")
-        wish_select("リフォーム履歴/必要工事が明確", "kd_renovation")
-
-# —— 保存ボタン（モードも一緒に反映 & compare 用 prefs も更新）——
-if st.button("💾 希望条件を上書き保存", key=ns("save_wish")):
-    payload["wish"] = dict(wish)
-    # basic_prefs.types と compare 用 prefs も同期
-    _set_mode(mode_label)  # 中で save_client と export_compare_prefs_min を呼ぶ
-    save_client(client_id, payload)
-    st.success("希望条件を上書き保存しました。（compare 用の種別も更新済み）")
-    st.rerun()
 
 st.divider()
 
-st.subheader("物件比較（別ページ）")
-st.markdown("""
-比較ページでは、現住居=偏差値50 を基準に
-内見物件の優劣を一覧で表示します。
-""")
+# ============================================
+# ④ DBデバッグ / 一覧（任意）
+# ============================================
+st.header("データベース：一覧・デバッグ")
 
-# ✅ 比較ページへは「/compare?client=...」で必ず開く（マスタ回避）
-if st.button("物件比較ページを開く", key=ns("open_compare")):
-    st.markdown(f"[↔ 物件比較ページを開く](/compare?client={client_id})")
+with st.expander("DB状態を表示", expanded=False):
+    all_rows = load_all_clients()
+    st.write(f"総件数：**{len(all_rows)}**")
+    if all_rows:
+        import pandas as pd
+        df = pd.DataFrame(all_rows, columns=["id","created","name","phone","email","memo"])
+        # 表示用に日付を文字列化
+        df["created"] = df["created"].apply(lambda d: d.strftime("%Y-%m-%d %H:%M") if d else "")
+        st.dataframe(df, use_container_width=True)
 
-# 直リンク（推奨）：ワンクリックで確実にID付きで開く
-st.link_button("↔ 物件比較（この顧客IDで開く・推奨）", f"/compare?client={client_id}", use_container_width=True)
+    # 参考：このIDのJSON確認は上の管理枠に配置済み
