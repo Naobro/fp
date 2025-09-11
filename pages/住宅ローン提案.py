@@ -161,6 +161,10 @@ ltv = principal / property_price_guess if property_price_guess else 1.0
 
 # ===== 金利の読込（保存済みのみ） =====
 rates = load_manual_rates()  # 無ければ {} のまま
+# 未設定の銀行がある場合は警告表示（後続は空欄で処理継続）
+_missing = [b for b in BANKS if b not in rates or str(rates.get(b, "")).strip() == ""]
+if _missing:
+    st.warning("未設定の金利があるため、該当銀行のセルは空欄になります： " + " / ".join(_missing))
 
 # ===== 認証付き・金利修正（セッション状態は使わない） =====
 ADMIN_PASSWORD = "naoki0510"
@@ -168,37 +172,81 @@ ADMIN_PASSWORD = "naoki0510"
 st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当専用）", expanded=False):
     st.warning("🔒 営業担当者専用。パスワード一致で編集欄が表示されます。")
-    pw_input = st.text_input("パスワード", type="password", key="pw_inline")
 
-    if pw_input == ADMIN_PASSWORD:
-        st.success("✅ 認証成功：『金利を保存』を押した時だけ反映・保存します。")
-        # 列は固定で作成（インデックスアクセスを避け、余計な例外を回避）
-        cA, cB, cC, cD, cE = st.columns(5)
-        bank_cols = [cA, cB, cC, cD, cE]
+    # ここでは SessionState を使わない（key はウィジェット識別用にのみ付与）
+    ADMIN_PASSWORD = "naoki0510"
 
-        # new_rates_dict はローカル変数。StreamlitのSessionStateとは無関係な純粋なdict名にする
+    col_p1, col_p2, _ = st.columns([2, 1, 2])
+    with col_p1:
+        pwd = st.text_input("パスワード", type="password", key="pwd_rates_edit")
+    with col_p2:
+        do_auth = st.button("🔓 認証", type="primary", key="btn_rates_auth")
+
+    if do_auth and pwd == ADMIN_PASSWORD:
+        st.success("✅ 認証成功 - 金利を編集できます")
+
+        # 銀行並び（保存ファイルに無い場合でも固定で表示）
+        BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
+
+        # 表示カラム
+        bank_cols = st.columns(len(BANKS))
+
+        # 英数字の安全キー（SessionStateは参照しない）
+        bank_key_map = {
+            "SBI新生銀行": "sbi_shinsei",
+            "三菱UFJ銀行": "mufg",
+            "PayPay銀行":  "paypay",
+            "じぶん銀行":  "jibun",
+            "住信SBI銀行": "sumishin_sbi",
+        }
+
+        # 保存済みのみ読む。無ければ {}（= 初期値は存在しない）
+        current_saved = load_manual_rates()  # 既存仕様：無ければ {} またはファイルがあればその中身
+
+        # 新しい入力値を一時格納（ローカル dict）
         new_rates_dict = {}
+        used_keys = set()
+
         for bank, col in zip(BANKS, bank_cols):
             with col:
-                current_val = float(rates[bank]) if bank in rates else 0.0  # 未保存なら 0.000 を表示
-                new_rates_dict[bank] = st.number_input(
-                    f"{bank}（％）", value=current_val, step=0.001, format="%.3f", key=f"rate_input_{bank}"
-                )
+                # 未保存なら 0.000 を表示（「初期値に戻す」等は一切なし）
+                current_val = float(current_saved.get(bank, 0.0))
 
-        if st.button("💾 金利を保存", type="primary", key="btn_save_rates"):
-            if save_manual_rates(new_rates_dict):
-                st.success("✅ 保存しました。以後の計算に反映されます。")
-            else:
-                st.error("❌ 保存に失敗しました。権限やファイルパスをご確認ください。")
-    elif pw_input:
-        st.error("❌ パスワードが違います。")
+                # ユニークキー（YYYYMMDD + 英数字名）
+                safe_key = f"mortgage_rate_{datetime.now().strftime('%Y%m%d')}_{bank_key_map[bank]}"
 
-# ===== 金利が未設定の銀行があれば停止（初期値は存在しない運用） =====
-missing_banks = [b for b in BANKS if b not in rates]
-if missing_banks:
-    st.error("金利未設定の銀行があります。『金利を修正する』から **全行** の金利（％）を入力し、保存してください。")
-    st.write("未設定：", "、".join(missing_banks))
-    st.stop()
+                if safe_key in used_keys:
+                    st.error(f"キーの重複: {safe_key}")
+                used_keys.add(safe_key)
+
+                try:
+                    new_val = st.number_input(
+                        f"{bank}（％）",
+                        value=current_val,
+                        step=0.001,
+                        format="%.3f",
+                        key=safe_key,
+                    )
+                except Exception as e:
+                    st.error(f"入力フィールド作成エラー ({bank}): {e}")
+                    new_val = current_val
+
+                new_rates_dict[bank] = float(new_val)
+
+        st.markdown("---")
+        c_save, _ = st.columns([1, 3])
+        with c_save:
+            if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
+                ok = save_manual_rates(new_rates_dict)
+                if ok:
+                    st.success("✅ 金利を保存しました（次回以降はこの値をそのまま読み込みます）")
+                else:
+                    st.error("❌ 保存に失敗しました")
+
+    elif do_auth and pwd != ADMIN_PASSWORD:
+        st.error("❌ パスワードが違います")
+    else:
+        st.info("💡 認証後に金利の修正が可能になります")
 
 # ===== 借入上限額 =====
 banks_exam = {
@@ -227,78 +275,132 @@ tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
 
 # ===== 返済額テーブル計算 =====
+# ===== 返済額テーブル計算 =====
 def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, list, list, set]:
+    """
+    返済額テーブルを構築する関数。
+    - BANKS, PLANS, limits, rates, ltv を参照（いずれもグローバルで定義済み）
+    - 金利未設定の銀行は安全にスキップして空欄セルを入れる
+    - 35年制限行／最長50年行の扱いを内包
+    戻り値:
+      (table_rows_local, highlights_local, row50_local, mins50)
+    """
     def cap_years(bank_name: str, req: int) -> int:
+        # 年数の上限（年齢制約：79-年齢、MUFG/SBI新生は35年まで）
         y = min(79 - age_now, req)
         if bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
             y = min(y, 35)
         return y
 
-    table_rows_local = []
-    highlights_local = []
+    table_rows_local: list[list[dict]] = []
+    highlights_local: list[set[int]] = []
 
+    # --- 各プランの行を構築 ---
     for plan in PLANS:
-        row = []
-        vals = []
+        row: list[dict] = []
+        vals: list[tuple[int, float]] = []
+
         for bank in BANKS:
-            # 借入上限超なら空欄
+            # 1) 借入上限で弾く
             if principal > limits.get(bank, 0):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
-            # 一般団信以外は、その銀行で当該プランの上乗せが存在しなければ空欄（提供なし扱い）
+            # 2) 金利が未設定なら空欄セル（KeyErrorを出さない）
+            if bank not in rates:
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
+
+            # 3) 「一般団信」以外は、その銀行で当該プランの上乗せが無いなら空欄
             if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
             y = cap_years(bank, years_req)
 
-            # 基準金利
+            # 4) 基準金利を決定（※ここが “探しやすい文言” です）
+            # >>>>>> 基準金利（銀行別ロジック）開始 <<<<<<
+            try:
+                base_percent_saved = float(rates[bank])  # 保存された％値を使用
+            except Exception:
+                # 数値化できない場合も空欄
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
+
             if bank == "住信SBI銀行":
-                eff_pct = sbi_effective_percent(float(rates[bank]), ltv, y)  # ％
+                # 住信SBIのみ：LTV・年数の段階加算を“％のまま”適用
+                eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)  # ％
                 base = eff_pct / 100.0
             else:
-                base = float(rates[bank]) / 100.0
+                # そのほかの銀行：保存％を実数化
+                base = base_percent_saved / 100.0
                 # PayPay/じぶん は 36年以上 +0.10%
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
+            # <<<<<< 基準金利（銀行別ロジック）終了 >>>>>>
 
+            # 5) 団信・付帯の上乗せ（％→実数）
             add = extra_rate_percent(bank, plan, age_now) / 100.0
+
+            # 6) 月返済額を計算
             m = monthly_payment(principal, base + add, y)
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
 
-        mins = set()
+        # 7) 最小返済額セルのハイライト
+        mins: set[int] = set()
         if vals:
             mv = min(v for _, v in vals)
             for idx, v in vals:
-                if abs(v - mv) < 0.5:
+                if abs(v - mv) < 0.5:  # ほぼ同一最小なら複数ハイライト
                     mins.add(idx)
 
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # 最長50年（一般団信の下段）
-    row50_local = []
-    vals50 = []
+        # 「一般団信」の直後に“最長50年”行を付けたい訳ではない（最長行は別途下で構築）
+        # ここでは通常行のみ扱う
+
+    # --- “最長50年” 行（一般団信の下段として描画用に返す） ---
+    row50_local: list[dict] = []
+    vals50: list[tuple[int, float]] = []
+
     for bank in BANKS:
+        # 1) 借入上限で弾く & MUFG/SBI新生は 50年非対応
         if principal > limits.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
+
+        # 2) 金利が未設定なら空欄セル
+        if bank not in rates:
+            row50_local.append({"rate": None, "monthly": None, "years": None})
+            continue
+
+        # 3) 年数は 年齢制約の範囲で最長 50 年
         y = min(79 - age_now, 50)
+
+        # 4) 基準金利（最長年数に対して同じロジックを適用）
+        try:
+            base_percent_saved = float(rates[bank])
+        except Exception:
+            row50_local.append({"rate": None, "monthly": None, "years": None})
+            continue
+
         if bank == "住信SBI銀行":
-            eff_pct = sbi_effective_percent(float(rates[bank]), ltv, y)
+            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)  # ％
             base = eff_pct / 100.0
         else:
-            base = float(rates[bank]) / 100.0
+            base = base_percent_saved / 100.0
             if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                 base += 0.10 / 100.0
+
         add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
+
         m = monthly_payment(principal, base + add, y)
         row50_local.append({"rate": base + add, "monthly": m, "years": y})
         vals50.append((len(row50_local) - 1, m))
 
-    mins50 = set()
+    mins50: set[int] = set()
     if vals50:
         mv = min(v for _, v in vals50)
         for idx, v in vals50:
