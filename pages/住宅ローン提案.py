@@ -14,6 +14,15 @@ from datetime import datetime
 
 import streamlit as st
 
+# --- compat guard: 外部コードが st.session_state.auth_status を触っても落ちないようにする ---
+try:
+    _ = st.session_state["auth_status"]  # 既にあれば何もしない
+except Exception:
+    try:
+        st.session_state["auth_status"] = None  # 無ければ置いておく（以後 AttributeError は出ない）
+    except Exception:
+        pass
+
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.units import mm
@@ -158,17 +167,17 @@ years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=m
 # LTV概算
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1.0
+
+# ===== 金利の読込（保存済みのみ） =====
 # ===== 金利の読込（保存済みのみ） =====
 rates = load_manual_rates()  # 無ければ {} のまま
 
-# 未設定の銀行がある場合は警告（表示のみ。以降の計算は該当セルを空欄扱いで続行）
-_missing = [b for b in BANKS if (b not in rates) or (str(rates.get(b, "")).strip() == "")]
+# 未設定の銀行は後続で空欄扱い（停止しない）
+_missing = [b for b in BANKS if b not in rates or str(rates.get(b, "")).strip() == ""]
 if _missing:
     st.warning("未設定の金利があるため、該当銀行のセルは空欄になります： " + " / ".join(_missing))
 
 # ===== 認証付き・金利修正（セッション状態は使わない） =====
-ADMIN_PASSWORD = "naoki0510"
-
 st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当専用）", expanded=False):
     st.warning("🔒 営業担当者専用。パスワード一致で編集欄が表示されます。")
@@ -179,13 +188,12 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
     with col_p2:
         do_auth = st.button("🔓 認証", type="primary", key="btn_rates_auth")
 
-    if do_auth and pwd == ADMIN_PASSWORD:
+    if do_auth and pwd == "naoki0510":
         st.success("✅ 認証成功 - 金利を編集できます")
 
-        # 表示カラム（順序はグローバルの BANKS を使用）
         bank_cols = st.columns(len(BANKS))
 
-        # 英数字のみの固定キー（毎回同じ。SessionStateの保存用途ではなくウィジェット識別のみ）
+        # 安全な英数字キー
         bank_key_map = {
             "SBI新生銀行": "sbi_shinsei",
             "三菱UFJ銀行": "mufg",
@@ -194,17 +202,20 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
             "住信SBI銀行": "sumishin_sbi",
         }
 
-        # 最新の保存内容を読み直し（存在しなければ {}）
-        current_saved = load_manual_rates()
+        current_saved = load_manual_rates()  # 無ければ {}
 
-        # 入力結果を一時格納（ローカル変数）
         new_rates_dict = {}
+        used_keys = set()
 
         for bank, col in zip(BANKS, bank_cols):
             with col:
-                # 未保存なら 0.000 を表示（“初期値”の概念は無し）
                 current_val = float(current_saved.get(bank, 0.0))
-                safe_key = f"rate_input_{bank_key_map[bank]}"
+
+                # 日付＋英数字名でキーをユニーク化（SessionStateに依存しない）
+                safe_key = f"mortgage_rate_{datetime.now().strftime('%Y%m%d')}_{bank_key_map[bank]}"
+                if safe_key in used_keys:
+                    st.error(f"キーの重複: {safe_key}")
+                used_keys.add(safe_key)
 
                 try:
                     new_val = st.number_input(
@@ -225,11 +236,11 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         with c_save:
             if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
                 if save_manual_rates(new_rates_dict):
-                    st.success("✅ 金利を保存しました（次回以降はこの値をそのまま使用します）")
+                    st.success("✅ 金利を保存しました（次回以降はこの値をそのまま読み込みます）")
                 else:
                     st.error("❌ 保存に失敗しました")
 
-    elif do_auth and pwd != ADMIN_PASSWORD:
+    elif do_auth and pwd != "naoki0510":
         st.error("❌ パスワードが違います")
     else:
         st.info("💡 認証後に金利の修正が可能になります")
