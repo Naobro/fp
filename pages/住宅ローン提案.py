@@ -1,5 +1,11 @@
 # /pages/住宅ローン提案.py
-# 住宅ローン 提案シミュレーター（初期値なし・st.session_state未使用・手動保存のみ・パスワード一致で編集表示）
+# 住宅ローン 提案シミュレーター
+# 要件：
+# - st.session_state は一切参照しない
+# - “初期値に戻す” 概念なし（保存が無ければエラーで停止）
+# - 保存は「金利を保存」ボタンでのみ
+# - パスワード一致後に編集UI表示（状態フラグ不使用）
+# - 直感的な固定キー（ASCII）のみ使用
 
 import os
 import io
@@ -7,7 +13,6 @@ import json
 from datetime import datetime
 
 import streamlit as st
-import pandas as pd
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -17,28 +22,32 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# ========== 画面設定 ==========
+# ===== 画面設定（最初に実行） =====
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
 
-# ========== フォント ==========
+# ===== フォント（日本語） =====
 FONT_PATH = "NotoSansJP-Regular.ttf"
 try:
-    pdfmetrics.registerFont(TTFont('NotoSansJP', FONT_PATH))
+    pdfmetrics.registerFont(TTFont("NotoSansJP", FONT_PATH))
 except Exception as e:
     st.error(f"フォント読み込み失敗: {e}\n{FONT_PATH} をプロジェクト直下に置いてください。")
     st.stop()
 
-def jp_style(size=11, font_name='NotoSansJP', align='CENTER', leading=15, bold=False, color=colors.black):
-    am = {'LEFT': 0, 'CENTER': 1, 'RIGHT': 2}
+def jp_style(size=11, align="CENTER", leading=15, bold=False, color=colors.black):
+    amap = {"LEFT": 0, "CENTER": 1, "RIGHT": 2}
     return ParagraphStyle(
-        name=f'jps_{size}_{align}',
-        fontName=font_name, fontSize=size, leading=leading,
-        alignment=am.get(align, 1),
-        fontWeight=("bold" if bold else "normal"),
-        textColor=color, spaceAfter=2, spaceBefore=2
+        name=f"jp_{size}_{align}",
+        fontName="NotoSansJP",
+        fontSize=size,
+        leading=leading,
+        alignment=amap.get(align, 1),
+        textColor=color,
+        spaceAfter=2,
+        spaceBefore=2,
+        # reportlabは fontWeight を解釈しないため、boldは使い分けで対応
     )
 
-# ========== 固定定義 ==========
+# ===== 固定定義 =====
 BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
 PLANS = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
@@ -50,7 +59,8 @@ SPECIAL_NOTES = {
     "住信SBI銀行": ["全疾病保障+三大疾病50%標準付帯", "125%ルールなし"],
 }
 
-def extra_rate(bank: str, plan: str, age: int) -> float:
+def extra_rate_percent(bank: str, plan: str, age: int) -> float:
+    # 団信・付帯の上乗せ（％）
     if bank == "SBI新生銀行":
         return 0.1 if plan == "がん100" else 0.0
     if bank == "三菱UFJ銀行":
@@ -63,15 +73,13 @@ def extra_rate(bank: str, plan: str, age: int) -> float:
         return (0.2 if age < 40 else 0.4) if plan == "三大疾病" else 0.0
     return 0.0
 
-# ========== 保存（JSON） ==========
+# ===== 保存（JSONのみ） =====
 SAVE_DIR = "data"
 SAVE_PATH = os.path.join(SAVE_DIR, "manual_rates.json")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 def load_manual_rates() -> dict:
-    """
-    保存済み金利のみ読む。無ければ空{}（初期値ゼロも出さない）。
-    """
+    """保存済み金利のみ返す。無ければ {}（初期値の概念なし）。"""
     try:
         if os.path.exists(SAVE_PATH):
             with open(SAVE_PATH, "r", encoding="utf-8") as f:
@@ -89,34 +97,40 @@ def load_manual_rates() -> dict:
     return {}
 
 def save_manual_rates(d: dict) -> bool:
-    """
-    『金利を保存』を押した時だけ、入力された数値を保存（上書き）。
-    """
+    """『金利を保存』押下時のみ保存。空文字は無視。"""
     try:
-        purified = {b: float(d[b]) for b in BANKS if b in d and str(d[b]).strip() != ""}
+        purified = {}
+        for b in BANKS:
+            if b in d and str(d[b]).strip() != "":
+                purified[b] = float(d[b])
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
             json.dump(purified, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
         return False
 
-# ========== 計算関数 ==========
-def monthly_payment(principal, annual_rate, years):
+# ===== 計算 =====
+def monthly_payment(principal: float, annual_rate: float, years: int) -> float:
     r = annual_rate / 12.0
     n = years * 12
     if r == 0:
         return principal / n
-    return principal * r / (1 - (1 + r) ** -n)
+    return principal * r / (1 - (1 + r) ** (-n))
 
 def sbi_effective_percent(base_percent: float, ltv: float, years: int) -> float:
+    # 住信SBIだけ LTV・年数帯で段階加算（％のまま）
     rate = float(base_percent)
-    if ltv <= 0.80: rate += -0.09
-    elif ltv > 1.00: rate += 0.07
-    if 36 <= years <= 40: rate += 0.07
-    elif years >= 41: rate += 0.15
+    if ltv <= 0.80:
+        rate += -0.09
+    elif ltv > 1.00:
+        rate += 0.07
+    if 36 <= years <= 40:
+        rate += 0.07
+    elif years >= 41:
+        rate += 0.15
     return rate
 
-def borrowing_limit(income, exam_rate, ratio, age_now):
+def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int) -> int:
     exam_years = min(35, 79 - age_now)
     annual = income * ratio
     m = annual / 12
@@ -125,116 +139,131 @@ def borrowing_limit(income, exam_rate, ratio, age_now):
     raw = (m * n) if r == 0 else (m * (1 - (1 + r) ** -n) / r)
     return int(raw // 100000 * 100000)
 
-# ========== UI：基本入力（ASCIIキー固定） ==========
+# ===== UI：基本入力（固定キー） =====
 st.title("住宅ローン 提案シミュレーター")
 
-c1, c2, c3, c4 = st.columns(4)
-with c1:
+col1, col2, col3, col4 = st.columns(4)
+with col1:
     principal = st.number_input("借入額 (万円)", min_value=500, max_value=100000, value=5000, key="inp_principal") * 10000
-with c2:
+with col2:
     self_fund = st.number_input("自己資金 (万円)", min_value=0, max_value=100000, value=200, key="inp_self_fund") * 10000
-with c3:
+with col3:
     annual_income = st.number_input("年収 (万円)", min_value=100, max_value=10000, value=1000, key="inp_income") * 10000
-with c4:
+with col4:
     age = st.number_input("年齢", min_value=18, max_value=80, value=35, key="inp_age")
 
 max_year = max(1, 79 - int(age))
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(35, max_year), key="inp_years")
 
-# 概算LTV
+# LTV概算
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1.0
 
-# ========== 金利の読込 ==========
-rates = load_manual_rates()  # 空なら空dictのまま
+# ===== 金利の読込（保存済みのみ） =====
+rates = load_manual_rates()  # 無ければ {} のまま
 
-# ========== 認証：一致時のみ編集UI（セッション状態は参照しない） ==========
+# ===== 認証付き・金利修正（セッション状態は使わない） =====
 ADMIN_PASSWORD = "naoki0510"
 
 st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当専用）", expanded=False):
     st.warning("🔒 営業担当者専用。パスワード一致で編集欄が表示されます。")
-    pw = st.text_input("パスワード", type="password", key="pw_input_inline")
+    pw_input = st.text_input("パスワード", type="password", key="pw_inline")
 
-    if pw == ADMIN_PASSWORD:
-        st.success("✅ 認証成功 - 入力値は『金利を保存』ボタンでのみ保存（自動保存なし）")
-        edited = {}
-        cols = st.columns(5)
-        for i, bank in enumerate(BANKS):
-            with cols[i]:
-                current = float(rates[bank]) if bank in rates else 0.0  # 未保存なら0.000表示（初期値の概念なし）
-                edited[bank] = st.number_input(f"{bank}（％）", value=current, step=0.001, format="%.3f", key=f"rate_{i}")
+    if pw_input == ADMIN_PASSWORD:
+        st.success("✅ 認証成功：『金利を保存』を押した時だけ反映・保存します。")
+        # 列は固定で作成（インデックスアクセスを避け、余計な例外を回避）
+        cA, cB, cC, cD, cE = st.columns(5)
+        bank_cols = [cA, cB, cC, cD, cE]
+
+        # new_rates_dict はローカル変数。StreamlitのSessionStateとは無関係な純粋なdict名にする
+        new_rates_dict = {}
+        for bank, col in zip(BANKS, bank_cols):
+            with col:
+                current_val = float(rates[bank]) if bank in rates else 0.0  # 未保存なら 0.000 を表示
+                new_rates_dict[bank] = st.number_input(
+                    f"{bank}（％）", value=current_val, step=0.001, format="%.3f", key=f"rate_input_{bank}"
+                )
 
         if st.button("💾 金利を保存", type="primary", key="btn_save_rates"):
-            if save_manual_rates(edited):
+            if save_manual_rates(new_rates_dict):
                 st.success("✅ 保存しました。以後の計算に反映されます。")
             else:
-                st.error("❌ 保存に失敗しました。権限やパスをご確認ください。")
-    elif pw:
+                st.error("❌ 保存に失敗しました。権限やファイルパスをご確認ください。")
+    elif pw_input:
         st.error("❌ パスワードが違います。")
 
-# ========== 金利が未設定の銀行があれば停止 ==========
-missing = [b for b in BANKS if b not in rates]
-if missing:
-    st.error("金利未設定の銀行があります。『金利を修正する』で **全行** の金利（％）を入力し、保存してください。")
-    st.write("未設定：", "、".join(missing))
+# ===== 金利が未設定の銀行があれば停止（初期値は存在しない運用） =====
+missing_banks = [b for b in BANKS if b not in rates]
+if missing_banks:
+    st.error("金利未設定の銀行があります。『金利を修正する』から **全行** の金利（％）を入力し、保存してください。")
+    st.write("未設定：", "、".join(missing_banks))
     st.stop()
 
-# ========== 借入上限 ==========
-banks_info = {
+# ===== 借入上限額 =====
+banks_exam = {
     "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
     "三菱UFJ銀行": {"審査金利": 0.0354, "返済比率": 0.35},
     "PayPay銀行":  {"審査金利": 0.03,   "返済比率": 0.40},
     "じぶん銀行":  {"審査金利": 0.0257, "返済比率": 0.35},
     "住信SBI銀行": {"審査金利": 0.0325, "返済比率": 0.35},
 }
-limit_amounts, limit_rows = {}, []
-for bank, info in banks_info.items():
-    limit = borrowing_limit(annual_income, info["審査金利"], info["返済比率"], int(age))
-    limit_amounts[bank] = limit
-    limit_rows.append([bank, f"{int(limit // 10000):,} 万円"])
+limits = {}
+rows_limit_html = []
+for bank, info in banks_exam.items():
+    lim = borrowing_limit(annual_income, info["審査金利"], info["返済比率"], int(age))
+    limits[bank] = lim
+    rows_limit_html.append((bank, f"{int(lim // 10000):,} 万円"))
+
 st.subheader("💰 年収からの借入上限額")
 st.markdown(
     "<style>.blimit th, .blimit td {border:1.2px solid #aaa; padding:12px; font-size:18px;} .blimit th{background:#F2F6FA;} .blimit{border-collapse:collapse; width:480px; margin-bottom:20px;}</style>",
     unsafe_allow_html=True
 )
 tbl = "<table class='blimit'><thead><tr><th style='width:250px;text-align:center'>銀行名</th><th style='width:230px;text-align:center'>借入上限額</th></tr></thead><tbody>"
-for bank, val in limit_rows:
+for bank, val in rows_limit_html:
     tbl += f"<tr><td align='center'>{bank}</td><td align='right'>{val}</td></tr>"
 tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
 
-# ========== 返済額テーブル計算 ==========
-def build_table():
-    rows, highlights = [], []
-
+# ===== 返済額テーブル計算 =====
+def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, list, list, set]:
     def cap_years(bank_name: str, req: int) -> int:
-        y = min(79 - int(age), req)
+        y = min(79 - age_now, req)
         if bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
             y = min(y, 35)
         return y
 
+    table_rows_local = []
+    highlights_local = []
+
     for plan in PLANS:
-        row, vals = [], []
+        row = []
+        vals = []
         for bank in BANKS:
-            if principal > limit_amounts.get(bank, 0):
-                row.append({"rate": None, "monthly": None, "years": None}); continue
+            # 借入上限超なら空欄
+            if principal > limits.get(bank, 0):
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
 
-            # 一般団信以外は extra_rate が0でも提供無しとして空欄にする
-            if plan != "一般団信" and extra_rate(bank, plan, int(age)) == 0.0:
-                row.append({"rate": None, "monthly": None, "years": None}); continue
+            # 一般団信以外は、その銀行で当該プランの上乗せが存在しなければ空欄（提供なし扱い）
+            if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
 
-            y = cap_years(bank, int(years))
+            y = cap_years(bank, years_req)
 
+            # 基準金利
             if bank == "住信SBI銀行":
                 eff_pct = sbi_effective_percent(float(rates[bank]), ltv, y)  # ％
                 base = eff_pct / 100.0
             else:
                 base = float(rates[bank]) / 100.0
+                # PayPay/じぶん は 36年以上 +0.10%
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
 
-            add = extra_rate(bank, plan, int(age)) / 100.0
+            add = extra_rate_percent(bank, plan, age_now) / 100.0
             m = monthly_payment(principal, base + add, y)
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
@@ -246,15 +275,17 @@ def build_table():
                 if abs(v - mv) < 0.5:
                     mins.add(idx)
 
-        rows.append(row); highlights.append(mins)
+        table_rows_local.append(row)
+        highlights_local.append(mins)
 
     # 最長50年（一般団信の下段）
-    row50, vals50 = [], []
+    row50_local = []
+    vals50 = []
     for bank in BANKS:
-        if principal > limit_amounts.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
-            row50.append({"rate": None, "monthly": None, "years": None}); continue
-
-        y = min(79 - int(age), 50)
+        if principal > limits.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
+            row50_local.append({"rate": None, "monthly": None, "years": None})
+            continue
+        y = min(79 - age_now, 50)
         if bank == "住信SBI銀行":
             eff_pct = sbi_effective_percent(float(rates[bank]), ltv, y)
             base = eff_pct / 100.0
@@ -262,11 +293,10 @@ def build_table():
             base = float(rates[bank]) / 100.0
             if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                 base += 0.10 / 100.0
-
-        add = extra_rate(bank, "一般団信", int(age)) / 100.0
+        add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
         m = monthly_payment(principal, base + add, y)
-        row50.append({"rate": base + add, "monthly": m, "years": y})
-        vals50.append((len(row50) - 1, m))
+        row50_local.append({"rate": base + add, "monthly": m, "years": y})
+        vals50.append((len(row50_local) - 1, m))
 
     mins50 = set()
     if vals50:
@@ -275,36 +305,42 @@ def build_table():
             if abs(v - mv) < 0.5:
                 mins50.add(idx)
 
-    return rows, highlights, row50, mins50
+    return table_rows_local, highlights_local, row50_local, mins50
 
-table_rows, highlights, row50, mins50 = build_table()
+table_rows, highlights, row50, mins50 = build_table(principal, int(years), int(age))
 
-# ========== HTMLテーブル描画 ==========
-def td_cell(d, is_min, wcss):
+# ===== HTMLテーブル描画 =====
+def td_cell(d: dict, is_min: bool, wcss: str) -> str:
     r, m, y = d["rate"], d["monthly"], d["years"]
     base = "text-align:center;vertical-align:middle;"
     bg = "background-color:#FFF8C8;" if is_min else ""
     if r is None:
         return f"<td style='{wcss}{base}'></td>"
-    return (f"<td style='{wcss}height:68px;{base}{bg}'>"
-            f"<div style='font-size:22px;font-weight:bold;color:#1B232A'>{r*100:.3f}%</div>"
-            f"<div style='font-size:22px;font-weight:bold;color:#226BB3'>¥{m:,.0f}</div>"
-            f"<div style='font-size:14px;color:#666;'>({y}年返済)</div></td>")
+    return (
+        f"<td style='{wcss}height:68px;{base}{bg}'>"
+        f"<div style='font-size:22px;font-weight:bold;color:#1B232A'>{r*100:.3f}%</div>"
+        f"<div style='font-size:22px;font-weight:bold;color:#226BB3'>¥{m:,.0f}</div>"
+        f"<div style='font-size:14px;color:#666;'>({y}年返済)</div>"
+        f"</td>"
+    )
 
 plan_w = "min-width:220px;max-width:220px;width:220px;"
 bank_w = "min-width:180px;max-width:180px;width:180px;"
-html = f"""
+html = """
 <style>
-.loan-table, .loan-table th, .loan-table td {{border:1.2px solid #aaa; border-collapse: collapse;}}
-.loan-table th, .loan-table td {{padding: 13px;}}
-.loan-table {{background-color:#fff; width:100%; table-layout:fixed;}}
-.loan-table th {{background-color:#F2F6FA; font-size:18px;}}
-.loan-table td {{font-size:18px;}}
+.loan-table, .loan-table th, .loan-table td {border:1.2px solid #aaa; border-collapse: collapse;}
+.loan-table th, .loan-table td {padding: 13px;}
+.loan-table {background-color:#fff; width:100%; table-layout:fixed;}
+.loan-table th {background-color:#F2F6FA; font-size:18px;}
+.loan-table td {font-size:18px;}
 </style>
 <table class="loan-table">
-<thead><tr><th style='{plan_w}text-align:center;font-size:18px;'>プラン</th>""" + \
-"".join([f"<th style='{bank_w}text-align:center;font-size:18px'>{b}</th>" for b in BANKS]) + \
-"</tr></thead><tbody>"
+<thead><tr>
+"""
+html += f"<th style='{plan_w}text-align:center;font-size:18px;'>プラン</th>"
+for b in BANKS:
+    html += f"<th style='{bank_w}text-align:center;font-size:18px'>{b}</th>"
+html += "</tr></thead><tbody>"
 
 for i, plan in enumerate(PLANS):
     html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:18px;'>{plan}</td>"
@@ -324,16 +360,17 @@ for bank in BANKS:
 html += "</tr></tbody></table>"
 st.markdown(html, unsafe_allow_html=True)
 
-# ========== PDF出力 ==========
-def create_pdf():
+# ===== PDF出力 =====
+def create_pdf() -> io.BytesIO:
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                            leftMargin=10*mm, rightMargin=10*mm,
-                            topMargin=13*mm, bottomMargin=13*mm)
-    st_title = jp_style(size=21, align='CENTER', leading=31, bold=True)
-    st_head  = jp_style(size=13, align='CENTER', leading=24, bold=True, color=colors.HexColor('#226BB3'))
-    st_cell  = jp_style(size=12, align='CENTER', leading=24)
-    st_cellb = jp_style(size=15, align='CENTER', leading=19, bold=True, color=colors.HexColor('#1B232A'))
+    doc = SimpleDocTemplate(
+        buf, pagesize=landscape(A4),
+        leftMargin=10*mm, rightMargin=10*mm, topMargin=13*mm, bottomMargin=13*mm
+    )
+    st_title = jp_style(size=21, align="CENTER", leading=31, bold=True)
+    st_head  = jp_style(size=13, align="CENTER", leading=24, bold=True, color=colors.HexColor("#226BB3"))
+    st_cell  = jp_style(size=12, align="CENTER", leading=24)
+    st_cellb = jp_style(size=15, align="CENTER", leading=19, bold=True, color=colors.HexColor("#1B232A"))
 
     elems = []
     elems.append(Paragraph("住宅ローン提案書", st_title))
@@ -372,25 +409,25 @@ def create_pdf():
     cw = [58*mm] + [43*mm]*len(BANKS)
 
     ts = TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.9, colors.HexColor("#bbb")),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#F2F6FA")),
-        ('LEFTPADDING', (0,0), (-1,-1), 14),
-        ('RIGHTPADDING', (0,0), (-1,-1), 14),
-        ('TOPPADDING', (0,0), (-1,-1), 13),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 13),
+        ("GRID", (0,0), (-1,-1), 0.9, colors.HexColor("#bbb")),
+        ("ALIGN", (0,0), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#F2F6FA")),
+        ("LEFTPADDING", (0,0), (-1,-1), 14),
+        ("RIGHTPADDING", (0,0), (-1,-1), 14),
+        ("TOPPADDING", (0,0), (-1,-1), 13),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 13),
     ])
 
     # ハイライト
     row_cursor = 1
     for i, mins in enumerate(highlights):
         for col_idx in mins:
-            ts.add('BACKGROUND', (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor('#FFF8C8'))
+            ts.add("BACKGROUND", (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor("#FFF8C8"))
         row_cursor += 1
         if PLANS[i] == "一般団信":
             for col_idx in mins50:
-                ts.add('BACKGROUND', (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor('#FFF8C8'))
+                ts.add("BACKGROUND", (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor("#FFF8C8"))
             row_cursor += 1
 
     tb = Table(data, colWidths=cw, rowHeights=rh)
