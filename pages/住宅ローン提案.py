@@ -155,18 +155,43 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         st.success("✅ 認証成功 - 金利修正が可能です")
         st.info("💾 **注意**：『金利を保存』ボタンを押した時だけ保存されます。自動保存は一切行いません。")
 
-        cols = st.columns(len(rates))
-        updated_rates = rates.copy()
-        for i, bank in enumerate(bank_order):
-            with cols[i]:
-                st.caption(f"基準: {BASE_THIS_MONTH.get(bank, 0):.3f}%")
-                new_val = st.number_input(
-                    f"{bank} (%)",
-                    value=float(rates[bank]),
-                    format="%.3f",
-                    step=0.001
-                )
-                updated_rates[bank] = new_val
+                # 金利修正UI（rates が空でも落ちない安全版）
+        if not bank_order:
+            st.error("金利マスターが空です。utils.rates.get_base_rates_for_current_month() の返り値をご確認ください。")
+            st.info("一時的に手入力で初期値を保存する場合は、下の『基準金利に戻す』を押すと、今月の基準値（空なら何も変わりません）を保存します。")
+            updated_rates = rates.copy()
+        else:
+            updated_rates = rates.copy()
+            # 銀行を複数行に分けて描画（1行あたり最大4列）
+            MAX_COLS = 4
+            for start in range(0, len(bank_order), MAX_COLS):
+                chunk = bank_order[start:start+MAX_COLS]
+                cols = st.columns(len(chunk))
+                for j, bank in enumerate(chunk):
+                    with cols[j]:
+                        st.caption(f"基準: {BASE_THIS_MONTH.get(bank, 0):.3f}%")
+                        new_val = st.number_input(
+                            f"{bank} (%)",
+                            value=float(rates[bank]),
+                            format="%.3f",
+                            step=0.001
+                        )
+                        updated_rates[bank] = new_val
+
+        # 保存ボタン
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            if st.button("💾 金利を保存", type="primary"):
+                if save_manual_rates(updated_rates):
+                    st.success("✅ 金利を保存しました（次回の計算からこの値を使用）")
+                else:
+                    st.error("❌ 保存に失敗しました")
+        with col_s2:
+            if st.button("🔄 基準金利に戻す", type="secondary"):
+                if save_manual_rates(BASE_THIS_MONTH):
+                    st.success("✅ 基準金利にリセットしました（次回の計算から反映）")
+                else:
+                    st.error("❌ リセットに失敗しました")
 
         col_s1, col_s2 = st.columns(2)
         with col_s1:
