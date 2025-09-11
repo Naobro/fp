@@ -158,7 +158,6 @@ years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=m
 # LTV概算
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1.0
-
 # ===== 金利の読込（保存済みのみ） =====
 rates = load_manual_rates()  # 無ければ {} のまま
 # 未設定の銀行がある場合は警告表示（後続は空欄で処理継続）
