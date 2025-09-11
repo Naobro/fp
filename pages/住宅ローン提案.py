@@ -39,8 +39,10 @@ def calc_monthly_payment(principal, annual_rate, years):
     if r == 0:
         return principal / n
     return principal * r / (1 - (1 + r) ** -n)
+
 # 今月の基準金利（%）を共通モジュールから取得
 BASE_THIS_MONTH = get_base_rates_for_current_month()
+
 # ========= 手動基準金利の永続保存（JSON：初回自動作成＋即保存対応） =========
 import os, json
 SAVE_DIR = "data"
@@ -89,10 +91,7 @@ with c4:
 max_year = max(1, 79 - age)
 years = st.slider("返済期間 (年)", 1, max_year, min(35, max_year))
 
-# ========= 今月の基準金利 見出し =========
-st.markdown(f"### {month_label()} 基準金利（初期値）")
-
-# ========= 銀行・金利設定（初期値） =========
+# ========= 銀行・金利設定（手動保存された金利を使用） =========
 if "manual_rates" not in st.session_state:
     # JSONがあれば復元、なければ初期化
     loaded = load_manual_rates()
@@ -102,13 +101,20 @@ if "manual_rates" not in st.session_state:
         st.session_state.manual_rates = BASE_THIS_MONTH.copy()
         save_manual_rates(st.session_state.manual_rates)  # 初回だけ即保存
 
-# この後は必ずセッションの manual_rates を使う
+# 保存済み金利と今月の基準金利を比較して、見出しを動的に変更
 rates = st.session_state.manual_rates.copy()
+is_modified = any(abs(rates[bank] - BASE_THIS_MONTH[bank]) > 0.001 for bank in rates.keys())
+
+if is_modified:
+    st.markdown(f"### {month_label()} **現在適用中の金利**（修正済み）")
+    st.info("💡 下記「金利を修正する」で調整された金利が適用されています")
+else:
+    st.markdown(f"### {month_label()} 基準金利（初期値）")
+
 # 物件価格概算・LTVに応じた住信SBIの帯調整（従来ロジックを維持）
 property_price_guess = (principal + self_fund) / 1.07
 ltv = principal / property_price_guess if property_price_guess else 1
 base_rate_sbi_percent = float(rates["住信SBI銀行"])
-
 
 # ── 住信SBI：LTV帯＋返済年数の段階加算（％単位で返す）──
 def sbi_effective_rate_percent(base_percent, ltv_value, years_value):
@@ -147,25 +153,71 @@ special_notes = {
 bank_order = list(rates.keys())
 plans_order = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
-# ========= 金利修正欄（営業担当用：今月基準から微修正・自動保存） =========
+# ========= 金利修正欄（パスワード認証付き営業担当専用） =========
 st.markdown("---")
-with st.expander("🔧 金利を修正する（営業担当用）", expanded=False):
-    cols = st.columns(len(rates))
-    for i, bank in enumerate(list(rates.keys())):
-        new_val = cols[i].number_input(
-            f"{bank} (%)",
-            value=float(st.session_state.manual_rates[bank]),
-            key=f"rate_input_{bank}",
-            format="%.3f",
-        )
-        # セッションを更新
-        st.session_state.manual_rates[bank] = new_val
-
-    # 🔄 入力があれば即保存
-    save_manual_rates(st.session_state.manual_rates)
+with st.expander("🔧 金利を修正する（営業担当専用）", expanded=False):
+    
+    # パスワード認証
+    if not st.session_state.auth_status:
+        st.warning("🔒 **営業担当者専用機能です。パスワードを入力してください。**")
+        
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col1:
+            password_input = st.text_input("パスワード", type="password", key="password_input")
+        with col2:
+            if st.button("🔓 認証", type="primary"):
+                if password_input == ADMIN_PASSWORD:
+                    st.session_state.auth_status = True
+                    st.success("✅ 認証成功")
+                    st.rerun()
+                else:
+                    st.error("❌ パスワードが間違っています")
+        with col3:
+            pass
+        
+        st.info("💡 認証後に金利の修正が可能になります")
+    
+    else:
+        # 認証済み - 金利修正UI
+        col_logout, col_space = st.columns([1, 4])
+        with col_logout:
+            if st.button("🔒 ログアウト", type="secondary"):
+                st.session_state.auth_status = False
+                st.rerun()
+        
+        st.success("🔓 **認証済み - 金利修正が可能です**")
+        st.warning("⚠️ 入力した金利は自動保存され、即座にシステムに反映されます。")
+        
+        cols = st.columns(len(rates))
+        for i, bank in enumerate(list(rates.keys())):
+            with cols[i]:
+                # 今月の基準金利を参考表示
+                st.caption(f"基準: {BASE_THIS_MONTH[bank]:.3f}%")
+                
+            new_val = cols[i].number_input(
+                f"{bank} (%)",
+                value=float(st.session_state.manual_rates[bank]),
+                key=f"rate_input_{bank}",
+                format="%.3f",
+                step=0.001
+            )
+            # 値が変更されたらセッションを更新
+            if abs(new_val - st.session_state.manual_rates[bank]) > 0.0001:
+                st.session_state.manual_rates[bank] = new_val
+                save_manual_rates(st.session_state.manual_rates)
+        
+        st.info("💾 金利の変更は即座に保存・適用されています")
+        
+        # リセットボタン（認証済みの場合のみ表示）
+        if st.button("🔄 基準金利に戻す", type="secondary"):
+            st.session_state.manual_rates = BASE_THIS_MONTH.copy()
+            save_manual_rates(st.session_state.manual_rates)
+            st.success("✅ 基準金利にリセットしました")
+            st.rerun()
 
 # 以後の計算は常に最新の正本を使用
 rates = st.session_state.manual_rates.copy()
+
 # ========= 借入上限額（10万円単位切り捨て・右揃え）==========
 def calc_borrowing_limit(income, exam_rate, limit_ratio, age):
     exam_years = min(35, 79 - age)
@@ -291,7 +343,7 @@ def make_table_data_and_highlight():
 
     min_idxs_50 = set()
     if row_50_vals:
-        minval = min(v for _, v in row_50_vals)
+        minval = min(v for _, v in row_vals)
         for col_idx, v in row_50_vals:
             if abs(v - minval) < 0.5:
                 min_idxs_50.add(col_idx)
@@ -300,6 +352,7 @@ def make_table_data_and_highlight():
 
 # ← 関数のすぐ下にこの1行（順序必須）
 table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight()
+
 # ========= 金利比較HTMLテーブル（Web UI）==========
 def make_html_cell(rate_data, is_min_monthly, width_css):
     rate = rate_data["rate"]; monthly = rate_data["monthly"]; years = rate_data["years"]
