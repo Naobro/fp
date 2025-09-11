@@ -1,7 +1,12 @@
 # 住宅ローン 提案シミュレーター（基準金利を月次管理：方法A）
+import os
+import io
+import json
+from datetime import datetime
+
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.units import mm
@@ -9,15 +14,20 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-import io
+
 from utils.rates import get_base_rates_for_current_month, month_label
+
+# ======================================
+# 画面設定
+# ======================================
+st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
 
 # ========= フォント ==========
 FONT_PATH = "NotoSansJP-Regular.ttf"
 try:
     pdfmetrics.registerFont(TTFont('NotoSansJP', FONT_PATH))
 except Exception as e:
-    st.error(f"フォント読み込み失敗: {e}\n{FONT_PATH}をプロジェクト直下に置いてください。")
+    st.error(f"フォント読み込み失敗: {e}\n{FONT_PATH} をプロジェクト直下に置いてください。")
     st.stop()
 
 def get_japanese_style(size=11, font_name='NotoSansJP', alignment='CENTER', leading=15, bold=False, color=colors.black):
@@ -43,34 +53,32 @@ def calc_monthly_payment(principal, annual_rate, years):
 # 今月の基準金利（%）を共通モジュールから取得
 BASE_THIS_MONTH = get_base_rates_for_current_month()
 
-# ========= 手動基準金利の永続保存（JSON：初回自動作成＋即保存対応） =========
-import os, json
+# ========= パスワード設定（営業担当者専用）=========
+ADMIN_PASSWORD = "naoki0510"  # 必要に応じて secrets へ移動可
+
+# ========= 手動基準金利の永続保存（JSON） =========
 SAVE_DIR = "data"
 SAVE_PATH = os.path.join(SAVE_DIR, "manual_rates.json")
-os.makedirs(SAVE_DIR, exist_ok=True)  # フォルダを必ず作成
+os.makedirs(SAVE_DIR, exist_ok=True)
 
 def load_manual_rates():
-    """保存済み基準金利を読み込む。存在しなければ None を返す。"""
+    """保存済み基準金利を読み込む。存在しなければ今月の基準値を返す。"""
     try:
         if os.path.exists(SAVE_PATH):
             with open(SAVE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # BASE_THIS_MONTH とキーを揃える（欠けは基準値で補完、余分は捨てる）
-            fixed = {}
-            for b in BASE_THIS_MONTH.keys():
-                fixed[b] = float(data.get(b, BASE_THIS_MONTH[b]))
-            return fixed
+            return {k: float(v) for k, v in data.items()}
     except Exception:
         pass
-    return None
+    # ファイルがない場合のみ今月の基準値を返す
+    return BASE_THIS_MONTH.copy()
 
 def save_manual_rates(d):
     """現在の金利辞書 d を JSON に保存。成功→True, 失敗→False"""
     try:
         os.makedirs(SAVE_DIR, exist_ok=True)
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump({k: float(v) for k, v in d.items()},
-                      f, ensure_ascii=False, indent=2)
+            json.dump({k: float(v) for k, v in d.items()}, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
         return False
@@ -91,47 +99,29 @@ with c4:
 max_year = max(1, 79 - age)
 years = st.slider("返済期間 (年)", 1, max_year, min(35, max_year))
 
-# ========= 銀行・金利設定（手動保存された金利を使用） =========
-if "manual_rates" not in st.session_state:
-    # JSONがあれば復元、なければ初期化
-    loaded = load_manual_rates()
-    if loaded:
-        st.session_state.manual_rates = loaded
-    else:
-        st.session_state.manual_rates = BASE_THIS_MONTH.copy()
-        save_manual_rates(st.session_state.manual_rates)  # 初回だけ即保存
-
-# 保存済み金利と今月の基準金利を比較して、見出しを動的に変更
-rates = st.session_state.manual_rates.copy()
-is_modified = any(abs(rates[bank] - BASE_THIS_MONTH[bank]) > 0.001 for bank in rates.keys())
-
-if is_modified:
-    st.markdown(f"### {month_label()} **現在適用中の金利**（修正済み）")
-    st.info("💡 下記「金利を修正する」で調整された金利が適用されています")
-else:
-    st.markdown(f"### {month_label()} 基準金利（初期値）")
+# ========= 現在の金利を取得（保存済み優先、なければ初回のみ基準値） =========
+rates = load_manual_rates()
+bank_order = list(rates.keys())
+plans_order = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
 # 物件価格概算・LTVに応じた住信SBIの帯調整（従来ロジックを維持）
-property_price_guess = (principal + self_fund) / 1.07
+property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1
-base_rate_sbi_percent = float(rates["住信SBI銀行"])
+base_rate_sbi_percent = float(rates.get("住信SBI銀行", 0.0))
 
 # ── 住信SBI：LTV帯＋返済年数の段階加算（％単位で返す）──
 def sbi_effective_rate_percent(base_percent, ltv_value, years_value):
     rate = float(base_percent)  # ％
-
-    # LTV帯：基準は 80%〜100%
+    # LTV帯
     if ltv_value <= 0.80:
         rate += -0.09   # 80%以下
     elif ltv_value > 1.00:
         rate += 0.07    # 100%超（諸費用まで借入）
-
-    # 返済年数の加算（36〜40年／41〜50年）
+    # 返済年数の加算（36〜40年／41〜）
     if 36 <= years_value <= 40:
         rate += 0.07
     elif years_value >= 41:
         rate += 0.15
-
     return rate  # ％
 
 # 団信・付帯の金利差（％）
@@ -150,77 +140,56 @@ special_notes = {
     "じぶん銀行": ["ワイド団信+0.3%", "じぶん割 最大-0.15%"],
     "住信SBI銀行": ["全疾病保障+三大疾病50%標準付帯", "125%ルールなし"],
 }
-bank_order = list(rates.keys())
-plans_order = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
-# ========= 金利修正欄（パスワード認証付き営業担当専用） =========
+# ========= 金利修正欄（パスワード認証付き／セッション不使用） =========
 st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当専用）", expanded=False):
-    
-    # パスワード認証
-    if not st.session_state.auth_status:
-        st.warning("🔒 **営業担当者専用機能です。パスワードを入力してください。**")
-        
-        col1, col2, col3 = st.columns([2, 1, 2])
-        with col1:
-            password_input = st.text_input("パスワード", type="password", key="password_input")
-        with col2:
-            if st.button("🔓 認証", type="primary"):
-                if password_input == ADMIN_PASSWORD:
-                    st.session_state.auth_status = True
-                    st.success("✅ 認証成功")
-                    st.rerun()
-                else:
-                    st.error("❌ パスワードが間違っています")
-        with col3:
-            pass
-        
-        st.info("💡 認証後に金利の修正が可能になります")
-    
-    else:
-        # 認証済み - 金利修正UI
-        col_logout, col_space = st.columns([1, 4])
-        with col_logout:
-            if st.button("🔒 ログアウト", type="secondary"):
-                st.session_state.auth_status = False
-                st.rerun()
-        
-        st.success("🔓 **認証済み - 金利修正が可能です**")
-        st.warning("⚠️ 入力した金利は自動保存され、即座にシステムに反映されます。")
-        
-        cols = st.columns(len(rates))
-        for i, bank in enumerate(list(rates.keys())):
-            with cols[i]:
-                # 今月の基準金利を参考表示
-                st.caption(f"基準: {BASE_THIS_MONTH[bank]:.3f}%")
-                
-            new_val = cols[i].number_input(
-                f"{bank} (%)",
-                value=float(st.session_state.manual_rates[bank]),
-                key=f"rate_input_{bank}",
-                format="%.3f",
-                step=0.001
-            )
-            # 値が変更されたらセッションを更新
-            if abs(new_val - st.session_state.manual_rates[bank]) > 0.0001:
-                st.session_state.manual_rates[bank] = new_val
-                save_manual_rates(st.session_state.manual_rates)
-        
-        st.info("💾 金利の変更は即座に保存・適用されています")
-        
-        # リセットボタン（認証済みの場合のみ表示）
-        if st.button("🔄 基準金利に戻す", type="secondary"):
-            st.session_state.manual_rates = BASE_THIS_MONTH.copy()
-            save_manual_rates(st.session_state.manual_rates)
-            st.success("✅ 基準金利にリセットしました")
-            st.rerun()
+    st.warning("🔒 営業担当者専用機能です。正しいパスワード入力時のみ、修正UIが表示されます。")
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        password_input = st.text_input("パスワード", type="password")
+    with col2:
+        auth_ok = st.button("🔓 認証", type="primary")
 
-# 以後の計算は常に最新の正本を使用
-rates = st.session_state.manual_rates.copy()
+    if auth_ok and password_input == ADMIN_PASSWORD:
+        st.success("✅ 認証成功 - 金利修正が可能です")
+        st.info("💾 **注意**：『金利を保存』ボタンを押した時だけ保存されます。自動保存は一切行いません。")
+
+        cols = st.columns(len(rates))
+        updated_rates = rates.copy()
+        for i, bank in enumerate(bank_order):
+            with cols[i]:
+                st.caption(f"基準: {BASE_THIS_MONTH.get(bank, 0):.3f}%")
+                new_val = st.number_input(
+                    f"{bank} (%)",
+                    value=float(rates[bank]),
+                    format="%.3f",
+                    step=0.001
+                )
+                updated_rates[bank] = new_val
+
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            if st.button("💾 金利を保存", type="primary"):
+                if save_manual_rates(updated_rates):
+                    st.success("✅ 金利を保存しました（次回の計算からこの値を使用）")
+                else:
+                    st.error("❌ 保存に失敗しました")
+        with col_s2:
+            if st.button("🔄 基準金利に戻す", type="secondary"):
+                if save_manual_rates(BASE_THIS_MONTH):
+                    st.success("✅ 基準金利にリセットしました（次回の計算から反映）")
+                else:
+                    st.error("❌ リセットに失敗しました")
+
+    elif auth_ok and password_input != ADMIN_PASSWORD:
+        st.error("❌ パスワードが間違っています")
+    else:
+        st.info("💡 認証に成功すると金利修正欄が表示されます")
 
 # ========= 借入上限額（10万円単位切り捨て・右揃え）==========
-def calc_borrowing_limit(income, exam_rate, limit_ratio, age):
-    exam_years = min(35, 79 - age)
+def calc_borrowing_limit(income, exam_rate, limit_ratio, age_now):
+    exam_years = min(35, 79 - age_now)
     annual_payment = income * limit_ratio
     monthly_payment = annual_payment / 12
     r = exam_rate / 12
@@ -263,36 +232,39 @@ table_html += "</tbody></table>"
 st.markdown(table_html, unsafe_allow_html=True)
 
 # ========= テーブル計算（Web/PDF 共通） =========
-def make_table_data_and_highlight():
+def make_table_data_and_highlight(current_rates):
     rows, highlights = [], []
+
+    def years_cap_for_bank(bank_name, req_years):
+        cap = min(79 - age, req_years)
+        if bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
+            cap = min(cap, 35)
+        return cap
 
     for plan in plans_order:
         row, row_vals = [], []
 
         for bank in bank_order:
             # 借入上限で弾く
-            if principal > limit_amounts[bank]:
+            if principal > limit_amounts.get(bank, 0):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
-            # プランが利用可能か
+            # プラン可否
             available = (plan == "一般団信" or plan in rate_diff.get(bank, {}))
             if not available:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
-            # 返済年数上限：SBI新生・三菱は35年、それ以外は79-年齢の範囲内
-            calc_years = min(79 - age, years)
-            if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
-                calc_years = min(calc_years, 35)
+            calc_years = years_cap_for_bank(bank, years)
 
-            # ── 基準金利：住信は「手入力基準％」に LTV＋年数の段階加算、他行は手入力％ ──
+            # 基準金利
             if bank == "住信SBI銀行":
                 eff_percent = sbi_effective_rate_percent(base_rate_sbi_percent, ltv, calc_years)  # ％
                 base_rate = eff_percent / 100.0
             else:
-                base_rate = float(rates[bank]) / 100.0
-                # 長期加算：PayPay/じぶん は 36年以上 +0.10%（住信/新生/MUFGは適用しない）
+                base_rate = float(current_rates[bank]) / 100.0
+                # 長期加算：PayPay/じぶん は 36年以上 +0.10%
                 if bank in ["PayPay銀行", "じぶん銀行"] and calc_years > 35:
                     base_rate += 0.10 / 100.0
 
@@ -314,24 +286,21 @@ def make_table_data_and_highlight():
         rows.append(row)
         highlights.append(min_idxs)
 
-    # ── 最長50年（一般団信の下段） ──
+    # ── 「最長50年」（一般団信の下段）──
     row_50, row_50_vals = [], []
     for bank in bank_order:
         # SBI新生・三菱は 35年までなので最長行は空欄
-        if principal > limit_amounts[bank] or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
+        if principal > limit_amounts.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row_50.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        # 各行の最長年数：50年または(79-年齢) の小さい方
         current_bank_max_years = min(79 - age, 50)
 
-        # 基準金利の取り方（住信は段階加算を％で適用）
         if bank == "住信SBI銀行":
             eff_percent = sbi_effective_rate_percent(base_rate_sbi_percent, ltv, current_bank_max_years)  # ％
             base_rate = eff_percent / 100.0
         else:
-            base_rate = float(rates[bank]) / 100.0
-            # 長期加算：PayPay/じぶん は 36年以上 +0.10%
+            base_rate = float(current_rates[bank]) / 100.0
             if bank in ["PayPay銀行", "じぶん銀行"] and current_bank_max_years > 35:
                 base_rate += 0.10 / 100.0
 
@@ -343,19 +312,18 @@ def make_table_data_and_highlight():
 
     min_idxs_50 = set()
     if row_50_vals:
-        minval = min(v for _, v in row_vals)
+        minval = min(v for _, v in row_50_vals)
         for col_idx, v in row_50_vals:
             if abs(v - minval) < 0.5:
                 min_idxs_50.add(col_idx)
 
     return rows, highlights, row_50, min_idxs_50
 
-# ← 関数のすぐ下にこの1行（順序必須）
-table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight()
+table_rows, highlight_rows, row_50, highlight_50 = make_table_data_and_highlight(rates)
 
 # ========= 金利比較HTMLテーブル（Web UI）==========
 def make_html_cell(rate_data, is_min_monthly, width_css):
-    rate = rate_data["rate"]; monthly = rate_data["monthly"]; years = rate_data["years"]
+    rate = rate_data["rate"]; monthly = rate_data["monthly"]; years_val = rate_data["years"]
     base_style = "text-align:center;vertical-align:middle;"
     bg = "background-color:#FFF8C8;" if is_min_monthly else ""
     if rate is None:
@@ -363,10 +331,11 @@ def make_html_cell(rate_data, is_min_monthly, width_css):
     return (f"<td style='{width_css}height:68px;{base_style}{bg}'>"
             f"<div style='font-size:22px;font-weight:bold;color:#1B232A'>{rate*100:.3f}%</div>"
             f"<div style='font-size:22px;font-weight:bold;color:#226BB3'>¥{monthly:,.0f}</div>"
-            f"<div style='font-size:14px;color:#666;'>({years}年返済)</div></td>")
+            f"<div style='font-size:14px;color:#666;'>({years_val}年返済)</div></td>")
 
 plan_width = "min-width:220px;max-width:220px;width:220px;"
 bank_width = "min-width:180px;max-width:180px;width:180px;"
+
 html_table_output = f"""
 <style>
 .loan-table, .loan-table th, .loan-table td {{border:1.2px solid #aaa; border-collapse: collapse;}}
@@ -387,6 +356,7 @@ for i, plan in enumerate(plans_order):
         rate_data = table_rows[i][col_idx]
         is_min = (col_idx in highlight_rows[i] and rate_data["monthly"] is not None)
         html_table_output += make_html_cell(rate_data, is_min, bank_width)
+    html_table_output += "</tr>"
     if plan == "一般団信":
         html_table_output += f"<tr><td style='{plan_width}text-align:center;font-weight:bold;font-size:17px;background-color:#F9F6EF;'>最長50年</td>"
         for col_idx, bank in enumerate(bank_order):
@@ -398,17 +368,21 @@ for i, plan in enumerate(plans_order):
 # 特記事項（左寄せ、上詰め）
 html_table_output += f"<tr><td style='{plan_width}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
 for bank in bank_order:
-    html_table_output += f"<td style='{bank_width}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(special_notes[bank])}</td>"
+    notes = special_notes.get(bank, [])
+    html_table_output += f"<td style='{bank_width}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(notes)}</td>"
 html_table_output += "</tr></tbody></table>"
 
+is_modified = any(abs(rates[b] - BASE_THIS_MONTH.get(b, 0.0)) > 0.0005 for b in bank_order)
+st.markdown(f"### {month_label()} " + ("**現在適用中の金利（修正済み）**" if is_modified else "基準金利（初期値）"))
 st.markdown(html_table_output, unsafe_allow_html=True)
 
 # ========= PDF出力：UIテーブルの完全コピー ==========
 def create_pdf_reportlab():
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                            leftMargin=10*mm, rightMargin=10*mm,
-                            topMargin=13*mm, bottomMargin=13*mm)
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        leftMargin=10*mm, rightMargin=10*mm, topMargin=13*mm, bottomMargin=13*mm
+    )
     style_title = get_japanese_style(size=21, font_name='NotoSansJP', alignment='CENTER', leading=31, bold=True)
     style_header = get_japanese_style(size=13, font_name='NotoSansJP', alignment='CENTER', leading=24, bold=True, color=colors.HexColor('#226BB3'))
     style_cell = get_japanese_style(size=12, font_name='NotoSansJP', alignment='CENTER', leading=24)
@@ -423,6 +397,7 @@ def create_pdf_reportlab():
     table_data_pdf = []
     header_row = [Paragraph("プラン", style_header)] + [Paragraph(b, style_header) for b in bank_order]
     table_data_pdf.append(header_row)
+
     for i, plan in enumerate(plans_order):
         row = [Paragraph(plan, style_cell)]
         for col_idx, bank in enumerate(bank_order):
@@ -430,9 +405,14 @@ def create_pdf_reportlab():
             if rate_data["rate"] is None:
                 row.append(Paragraph("", style_cell))
             else:
-                cell_content = f"<b>{rate_data['rate']*100:.3f}%</b><br/><b>¥{rate_data['monthly']:,.0f}</b><br/><font size=10>({rate_data['years']}年返済)</font>"
+                cell_content = (
+                    f"<b>{rate_data['rate']*100:.3f}%</b>"
+                    f"<br/><b>¥{rate_data['monthly']:,.0f}</b>"
+                    f"<br/><font size=10>({rate_data['years']}年返済)</font>"
+                )
                 row.append(Paragraph(cell_content, style_cellcontent))
         table_data_pdf.append(row)
+
         if plan == "一般団信":
             row_50_pdf = [Paragraph("最長50年", style_cell)]
             for col_idx, bank in enumerate(bank_order):
@@ -440,7 +420,11 @@ def create_pdf_reportlab():
                 if rate_data["rate"] is None:
                     row_50_pdf.append(Paragraph("", style_cell))
                 else:
-                    cell_content = f"<b>{rate_data['rate']*100:.3f}%</b><br/><b>¥{rate_data['monthly']:,.0f}</b><br/><font size=10>({rate_data['years']}年返済)</font>"
+                    cell_content = (
+                        f"<b>{rate_data['rate']*100:.3f}%</b>"
+                        f"<br/><b>¥{rate_data['monthly']:,.0f}</b>"
+                        f"<br/><font size=10>({rate_data['years']}年返済)</font>"
+                    )
                     row_50_pdf.append(Paragraph(cell_content, style_cellcontent))
             table_data_pdf.append(row_50_pdf)
 
