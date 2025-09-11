@@ -160,8 +160,9 @@ property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (princip
 ltv = principal / property_price_guess if property_price_guess else 1.0
 # ===== 金利の読込（保存済みのみ） =====
 rates = load_manual_rates()  # 無ければ {} のまま
-# 未設定の銀行がある場合は警告表示（後続は空欄で処理継続）
-_missing = [b for b in BANKS if b not in rates or str(rates.get(b, "")).strip() == ""]
+
+# 未設定の銀行がある場合は警告（表示のみ。以降の計算は該当セルを空欄扱いで続行）
+_missing = [b for b in BANKS if (b not in rates) or (str(rates.get(b, "")).strip() == "")]
 if _missing:
     st.warning("未設定の金利があるため、該当銀行のセルは空欄になります： " + " / ".join(_missing))
 
@@ -172,9 +173,6 @@ st.markdown("---")
 with st.expander("🔧 金利を修正する（営業担当専用）", expanded=False):
     st.warning("🔒 営業担当者専用。パスワード一致で編集欄が表示されます。")
 
-    # ここでは SessionState を使わない（key はウィジェット識別用にのみ付与）
-    ADMIN_PASSWORD = "naoki0510"
-
     col_p1, col_p2, _ = st.columns([2, 1, 2])
     with col_p1:
         pwd = st.text_input("パスワード", type="password", key="pwd_rates_edit")
@@ -184,13 +182,10 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
     if do_auth and pwd == ADMIN_PASSWORD:
         st.success("✅ 認証成功 - 金利を編集できます")
 
-        # 銀行並び（保存ファイルに無い場合でも固定で表示）
-        BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
-
-        # 表示カラム
+        # 表示カラム（順序はグローバルの BANKS を使用）
         bank_cols = st.columns(len(BANKS))
 
-        # 英数字の安全キー（SessionStateは参照しない）
+        # 英数字のみの固定キー（毎回同じ。SessionStateの保存用途ではなくウィジェット識別のみ）
         bank_key_map = {
             "SBI新生銀行": "sbi_shinsei",
             "三菱UFJ銀行": "mufg",
@@ -199,24 +194,17 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
             "住信SBI銀行": "sumishin_sbi",
         }
 
-        # 保存済みのみ読む。無ければ {}（= 初期値は存在しない）
-        current_saved = load_manual_rates()  # 既存仕様：無ければ {} またはファイルがあればその中身
+        # 最新の保存内容を読み直し（存在しなければ {}）
+        current_saved = load_manual_rates()
 
-        # 新しい入力値を一時格納（ローカル dict）
+        # 入力結果を一時格納（ローカル変数）
         new_rates_dict = {}
-        used_keys = set()
 
         for bank, col in zip(BANKS, bank_cols):
             with col:
-                # 未保存なら 0.000 を表示（「初期値に戻す」等は一切なし）
+                # 未保存なら 0.000 を表示（“初期値”の概念は無し）
                 current_val = float(current_saved.get(bank, 0.0))
-
-                # ユニークキー（YYYYMMDD + 英数字名）
-                safe_key = f"mortgage_rate_{datetime.now().strftime('%Y%m%d')}_{bank_key_map[bank]}"
-
-                if safe_key in used_keys:
-                    st.error(f"キーの重複: {safe_key}")
-                used_keys.add(safe_key)
+                safe_key = f"rate_input_{bank_key_map[bank]}"
 
                 try:
                     new_val = st.number_input(
@@ -236,9 +224,8 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         c_save, _ = st.columns([1, 3])
         with c_save:
             if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
-                ok = save_manual_rates(new_rates_dict)
-                if ok:
-                    st.success("✅ 金利を保存しました（次回以降はこの値をそのまま読み込みます）")
+                if save_manual_rates(new_rates_dict):
+                    st.success("✅ 金利を保存しました（次回以降はこの値をそのまま使用します）")
                 else:
                     st.error("❌ 保存に失敗しました")
 
@@ -246,7 +233,6 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         st.error("❌ パスワードが違います")
     else:
         st.info("💡 認証後に金利の修正が可能になります")
-
 # ===== 借入上限額 =====
 banks_exam = {
     "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
