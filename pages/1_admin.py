@@ -1,8 +1,9 @@
 # pages/1_admin.py  — 管理画面（新規発行・一覧・検索・即アクセス・削除）
 import streamlit as st
 import json, secrets, string
-from pathlib import Path
+import sqlite3
 from datetime import datetime
+from contextlib import contextmanager
 
 # 画面設定
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
@@ -10,47 +11,124 @@ st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide
 # 共有URL（本番URLを secrets で上書き可）
 BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/client_portal")
 
-# データ保存先
-DATA_DIR = Path("data/clients")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+# データベース設定
+DB_PATH = "clients.db"
+
+# -------------------------------
+# データベース管理
+# -------------------------------
+@contextmanager
+def get_db():
+    """データベース接続のコンテキストマネージャー"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def init_db():
+    """データベース初期化"""
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                client_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                name TEXT,
+                phone TEXT,
+                email TEXT,
+                memo TEXT,
+                data TEXT NOT NULL  -- JSON文字列として全データを保存
+            )
+        """)
+        conn.commit()
+
+# アプリ起動時にDB初期化
+init_db()
 
 # -------------------------------
 # 共通ユーティリティ
 # -------------------------------
 def gen_id(n: int = 6) -> str:
+    """クライアントID生成"""
     alphabet = string.ascii_lowercase + string.digits
     return "c-" + "".join(secrets.choice(alphabet) for _ in range(n))
 
+def save_client(client_id: str, payload: dict):
+    """クライアントデータをデータベースに保存"""
+    meta = payload.get("meta", {})
+    with get_db() as conn:
+        conn.execute("""
+            INSERT OR REPLACE INTO clients 
+            (client_id, created_at, name, phone, email, memo, data)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            client_id,
+            meta.get("created_at"),
+            meta.get("name"),
+            meta.get("phone"),
+            meta.get("email"),
+            meta.get("memo"),
+            json.dumps(payload, ensure_ascii=False)
+        ))
+        conn.commit()
+
+def load_client(client_id: str) -> dict:
+    """特定のクライアントデータを読み込み"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT data FROM clients WHERE client_id = ?", 
+            (client_id,)
+        ).fetchone()
+        if row:
+            return json.loads(row["data"])
+        return None
+
 def load_all_clients():
-    """data/clients/*.json を読み込んで一覧返却"""
+    """全クライアントデータを読み込み"""
     clients = []
-    for p in sorted(DATA_DIR.glob("*.json")):
-        try:
-            obj = json.loads(p.read_text(encoding="utf-8"))
-            meta = obj.get("meta", {})
-            cid = meta.get("client_id") or p.stem
-            name = meta.get("name") or "(無名)"
-            created_raw = meta.get("created_at")
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT client_id, created_at, name, phone, email, memo, data 
+            FROM clients 
+            ORDER BY created_at DESC
+        """).fetchall()
+        
+        for row in rows:
             try:
-                created = datetime.fromisoformat(created_raw) if created_raw else None
+                created = datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
             except Exception:
                 created = None
+                
             clients.append({
-                "id": cid,
-                "name": name,
+                "id": row["client_id"],
+                "name": row["name"] or "(無名)",
                 "created": created,
-                "path": p,
-                "meta": meta,
-                "raw": obj,
+                "phone": row["phone"],
+                "email": row["email"],
+                "memo": row["memo"],
+                "raw": json.loads(row["data"]) if row["data"] else {}
             })
-        except Exception:
-            # 壊れたJSONなどはスキップ
-            continue
     return clients
 
+def delete_client(client_id: str) -> bool:
+    """クライアントを削除"""
+    try:
+        with get_db() as conn:
+            cursor = conn.execute(
+                "DELETE FROM clients WHERE client_id = ?", 
+                (client_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except Exception:
+        return False
+
 def share_url_for(cid: str) -> str:
+    """共有URL生成"""
     base = BASE_URL.rstrip("/")
     return f"{base}?client={cid}"
+
 # -------------------------------
 # 新規発行（PINなし）
 # -------------------------------
@@ -100,8 +178,9 @@ if submitted:
         },
         "listings": []
     }
-    out = DATA_DIR / f"{client_id}.json"
-    out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    
+    # データベースに保存
+    save_client(client_id, payload)
 
     url = share_url_for(client_id)
     st.success("お客様用URLを発行しました。下のリンクを共有してください。")
@@ -170,14 +249,14 @@ if do_bulk:
             if "（" in label and "）" in label:
                 cid = label.split("（")[-1].split("）")[0]
                 pick_ids.append(cid)
-        for c in clients:
-            if c["id"] in pick_ids and c["path"].exists():
-                try:
-                    c["path"].unlink()
-                    deleted += 1
-                except Exception:
-                    pass
-        st.success(f"{deleted} 件削除しました。画面を再読込してください。")
+        
+        for cid in pick_ids:
+            if delete_client(cid):
+                deleted += 1
+                
+        if deleted > 0:
+            st.success(f"{deleted} 件削除しました。")
+            st.rerun()  # 画面を再読込
 
 st.divider()
 
@@ -205,9 +284,47 @@ else:
         with cols[4]:
             # 個別削除
             if st.button("🗑️", key=f"del-{c['id']}"):
-                try:
-                    if c["path"].exists():
-                        c["path"].unlink()
-                        st.experimental_rerun()
-                except Exception:
+                if delete_client(c["id"]):
+                    st.success("削除しました")
+                    st.rerun()
+                else:
                     st.error("削除に失敗しました")
+
+# -------------------------------
+# データベース管理ユーティリティ（デバッグ用）
+# -------------------------------
+with st.expander("🔧 データベース管理（デバッグ用）"):
+    st.caption("データベースの状態確認・メンテナンス用")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("DB統計表示"):
+            with get_db() as conn:
+                count = conn.execute("SELECT COUNT(*) as cnt FROM clients").fetchone()["cnt"]
+                oldest = conn.execute("SELECT MIN(created_at) as oldest FROM clients").fetchone()["oldest"]
+                newest = conn.execute("SELECT MAX(created_at) as newest FROM clients").fetchone()["newest"]
+                
+                st.write(f"総レコード数: {count}")
+                st.write(f"最古: {oldest}")
+                st.write(f"最新: {newest}")
+    
+    with col2:
+        if st.button("DBバックアップ作成"):
+            backup_data = []
+            with get_db() as conn:
+                rows = conn.execute("SELECT * FROM clients").fetchall()
+                for row in rows:
+                    backup_data.append(dict(row))
+            
+            backup_json = json.dumps(backup_data, ensure_ascii=False, indent=2)
+            st.download_button(
+                "📥 バックアップダウンロード",
+                backup_json,
+                file_name=f"clients_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
+    
+    with col3:
+        if st.button("⚠️ DB全削除（危険）"):
+            st.warning("この操作は全データを削除します！実行前に必ずバックアップを取ってください。")
