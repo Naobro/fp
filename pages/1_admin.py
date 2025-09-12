@@ -205,7 +205,7 @@ def share_url_for(cid: str) -> str:
 # -------------------------------
 st.header("お客様ページの新規発行（PINなし）")
 
-# 1クリック多重実行ガード（idempotency）
+# 1クリック多重実行ガード（idempotency 用キー）
 if "__create_idem__" not in st.session_state:
     st.session_state["__create_idem__"] = None
 
@@ -225,14 +225,22 @@ if submitted:
     if not name_clean:
         st.error("お客様名は必須です。空欄では作成できません。")
     else:
-        # 余計な改行や全角スペースの連続なども軽く正規化
+        # 余計な空白を正規化
         name_clean = " ".join(name_clean.split())
+
+        # 初回クリック時にのみ idempotency_key を採番して保持
+        idem = st.session_state.get("__create_idem__")
+        if not idem:
+            idem = secrets.token_hex(16)  # 一意キー
+            st.session_state["__create_idem__"] = idem
 
         client_id = gen_id()
         payload = {
             "meta": {
                 "client_id": client_id,
-                "created_at": datetime.now().isoformat(),
+                # 表示用に残すローカル時刻（JST）ではなく、保存は UTC を優先
+                "created_at_utc": utc_now_iso(),
+                "created_at": datetime.now().isoformat(),  # 互換のため残す
                 "name": name_clean,
                 "phone": (phone or "").strip(),
                 "email": (email or "").strip(),
@@ -262,12 +270,25 @@ if submitted:
             "listings": []
         }
 
-        save_client(client_id, payload)
+        # ★ 重要：idempotency_key を渡して保存（多重作成を防ぐ）
+        ok = save_client(client_id, payload, idempotency_key=idem)
 
         url = share_url_for(client_id)
-        st.success("お客様用URLを発行しました。下のリンクを共有してください。")
-        st.code(url, language="text")
-        st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
+        if ok:
+            st.success("お客様用URLを発行しました。下のリンクを共有してください。")
+            st.code(url, language="text")
+            st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
+        else:
+            # 直前のリラン等で重複呼び出されたケース（DBには既に存在）
+            st.info("同じ操作がすでに登録済みです（重複作成は行っていません）。")
+            st.code(url, language="text")
+            st.link_button("➡️ お客様ページを開く（新規タブ）", url, type="primary")
+
+        # 次の新規作成のためにキーをリセットするボタンを出す
+        if st.button("＋ もう一件登録する"):
+            st.session_state["__create_idem__"] = None
+            st.rerun()
+
 st.divider()
 
 # -------------------------------
