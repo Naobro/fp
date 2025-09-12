@@ -11,6 +11,7 @@ import os
 import io
 import json
 from datetime import datetime
+from pathlib import Path  # ← 追加（フォント探索に使用）
 
 import streamlit as st
 from fpdf import FPDF  # ← fpdf2 を使用（reportlab は使いません）
@@ -19,8 +20,30 @@ from fpdf import FPDF  # ← fpdf2 を使用（reportlab は使いません）
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
 
 # ===== フォント（日本語 TrueType; fpdf2 で使用） =====
-FONT_PATH = "NotoSansJP-Regular.ttf"
 # 起動時にはチェックせず、PDF作成時にだけ存在確認する
+# 置き場所はプロジェクト直下 or fonts/ のいずれでもOKにする
+FONT_PATH = "NotoSansJP-Regular.ttf"  # 互換のため定義だけ残す（実解決は _resolve_font_path で行う）
+
+def _resolve_font_path() -> str | None:
+    """
+    NotoSansJP-Regular.ttf を複数候補から探索して、見つかった絶対パスを返す。
+    見つからなければ None。
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here / "NotoSansJP-Regular.ttf",
+        here / "fonts" / "NotoSansJP-Regular.ttf",
+        Path.cwd() / "NotoSansJP-Regular.ttf",
+        Path.cwd() / "fonts" / "NotoSansJP-Regular.ttf",
+    ]
+    for p in candidates:
+        try:
+            if p.exists() and p.is_file():
+                return str(p.resolve())
+        except Exception:
+            pass
+    return None
+
 # ===== 固定定義 =====
 BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
 PLANS = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
@@ -141,56 +164,7 @@ _missing = [b for b in BANKS if b not in rates or str(rates.get(b, "")).strip() 
 if _missing:
     st.warning("未設定の金利があるため、該当銀行のセルは空欄になります： " + " / ".join(_missing))
 
-# ===== 認証付き・金利修正（セッション状態は使わない） =====
-st.markdown("---")
 
-# 認証ボタンは使わず、パスワード一致だけで編集UIを表示
-pwd = st.text_input("🔒 営業担当パスワード", type="password", key="pwd_rates_edit")
-exp_open = (pwd == "naoki0510")
-
-with st.expander("🔧 金利を修正する（営業担当専用）", expanded=exp_open):
-    if not exp_open:
-        st.info("パスワードが一致すると編集欄が開きます。")
-    else:
-        # 銀行ごとに **固定キー**（毎回同じキーで、入力は自動保持される）
-        bank_key_map = {
-            "SBI新生銀行": "mortgage_rate_sbi_shinsei",
-            "三菱UFJ銀行": "mortgage_rate_mufg",
-            "PayPay銀行":  "mortgage_rate_paypay",
-            "じぶん銀行":  "mortgage_rate_jibun",
-            "住信SBI銀行": "mortgage_rate_sumishin_sbi",
-        }
-
-        # 保存済み値の読込（無ければ {}）
-        current_saved = load_manual_rates()
-
-        cols = st.columns(len(BANKS))
-        new_rates_dict = {}
-
-        for bank, col in zip(BANKS, cols):
-            with col:
-                key = bank_key_map[bank]
-                # 初回表示のみ value が効く（2回目以降はキーに紐づく現在値が保持される）
-                default_val = float(current_saved.get(bank, 0.0))
-                val = st.number_input(
-                    f"{bank}（年利％）",
-                    value=default_val,
-                    step=0.001,
-                    format="%.3f",
-                    key=key,  # ←固定キー
-                )
-                # number_input は float を返すが、保険で数値化
-                try:
-                    new_rates_dict[bank] = float(val)
-                except Exception:
-                    new_rates_dict[bank] = default_val
-
-        st.markdown("")
-        if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
-            if save_manual_rates(new_rates_dict):
-                st.success("✅ 金利を保存しました（上部の表にも反映されます）")
-            else:
-                st.error("❌ 保存に失敗しました")
 # ===== 借入上限額 =====
 banks_exam = {
     "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
@@ -397,10 +371,20 @@ def create_pdf() -> io.BytesIO:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
 
-    # フォント登録（日本語）
-    if not os.path.exists(FONT_PATH):
-        raise FileNotFoundError(f"PDF用フォントが見つかりません：{FONT_PATH}")
-    pdf.add_font("NotoSansJP", "", FONT_PATH, uni=True)
+    # フォント登録（日本語）— PDF作成時にだけ厳密に探索
+    resolved = _resolve_font_path()
+    if not resolved:
+        searched = [
+            "NotoSansJP-Regular.ttf",
+            "fonts/NotoSansJP-Regular.ttf",
+            "./NotoSansJP-Regular.ttf",
+            "./fonts/NotoSansJP-Regular.ttf",
+        ]
+        raise FileNotFoundError(
+            "PDF用フォントが見つかりません：NotoSansJP-Regular.ttf\n"
+            "探した場所:\n - " + "\n - ".join(searched)
+        )
+    pdf.add_font("NotoSansJP", "", resolved, uni=True)
     pdf.set_font("NotoSansJP", size=14)
 
     # タイトル
@@ -495,3 +479,54 @@ if st.button("📄 PDFを作成", key="btn_make_pdf"):
         st.error(str(e))
     except Exception as e:
         st.error(f"PDFの作成でエラー：{e}")
+
+# ===== 認証付き・金利修正（セッション状態は使わない） =====
+st.markdown("---")
+
+# 認証ボタンは使わず、パスワード一致だけで編集UIを表示
+pwd = st.text_input("🔒 営業担当パスワード", type="password", key="pwd_rates_edit")
+exp_open = (pwd == "naoki0510")
+
+with st.expander("🔧 金利を修正する（営業担当専用）", expanded=exp_open):
+    if not exp_open:
+        st.info("パスワードが一致すると編集欄が開きます。")
+    else:
+        # 銀行ごとに **固定キー**（毎回同じキーで、入力は自動保持される）
+        bank_key_map = {
+            "SBI新生銀行": "mortgage_rate_sbi_shinsei",
+            "三菱UFJ銀行": "mortgage_rate_mufg",
+            "PayPay銀行":  "mortgage_rate_paypay",
+            "じぶん銀行":  "mortgage_rate_jibun",
+            "住信SBI銀行": "mortgage_rate_sumishin_sbi",
+        }
+
+        # 保存済み値の読込（無ければ {}）
+        current_saved = load_manual_rates()
+
+        cols = st.columns(len(BANKS))
+        new_rates_dict = {}
+
+        for bank, col in zip(BANKS, cols):
+            with col:
+                key = bank_key_map[bank]
+                # 初回表示のみ value が効く（2回目以降はキーに紐づく現在値が保持される）
+                default_val = float(current_saved.get(bank, 0.0))
+                val = st.number_input(
+                    f"{bank}（年利％）",
+                    value=default_val,
+                    step=0.001,
+                    format="%.3f",
+                    key=key,  # ←固定キー
+                )
+                # number_input は float を返すが、保険で数値化
+                try:
+                    new_rates_dict[bank] = float(val)
+                except Exception:
+                    new_rates_dict[bank] = default_val
+
+        st.markdown("")
+        if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
+            if save_manual_rates(new_rates_dict):
+                st.success("✅ 金利を保存しました（上部の表にも反映されます）")
+            else:
+                st.error("❌ 保存に失敗しました")
