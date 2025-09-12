@@ -220,61 +220,54 @@ with st.form("new_client"):
     submitted = st.form_submit_button("新規作成", type="primary")
 
 if submitted:
-    # 同一送信で2回通らないように、送信時に idempotency_key を確定
-    if not st.session_state["__create_idem__"]:
-        st.session_state["__create_idem__"] = secrets.token_urlsafe(16)
+    # 必須チェック（空欄や空白のみは拒否）
+    name_clean = (name or "").strip()
+    if not name_clean:
+        st.error("お客様名は必須です。空欄では作成できません。")
+    else:
+        # 余計な改行や全角スペースの連続なども軽く正規化
+        name_clean = " ".join(name_clean.split())
 
-    idem = st.session_state["__create_idem__"]
-    client_id = gen_id()
+        client_id = gen_id()
+        payload = {
+            "meta": {
+                "client_id": client_id,
+                "created_at": datetime.now().isoformat(),
+                "name": name_clean,
+                "phone": (phone or "").strip(),
+                "email": (email or "").strip(),
+                "memo": memo or "",
+            },
+            "baseline": {
+                "housing_cost_m": None,
+                "walk_min": None,
+                "area_m2": None,
+                "floor": None,
+                "corner": None,
+                "inner_corridor": None,
+                "balcony_type": None,
+                "balcony_aspect": None,
+                "view": None,
+                "husband_commute_min": None,
+                "wife_commute_min": None,
+                "spec_current": {}
+            },
+            "prefs": {
+                "importance": {"price": 3, "location": 3, "size_layout": 3, "spec": 3, "management": 3},
+                "budget_max_m": None,
+                "min_floor": None,
+                "min_floor_tolerance": 0,
+                "spec_wish": {}
+            },
+            "listings": []
+        }
 
-    payload = {
-        "meta": {
-            "client_id": client_id,
-            # UTCで保存（表示時にJSTへ変換）
-            "created_at_utc": utc_now_iso(),
-            # 互換目的：旧カラムも一応入れておく（廃止予定）
-            "created_at": utc_now_iso(),
-            "name": name,
-            "phone": phone,
-            "email": email,
-            "memo": memo,
-        },
-        "baseline": {
-            "housing_cost_m": None,
-            "walk_min": None,
-            "area_m2": None,
-            "floor": None,
-            "corner": None,
-            "inner_corridor": None,
-            "balcony_type": None,
-            "balcony_aspect": None,
-            "view": None,
-            "husband_commute_min": None,
-            "wife_commute_min": None,
-            "spec_current": {}
-        },
-        "prefs": {
-            "importance": {"price": 3, "location": 3, "size_layout": 3, "spec": 3, "management": 3},
-            "budget_max_m": None,
-            "min_floor": None,
-            "min_floor_tolerance": 0,
-            "spec_wish": {}
-        },
-        "listings": []
-    }
+        save_client(client_id, payload)
 
-    inserted = save_client(client_id, payload, idem)
-    if inserted:
-        # 一度成功したらキーをリセット（連打で別IDを作りたいときに備える）
-        st.session_state["__create_idem__"] = None
         url = share_url_for(client_id)
         st.success("お客様用URLを発行しました。下のリンクを共有してください。")
         st.code(url, language="text")
         st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
-    else:
-        # 同一キーでの重複挿入は無視（NO-OP）
-        st.info("同一操作はすでに処理済みです（重複作成は行われません）。")
-
 st.divider()
 
 # -------------------------------
