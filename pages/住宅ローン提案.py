@@ -460,17 +460,17 @@ def create_pdf() -> io.BytesIO:
         x += bank_w_mm
     pdf.set_xy(10, y_start + 10)
 
-    # バッファに保存（fpdf2 は bytearray や memoryview を返す）
-pdf_bytes = pdf.output(dest="S")
-# memoryview→bytes などに正規化（環境差吸収）
-if isinstance(pdf_bytes, memoryview):
-    pdf_bytes = pdf_bytes.tobytes()
-elif not isinstance(pdf_bytes, (bytes, bytearray)):
-    pdf_bytes = bytes(pdf_bytes)
+        # バッファに保存（fpdf2 は bytearray や memoryview を返す）
+        pdf_bytes = pdf.output(dest="S")
+        # 実行環境差を吸収して bytes に正規化
+        if isinstance(pdf_bytes, memoryview):
+            pdf_bytes = pdf_bytes.tobytes()
+        elif not isinstance(pdf_bytes, (bytes, bytearray)):
+            pdf_bytes = bytes(pdf_bytes)
 
-out = io.BytesIO(pdf_bytes)
-out.seek(0)
-return out
+        out = io.BytesIO(pdf_bytes)
+        out.seek(0)
+        return out
 
 if st.button("📄 PDFを作成", key="btn_make_pdf"):
     try:
