@@ -58,9 +58,27 @@ st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 # ===== 今月の基準金利（最上段）=====
 base_rates = get_base_rates_for_current_month()
 
-# JSON保存された手動金利用（st.session_stateは使わない）
-from utils.rates import load_manual_rates
-manual_rates = load_manual_rates()
+# JSONから手動金利を直接読む（utils.rates には依存しない）
+from typing import Dict, Any
+def _load_manual_rates_from_json() -> Dict[str, float]:
+    import json
+    p = (ROOT / "data" / "manual_rates.json")
+    try:
+        if p.exists():
+            with p.open("r", encoding="utf-8") as f:
+                raw: Dict[str, Any] = json.load(f) or {}
+            out: Dict[str, float] = {}
+            for k, v in raw.items():
+                try:
+                    out[k] = float(v)
+                except Exception:
+                    pass
+            return out
+    except Exception:
+        pass
+    return {}
+
+manual_rates = _load_manual_rates_from_json()
 
 sbi_rate = manual_rates.get("SBI新生銀行", base_rates.get("SBI新生銀行"))
 if sbi_rate is not None:
