@@ -891,12 +891,13 @@ for p in props:
         "坪単価(万/坪)": round(tsubo,1),
         "適合度(0-100)": round(to_hensachi_abs(fit),1),
         "偏差値(現住=50)": round(to_hensachi_rel(fit, cur_fit),1),
-        "再開発": "有" if p.get("redevelopment_bonus") else "無",
-        "宅配ボックス": ("—" if p.get("type","マンション")=="戸建て" else ("有" if p.get("mgmt",{}).get("宅配ボックス", False) else "無"))
     })
-st.dataframe(rows, use_container_width=True)
-st.caption("※ 適合度=希望充足率を0–100に線形マップ。偏差値は現住=50の差分表現（現住適合度を基準化）。")
 
+# 表示時に物件名を広めに表示する設定
+st.dataframe(rows, use_container_width=True, column_config={
+    "物件名": st.column_config.TextColumn("物件名", width="large")
+})
+st.caption("※ 適合度=希望充足率を0–100に線形マップ。偏差値は現住=50の差分表現（現住適合度を基準化）。")
 # ========== 自動保存（変更検知で即保存） ==========
 client_id_final = _get_client_id_from_query()
 if client_id_final and st.session_state.get("__autosave__", False):
