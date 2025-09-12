@@ -57,9 +57,12 @@ st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 
 # ===== 今月の基準金利（最上段）=====
 base_rates = get_base_rates_for_current_month()
-manual = st.session_state.get("manual_rates", {})
 
-sbi_rate = manual.get("SBI新生銀行", base_rates.get("SBI新生銀行"))
+# JSON保存された手動金利用（st.session_stateは使わない）
+from utils.rates import load_manual_rates
+manual_rates = load_manual_rates()
+
+sbi_rate = manual_rates.get("SBI新生銀行", base_rates.get("SBI新生銀行"))
 if sbi_rate is not None:
     st.markdown(
         f"""
@@ -71,7 +74,6 @@ if sbi_rate is not None:
         """,
         unsafe_allow_html=True
     )
-
 # ===== 事前審査用紙 =====
 st.subheader("事前審査用紙（ダウンロード）")
 st.markdown("""
