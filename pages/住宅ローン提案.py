@@ -461,10 +461,10 @@ def create_pdf() -> io.BytesIO:
     pdf.set_xy(10, y_start + 10)
 
     # バッファに保存
-pdf_bytes = pdf.output(dest="S")  # fpdf2 は bytearray を返す
-out = io.BytesIO(pdf_bytes)
-out.seek(0)
-return out
+    pdf_bytes = pdf.output(dest="S")  # fpdf2 は bytearray を返す
+    out = io.BytesIO(pdf_bytes)
+    out.seek(0)
+    return out
 
 if st.button("📄 PDFを作成", key="btn_make_pdf"):
     try:
