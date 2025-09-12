@@ -31,17 +31,30 @@ def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(r["name"] == col for r in rows)
 
+def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    # RowFactory=Row なので名前で参照可。万一のためタプル位置1(name)も併用。
+    for r in rows:
+        try:
+            if r["name"] == col:
+                return True
+        except Exception:
+            if len(r) > 1 and r[1] == col:
+                return True
+    return False
+
 def ensure_schema():
     """
     テーブル作成＋不足カラムの追加（安全な移行）。
     - idempotency_key: 重複作成防止の一意キー
     - created_at_utc : 作成時刻（UTC保存）
+    既にカラムがある/インデックスがある環境でも落ちないように try/except で保護。
     """
     with get_db() as conn:
+        # 既存環境を壊さない最低限の定義（IF NOT EXISTS）
         conn.execute("""
             CREATE TABLE IF NOT EXISTS clients (
                 client_id TEXT PRIMARY KEY,
-                -- 旧: created_at（ローカル/naive）を使っていた可能性あり
                 created_at TEXT,
                 name TEXT,
                 phone TEXT,
@@ -50,20 +63,40 @@ def ensure_schema():
                 data TEXT NOT NULL
             )
         """)
-        # 追加カラムが無ければ付与
-        if not _has_column(conn, "clients", "idempotency_key"):
-            conn.execute("ALTER TABLE clients ADD COLUMN idempotency_key TEXT")
-        if not _has_column(conn, "clients", "created_at_utc"):
-            conn.execute("ALTER TABLE clients ADD COLUMN created_at_utc TEXT")
 
-        # 一意制約（古環境でも使えるよう INDEX を別途作成）
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_idem ON clients(idempotency_key)")
-        # 既存データで created_at_utc が空のものは created_at を引き継ぐ（なければ今のUTC）
-        conn.execute("""
-            UPDATE clients
-               SET created_at_utc = COALESCE(created_at_utc, created_at, strftime('%Y-%m-%dT%H:%M:%SZ'))
-             WHERE created_at_utc IS NULL
-        """)
+        # 追加カラムは存在チェック＋try/except（古いSQLiteでも安全）
+        if not _has_column(conn, "clients", "idempotency_key"):
+            try:
+                conn.execute("ALTER TABLE clients ADD COLUMN idempotency_key TEXT")
+            except sqlite3.OperationalError:
+                pass  # 既にある等は無視
+
+        if not _has_column(conn, "clients", "created_at_utc"):
+            try:
+                conn.execute("ALTER TABLE clients ADD COLUMN created_at_utc TEXT")
+            except sqlite3.OperationalError:
+                pass
+
+        # 一意インデックス（NULLは重複許容になる仕様）
+        try:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_idem ON clients(idempotency_key)")
+        except sqlite3.OperationalError:
+            pass
+
+        # 既存行の created_at_utc を補完（created_at があれば流用、無ければ現在UTC）
+        try:
+            conn.execute("""
+                UPDATE clients
+                   SET created_at_utc = COALESCE(
+                        created_at_utc,
+                        created_at,
+                        strftime('%Y-%m-%dT%H:%M:%SZ')  -- 現在UTC
+                   )
+                 WHERE created_at_utc IS NULL
+            """)
+        except sqlite3.OperationalError:
+            pass
+
         conn.commit()
 
 # 起動時にスキーマを保証
