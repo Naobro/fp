@@ -146,72 +146,54 @@ if _missing:
 
 # ===== 認証付き・金利修正（セッション状態は使わない） =====
 st.markdown("---")
-with st.expander("🔧 金利を修正する（営業担当専用）", expanded=False):
-    st.warning("🔒 営業担当者専用。パスワード一致で編集欄が表示されます。")
 
-    col_p1, col_p2, _ = st.columns([2, 1, 2])
-    with col_p1:
-        pwd = st.text_input("パスワード", type="password", key="pwd_rates_edit")
-    with col_p2:
-        do_auth = st.button("🔓 認証", type="primary", key="btn_rates_auth")
+# 認証ボタンは使わず、パスワード一致だけで編集UIを表示
+pwd = st.text_input("🔒 営業担当パスワード", type="password", key="pwd_rates_edit")
+exp_open = (pwd == "naoki0510")
 
-    if do_auth and pwd == "naoki0510":
-        st.success("✅ 認証成功 - 金利を編集できます")
-
-        bank_cols = st.columns(len(BANKS))
-
-        # 安全な英数字キー
+with st.expander("🔧 金利を修正する（営業担当専用）", expanded=exp_open):
+    if not exp_open:
+        st.info("パスワードが一致すると編集欄が開きます。")
+    else:
+        # 銀行ごとに **固定キー**（毎回同じキーで、入力は自動保持される）
         bank_key_map = {
-            "SBI新生銀行": "sbi_shinsei",
-            "三菱UFJ銀行": "mufg",
-            "PayPay銀行":  "paypay",
-            "じぶん銀行":  "jibun",
-            "住信SBI銀行": "sumishin_sbi",
+            "SBI新生銀行": "mortgage_rate_sbi_shinsei",
+            "三菱UFJ銀行": "mortgage_rate_mufg",
+            "PayPay銀行":  "mortgage_rate_paypay",
+            "じぶん銀行":  "mortgage_rate_jibun",
+            "住信SBI銀行": "mortgage_rate_sumishin_sbi",
         }
 
-        current_saved = load_manual_rates()  # 無ければ {}
+        # 保存済み値の読込（無ければ {}）
+        current_saved = load_manual_rates()
 
+        cols = st.columns(len(BANKS))
         new_rates_dict = {}
-        used_keys = set()
 
-        for bank, col in zip(BANKS, bank_cols):
+        for bank, col in zip(BANKS, cols):
             with col:
-                current_val = float(current_saved.get(bank, 0.0))
-
-                # 日付＋英数字名でキーをユニーク化（SessionStateに依存しない）
-                safe_key = f"mortgage_rate_{datetime.now().strftime('%Y%m%d')}_{bank_key_map[bank]}"
-                if safe_key in used_keys:
-                    st.error(f"キーの重複: {safe_key}")
-                used_keys.add(safe_key)
-
+                key = bank_key_map[bank]
+                # 初回表示のみ value が効く（2回目以降はキーに紐づく現在値が保持される）
+                default_val = float(current_saved.get(bank, 0.0))
+                val = st.number_input(
+                    f"{bank}（年利％）",
+                    value=default_val,
+                    step=0.001,
+                    format="%.3f",
+                    key=key,  # ←固定キー
+                )
+                # number_input は float を返すが、保険で数値化
                 try:
-                    new_val = st.number_input(
-                        f"{bank}（％）",
-                        value=current_val,
-                        step=0.001,
-                        format="%.3f",
-                        key=safe_key,
-                    )
-                except Exception as e:
-                    st.error(f"入力フィールド作成エラー ({bank}): {e}")
-                    new_val = current_val
+                    new_rates_dict[bank] = float(val)
+                except Exception:
+                    new_rates_dict[bank] = default_val
 
-                new_rates_dict[bank] = float(new_val)
-
-        st.markdown("---")
-        c_save, _ = st.columns([1, 3])
-        with c_save:
-            if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
-                if save_manual_rates(new_rates_dict):
-                    st.success("✅ 金利を保存しました（次回以降はこの値をそのまま読み込みます）")
-                else:
-                    st.error("❌ 保存に失敗しました")
-
-    elif do_auth and pwd != "naoki0510":
-        st.error("❌ パスワードが違います")
-    else:
-        st.info("💡 認証後に金利の修正が可能になります")
-
+        st.markdown("")
+        if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
+            if save_manual_rates(new_rates_dict):
+                st.success("✅ 金利を保存しました（上部の表にも反映されます）")
+            else:
+                st.error("❌ 保存に失敗しました")
 # ===== 借入上限額 =====
 banks_exam = {
     "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
