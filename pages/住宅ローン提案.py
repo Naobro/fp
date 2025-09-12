@@ -20,10 +20,7 @@ st.set_page_config(page_title="住宅ローン 提案シミュレーター", lay
 
 # ===== フォント（日本語 TrueType; fpdf2 で使用） =====
 FONT_PATH = "NotoSansJP-Regular.ttf"
-FONT_OK = os.path.exists(FONT_PATH)
-if not FONT_OK:
-    st.warning(f"PDF用フォントが見つかりませんでした：{FONT_PATH} をプロジェクト直下に置いてください。")
-
+# 起動時にはチェックせず、PDF作成時にだけ存在確認する
 # ===== 固定定義 =====
 BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
 PLANS = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
