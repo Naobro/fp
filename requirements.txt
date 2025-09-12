@@ -1,28 +1,29 @@
-pip==25.2
-setuptools==75.1.0
-wheel==0.44.0
+# --- 基本ツール ---
+streamlit>=1.36,<2.0
 
-streamlit==1.36.0
-# 科学計算（他ページが使うため保持・相性固定）
-numpy==1.26.4
-pandas==2.1.4
-matplotlib==3.8.2
-numpy-financial==1.0.0
+# 科学計算系
+numpy>=1.26,<2.0
+pandas>=2.1,<3.0
+matplotlib>=3.8,<4.0
+numpy-financial>=1.0,<2.0
+
 # PDF
-reportlab==3.6.13
-# HTTP
-requests==2.31.0
-# supabase を使う場合のみ。使っていなければ **この行を削除**
-supabase==2.6.7
+reportlab>=3.6,<4.0
+fpdf2>=2.7,<3.0
 
-# ── matplotlib / pandas のサブ依存も固定（ホイール取得を優先してビルド失敗を防止）
-pillow==10.2.0
-kiwisolver==1.4.5
-cycler==0.12.1
-contourpy==1.2.0
-fonttools==4.47.2
-pyparsing==3.1.2
-python-dateutil==2.8.2
-packaging==23.2
-tzdata==2024.1
-fpdf2>=2.7
+# HTTP
+requests>=2.31,<3.0
+
+# 画像処理などサブ依存
+pillow>=10.2,<11.0
+kiwisolver>=1.4,<2.0
+cycler>=0.12,<1.0
+contourpy>=1.2,<2.0
+fonttools>=4.47,<5.0
+pyparsing>=3.1,<4.0
+python-dateutil>=2.8,<3.0
+packaging>=23.2,<24.0
+tzdata>=2024.1,<2025.0
+
+# Supabase → 本当に必要な場合だけ残す
+# supabase>=2.6,<3.0
