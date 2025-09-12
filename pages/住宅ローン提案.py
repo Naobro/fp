@@ -1,29 +1,18 @@
 # /pages/住宅ローン提案.py
 # 住宅ローン 提案シミュレーター（reportlab不使用 / fpdf2版）
-# 要件：
-# - st.session_state は一切参照しない
-# - “初期値に戻す” 概念なし（保存が無ければエラーで停止）
-# - 保存は「金利を保存」ボタンでのみ
-# - パスワード一致後に編集UI表示（状態フラグ不使用）
-# - 直感的な固定キー（ASCII）のみ使用
 
 import os
 import io
 import json
-from datetime import datetime
-from pathlib import Path  # ← 追加（フォント探索に使用）
+from pathlib import Path
 
 import streamlit as st
-from fpdf import FPDF  # ← fpdf2 を使用（reportlab は使いません）
+from fpdf import FPDF  # fpdf2
 
-# ===== 画面設定（最初に実行） =====
+# ===== 画面設定 =====
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
 
-# ===== フォント（日本語 TrueType; fpdf2 で使用） =====
-# 起動時にはチェックせず、PDF作成時にだけ存在確認する
-# 置き場所はプロジェクト直下 or fonts/ のいずれでもOKにする
-FONT_PATH = "NotoSansJP-Regular.ttf"  # 互換のため定義だけ残す（実解決は _resolve_font_path で行う）
-
+# ===== フォント探索 =====
 def _resolve_font_path() -> str | None:
     """
     NotoSansJP-Regular.ttf を複数候補から探索して、見つかった絶対パスを返す。
@@ -44,7 +33,7 @@ def _resolve_font_path() -> str | None:
             pass
     return None
 
-# ===== 固定定義 =====
+# ===== 共有定義 =====
 BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
 PLANS = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
@@ -57,7 +46,6 @@ SPECIAL_NOTES = {
 }
 
 def extra_rate_percent(bank: str, plan: str, age: int) -> float:
-    # 団信・付帯の上乗せ（％）
     if bank == "SBI新生銀行":
         return 0.1 if plan == "がん100" else 0.0
     if bank == "三菱UFJ銀行":
@@ -70,13 +58,12 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
         return (0.2 if age < 40 else 0.4) if plan == "三大疾病" else 0.0
     return 0.0
 
-# ===== 保存（JSONのみ） =====
+# ===== 保存（JSON） =====
 SAVE_DIR = "data"
 SAVE_PATH = os.path.join(SAVE_DIR, "manual_rates.json")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 def load_manual_rates() -> dict:
-    """保存済み金利のみ返す。無ければ {}（初期値の概念なし）。"""
     try:
         if os.path.exists(SAVE_PATH):
             with open(SAVE_PATH, "r", encoding="utf-8") as f:
@@ -94,7 +81,6 @@ def load_manual_rates() -> dict:
     return {}
 
 def save_manual_rates(d: dict) -> bool:
-    """『金利を保存』押下時のみ保存。空文字は無視。"""
     try:
         purified = {}
         for b in BANKS:
@@ -115,7 +101,6 @@ def monthly_payment(principal: float, annual_rate: float, years: int) -> float:
     return principal * r / (1 - (1 + r) ** (-n))
 
 def sbi_effective_percent(base_percent: float, ltv: float, years: int) -> float:
-    # 住信SBIだけ LTV・年数帯で段階加算（％のまま）
     rate = float(base_percent)
     if ltv <= 0.80:
         rate += -0.09
@@ -136,7 +121,7 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int)
     raw = (m * n) if r == 0 else (m * (1 - (1 + r) ** -n) / r)
     return int(raw // 100000 * 100000)
 
-# ===== UI：基本入力（固定キー） =====
+# ===== UI =====
 st.title("住宅ローン 提案シミュレーター")
 
 col1, col2, col3, col4 = st.columns(4)
@@ -156,16 +141,13 @@ years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=m
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1.0
 
-# ===== 金利の読込（保存済みのみ） =====
-rates = load_manual_rates()  # 無ければ {} のまま
-
-# 未設定の銀行は後続で空欄扱い（停止しない）
+# 金利
+rates = load_manual_rates()
 _missing = [b for b in BANKS if b not in rates or str(rates.get(b, "")).strip() == ""]
 if _missing:
     st.warning("未設定の金利があるため、該当銀行のセルは空欄になります： " + " / ".join(_missing))
 
-
-# ===== 借入上限額 =====
+# 借入上限
 banks_exam = {
     "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
     "三菱UFJ銀行": {"審査金利": 0.0354, "返済比率": 0.35},
@@ -191,74 +173,52 @@ for bank, val in rows_limit_html:
 tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
 
-# ===== 返済額テーブル計算 =====
-def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, list, list, set]:
-    """
-    返済額テーブルを構築する関数。
-    - BANKS, PLANS, limits, rates, ltv を参照（いずれもグローバルで定義済み）
-    - 金利未設定の銀行は安全にスキップして空欄セルを入れる
-    - 35年制限行／最長50年行の扱いを内包
-    戻り値: (table_rows_local, highlights_local, row50_local, mins50)
-    """
+# ===== 返済額テーブルのデータ作成 =====
+def build_table(principal: float, years_req: int, age_now: int):
     def cap_years(bank_name: str, req: int) -> int:
-        # 年数の上限（年齢制約：79-年齢、MUFG/SBI新生は35年まで）
         y = min(79 - age_now, req)
         if bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
             y = min(y, 35)
         return y
 
-    table_rows_local: list[list[dict]] = []
-    highlights_local: list[set[int]] = []
+    table_rows_local = []
+    highlights_local = []
 
-    # --- 各プランの行を構築 ---
     for plan in PLANS:
-        row: list[dict] = []
-        vals: list[tuple[int, float]] = []
-
+        row = []
+        vals = []
         for bank in BANKS:
-            # 1) 借入上限で弾く
             if principal > limits.get(bank, 0):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
-
-            # 2) 金利が未設定なら空欄セル（KeyErrorを出さない）
             if bank not in rates:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
-
-            # 3) 「一般団信」以外は、その銀行で当該プランの上乗せが無いなら空欄
             if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
             y = cap_years(bank, years_req)
-
-            # 4) 基準金利（銀行別ロジック）
             try:
-                base_percent_saved = float(rates[bank])  # ％
+                base_percent_saved = float(rates[bank])
             except Exception:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
             if bank == "住信SBI銀行":
-                eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)  # ％
+                eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
                 base = eff_pct / 100.0
             else:
                 base = base_percent_saved / 100.0
-                # PayPay/じぶん は 36年以上 +0.10%
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
 
-            # 5) 団信・付帯の上乗せ（％→実数）
             add = extra_rate_percent(bank, plan, age_now) / 100.0
-
-            # 6) 月返済額
             m = monthly_payment(principal, base + add, y)
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
 
-        # 7) 最小返済額セルのハイライト
-        mins: set[int] = set()
+        mins = set()
         if vals:
             mv = min(v for _, v in vals)
             for idx, v in vals:
@@ -268,22 +228,18 @@ def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, l
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # --- “最長50年” 行（一般団信の下段として描画用に返す） ---
-    row50_local: list[dict] = []
-    vals50: list[tuple[int, float]] = []
-
+    # 最長50年行
+    row50_local = []
+    vals50 = []
     for bank in BANKS:
-        # 借入上限で弾く & MUFG/SBI新生は 50年非対応
         if principal > limits.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
-
         if bank not in rates:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
         y = min(79 - age_now, 50)
-
         try:
             base_percent_saved = float(rates[bank])
         except Exception:
@@ -291,7 +247,7 @@ def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, l
             continue
 
         if bank == "住信SBI銀行":
-            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)  # ％
+            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
             base = eff_pct / 100.0
         else:
             base = base_percent_saved / 100.0
@@ -299,12 +255,11 @@ def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, l
                 base += 0.10 / 100.0
 
         add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
-
         m = monthly_payment(principal, base + add, y)
         row50_local.append({"rate": base + add, "monthly": m, "years": y})
         vals50.append((len(row50_local) - 1, m))
 
-    mins50: set[int] = set()
+    mins50 = set()
     if vals50:
         mv = min(v for _, v in vals50)
         for idx, v in vals50:
@@ -315,7 +270,7 @@ def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, l
 
 table_rows, highlights, row50, mins50 = build_table(principal, int(years), int(age))
 
-# ===== HTMLテーブル描画 =====
+# ===== HTML（画面表示用） =====
 def td_cell(d: dict, is_min: bool, wcss: str) -> str:
     r, m, y = d["rate"], d["monthly"], d["years"]
     base = "text-align:center;vertical-align:middle;"
@@ -366,12 +321,23 @@ for bank in BANKS:
 html += "</tr></tbody></table>"
 st.markdown(html, unsafe_allow_html=True)
 
-# ===== PDF出力（fpdf2） =====
+# ===== PDF出力 =====
+def _pdf_to_bytesio(pdf: FPDF) -> io.BytesIO:
+    """fpdf2 の output(dest='S') を BytesIO に正規化して返す"""
+    pdf_bytes = pdf.output(dest="S")  # bytes / bytearray / memoryview など
+    if isinstance(pdf_bytes, memoryview):
+        pdf_bytes = pdf_bytes.tobytes()
+    elif not isinstance(pdf_bytes, (bytes, bytearray)):
+        pdf_bytes = bytes(pdf_bytes)
+    out = io.BytesIO(pdf_bytes)
+    out.seek(0)
+    return out
+
 def create_pdf() -> io.BytesIO:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
 
-    # フォント登録（日本語）— PDF作成時にだけ厳密に探索
+    # 日本語フォント
     resolved = _resolve_font_path()
     if not resolved:
         searched = [
@@ -393,10 +359,9 @@ def create_pdf() -> io.BytesIO:
     pdf.cell(0, 8, txt=f"■ 借入金額：¥{principal:,.0f}", ln=1, align="C")
     pdf.ln(2)
 
-    # 列幅
+    # 列幅など
     plan_w_mm = 45
     bank_w_mm = 40
-    row_h = 16
 
     # ヘッダ
     pdf.set_font("NotoSansJP", size=10)
@@ -406,46 +371,56 @@ def create_pdf() -> io.BytesIO:
         pdf.cell(bank_w_mm, 10, b, border=1, align="C", fill=True)
     pdf.ln(10)
 
-    def fmt_cell(d):
+    # 固定高さグリッド（罫線→テキストの順で描画）
+    line_h = 5.4                 # 1行の高さ
+    cell_h = line_h * 3          # 各セルは3行固定
+    x_left = 10                  # 左余白
+    y_cursor = pdf.get_y()       # テーブル開始Y
+
+    pdf.set_font("NotoSansJP", size=10)
+
+    def _cell_text(d: dict) -> list[str]:
         if d["rate"] is None:
-            return ""
-        return f"{d['rate']*100:.3f}%\n¥{d['monthly']:,.0f}\n({d['years']}年)"
+            return ["", "", ""]
+        return [f"{d['rate']*100:.3f}%", f"¥{d['monthly']:,.0f}", f"({d['years']}年)"]
 
-    # 本体行
-    for i, plan in enumerate(PLANS):
-        pdf.set_font("NotoSansJP", size=10)
-        y_start = pdf.get_y()
-        pdf.cell(plan_w_mm, row_h, plan, border=1, align="C")
-
-        x = pdf.get_x()
-        y = y_start
-        for col_idx, _ in enumerate(BANKS):
-            pdf.set_xy(x, y)
-            txt = fmt_cell(table_rows[i][col_idx])
-            pdf.multi_cell(bank_w_mm, 5.5, txt=txt, border=1, align="C")
+    def _draw_row(label: str, cells: list[dict], y: float, fill: tuple | None = None):
+        # 罫線（枠）を先に描く
+        x = x_left
+        if fill:
+            pdf.set_fill_color(*fill)
+            pdf.rect(x, y, plan_w_mm, cell_h, style="F")
+        pdf.rect(x, y, plan_w_mm, cell_h)  # 見出し枠
+        x += plan_w_mm
+        for _ in BANKS:
+            pdf.rect(x, y, bank_w_mm, cell_h)
             x += bank_w_mm
 
-        pdf.set_xy(10, y_start + row_h)  # 10mm は左余白の既定
+        # テキスト（枠は固定高なのでズレない）
+        pdf.set_xy(x_left, y + (cell_h - line_h) / 2)  # 見出しは中央行
+        pdf.multi_cell(plan_w_mm, line_h, label, border=0, align="C")
 
-        # 「一般団信」の次に最長50年行
+        x = x_left + plan_w_mm
+        for d in cells:
+            t1, t2, t3 = _cell_text(d)
+            pdf.set_xy(x, y)
+            pdf.multi_cell(bank_w_mm, line_h, t1, border=0, align="C")
+            pdf.set_xy(x, y + line_h)
+            pdf.multi_cell(bank_w_mm, line_h, t2, border=0, align="C")
+            pdf.set_xy(x, y + line_h * 2)
+            pdf.multi_cell(bank_w_mm, line_h, t3, border=0, align="C")
+            x += bank_w_mm
+
+    # 6つのプラン行
+    for i, plan in enumerate(PLANS):
+        _draw_row(plan, table_rows[i], y_cursor, fill=None)
+        y_cursor += cell_h
         if plan == "一般団信":
-            pdf.set_font("NotoSansJP", size=10)
-            pdf.set_fill_color(249, 246, 239)
-            y_start = pdf.get_y()
-            pdf.cell(plan_w_mm, row_h, "最長50年", border=1, align="C", fill=True)
+            _draw_row("最長50年", row50, y_cursor, fill=(249, 246, 239))
+            y_cursor += cell_h
 
-            x = pdf.get_x()
-            y = y_start
-            for col_idx, _ in enumerate(BANKS):
-                pdf.set_xy(x, y)
-                txt = fmt_cell(row50[col_idx])
-                pdf.multi_cell(bank_w_mm, 5.5, txt=txt, border=1, align="C")
-                x += bank_w_mm
-
-            pdf.set_xy(10, y_start + row_h)
-
-        # 備考
-    pdf.ln(2)
+    # 備考
+    pdf.set_xy(x_left, y_cursor + 2)
     pdf.set_font("NotoSansJP", size=9)
     pdf.set_fill_color(252, 249, 240)
     y_start = pdf.get_y()
@@ -460,18 +435,9 @@ def create_pdf() -> io.BytesIO:
         x += bank_w_mm
     pdf.set_xy(10, y_start + 10)
 
-    # バッファに保存（fpdf2 は bytearray や memoryview を返す）
-    pdf_bytes = pdf.output(dest="S")
-    # 実行環境差を吸収して bytes に正規化
-    if isinstance(pdf_bytes, memoryview):
-        pdf_bytes = pdf_bytes.tobytes()
-    elif not isinstance(pdf_bytes, (bytes, bytearray)):
-        pdf_bytes = bytes(pdf_bytes)
+    return _pdf_to_bytesio(pdf)
 
-    out = io.BytesIO(pdf_bytes)
-    out.seek(0)
-    return out
-
+# ===== PDF生成ボタン =====
 if st.button("📄 PDFを作成", key="btn_make_pdf"):
     try:
         pdf_buf = create_pdf()
@@ -487,10 +453,8 @@ if st.button("📄 PDFを作成", key="btn_make_pdf"):
     except Exception as e:
         st.error(f"PDFの作成でエラー：{e}")
 
-# ===== 認証付き・金利修正（セッション状態は使わない） =====
+# ===== 金利修正（パスワード一致で展開） =====
 st.markdown("---")
-
-# 認証ボタンは使わず、パスワード一致だけで編集UIを表示
 pwd = st.text_input("🔒 営業担当パスワード", type="password", key="pwd_rates_edit")
 exp_open = (pwd == "naoki0510")
 
@@ -498,7 +462,6 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
     if not exp_open:
         st.info("パスワードが一致すると編集欄が開きます。")
     else:
-        # 銀行ごとに **固定キー**（毎回同じキーで、入力は自動保持される）
         bank_key_map = {
             "SBI新生銀行": "mortgage_rate_sbi_shinsei",
             "三菱UFJ銀行": "mortgage_rate_mufg",
@@ -507,25 +470,21 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
             "住信SBI銀行": "mortgage_rate_sumishin_sbi",
         }
 
-        # 保存済み値の読込（無ければ {}）
         current_saved = load_manual_rates()
-
         cols = st.columns(len(BANKS))
         new_rates_dict = {}
 
         for bank, col in zip(BANKS, cols):
             with col:
                 key = bank_key_map[bank]
-                # 初回表示のみ value が効く（2回目以降はキーに紐づく現在値が保持される）
                 default_val = float(current_saved.get(bank, 0.0))
                 val = st.number_input(
                     f"{bank}（年利％）",
                     value=default_val,
                     step=0.001,
                     format="%.3f",
-                    key=key,  # ←固定キー
+                    key=key,
                 )
-                # number_input は float を返すが、保険で数値化
                 try:
                     new_rates_dict[bank] = float(val)
                 except Exception:
