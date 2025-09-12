@@ -91,8 +91,8 @@ def gh_raw(path: str) -> str:
 # ============================================
 # 6) ヒーロー
 # ============================================
-top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
-st.image(gh_raw(top_img), use_container_width=True)
+top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png?raw=1"
+st.image(top_img, use_container_width=True)
 
 st.title("不動産エージェント NAOKI")
 
@@ -135,8 +135,8 @@ st.divider()
 # ============================================
 st.subheader("phase①　不安の解消")
 
-huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
-st.image(gh_raw(huan_img), use_container_width=True)
+huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png?raw=1"
+st.image(huan_img, use_container_width=True)
 
 st.markdown("## 🏠 不動産購入時の不安ランキング（調査対象：500人）")
 
@@ -201,8 +201,8 @@ st.info("“不安の解消は可視化して、専門家　データで解消�
 # ============================================
 st.subheader("phase②　ライフプラン　予算")
 
-fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
-st.image(gh_raw(fp_img), use_container_width=True)
+fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png?raw=1"
+st.image(fp_img, use_container_width=True)
 
 st.divider()
 st.header("フェーズ② ライフプラン／予算")
