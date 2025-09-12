@@ -14,15 +14,6 @@ from datetime import datetime
 
 import streamlit as st
 
-# --- compat guard: 外部コードが st.session_state.auth_status を触っても落ちないようにする ---
-try:
-    _ = st.session_state["auth_status"]  # 既にあれば何もしない
-except Exception:
-    try:
-        st.session_state["auth_status"] = None  # 無ければ置いておく（以後 AttributeError は出ない）
-    except Exception:
-        pass
-
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.units import mm
@@ -53,7 +44,6 @@ def jp_style(size=11, align="CENTER", leading=15, bold=False, color=colors.black
         textColor=color,
         spaceAfter=2,
         spaceBefore=2,
-        # reportlabは fontWeight を解釈しないため、boldは使い分けで対応
     )
 
 # ===== 固定定義 =====
@@ -169,7 +159,6 @@ property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (princip
 ltv = principal / property_price_guess if property_price_guess else 1.0
 
 # ===== 金利の読込（保存済みのみ） =====
-# ===== 金利の読込（保存済みのみ） =====
 rates = load_manual_rates()  # 無ければ {} のまま
 
 # 未設定の銀行は後続で空欄扱い（停止しない）
@@ -244,6 +233,7 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         st.error("❌ パスワードが違います")
     else:
         st.info("💡 認証後に金利の修正が可能になります")
+
 # ===== 借入上限額 =====
 banks_exam = {
     "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
@@ -271,15 +261,13 @@ tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
 
 # ===== 返済額テーブル計算 =====
-# ===== 返済額テーブル計算 =====
 def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, list, list, set]:
     """
     返済額テーブルを構築する関数。
     - BANKS, PLANS, limits, rates, ltv を参照（いずれもグローバルで定義済み）
     - 金利未設定の銀行は安全にスキップして空欄セルを入れる
     - 35年制限行／最長50年行の扱いを内包
-    戻り値:
-      (table_rows_local, highlights_local, row50_local, mins50)
+    戻り値: (table_rows_local, highlights_local, row50_local, mins50)
     """
     def cap_years(bank_name: str, req: int) -> int:
         # 年数の上限（年齢制約：79-年齢、MUFG/SBI新生は35年まで）
@@ -314,31 +302,26 @@ def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, l
 
             y = cap_years(bank, years_req)
 
-            # 4) 基準金利を決定（※ここが “探しやすい文言” です）
-            # >>>>>> 基準金利（銀行別ロジック）開始 <<<<<<
+            # 4) 基準金利（銀行別ロジック）
             try:
-                base_percent_saved = float(rates[bank])  # 保存された％値を使用
+                base_percent_saved = float(rates[bank])  # ％
             except Exception:
-                # 数値化できない場合も空欄
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
             if bank == "住信SBI銀行":
-                # 住信SBIのみ：LTV・年数の段階加算を“％のまま”適用
                 eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)  # ％
                 base = eff_pct / 100.0
             else:
-                # そのほかの銀行：保存％を実数化
                 base = base_percent_saved / 100.0
                 # PayPay/じぶん は 36年以上 +0.10%
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
-            # <<<<<< 基準金利（銀行別ロジック）終了 >>>>>>
 
             # 5) 団信・付帯の上乗せ（％→実数）
             add = extra_rate_percent(bank, plan, age_now) / 100.0
 
-            # 6) 月返済額を計算
+            # 6) 月返済額
             m = monthly_payment(principal, base + add, y)
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
@@ -348,34 +331,28 @@ def build_table(principal: float, years_req: int, age_now: int) -> tuple[list, l
         if vals:
             mv = min(v for _, v in vals)
             for idx, v in vals:
-                if abs(v - mv) < 0.5:  # ほぼ同一最小なら複数ハイライト
+                if abs(v - mv) < 0.5:
                     mins.add(idx)
 
         table_rows_local.append(row)
         highlights_local.append(mins)
-
-        # 「一般団信」の直後に“最長50年”行を付けたい訳ではない（最長行は別途下で構築）
-        # ここでは通常行のみ扱う
 
     # --- “最長50年” 行（一般団信の下段として描画用に返す） ---
     row50_local: list[dict] = []
     vals50: list[tuple[int, float]] = []
 
     for bank in BANKS:
-        # 1) 借入上限で弾く & MUFG/SBI新生は 50年非対応
+        # 借入上限で弾く & MUFG/SBI新生は 50年非対応
         if principal > limits.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        # 2) 金利が未設定なら空欄セル
         if bank not in rates:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        # 3) 年数は 年齢制約の範囲で最長 50 年
         y = min(79 - age_now, 50)
 
-        # 4) 基準金利（最長年数に対して同じロジックを適用）
         try:
             base_percent_saved = float(rates[bank])
         except Exception:
@@ -537,5 +514,10 @@ def create_pdf() -> io.BytesIO:
 
 if st.button("📄 PDFを作成", key="btn_make_pdf"):
     pdf_buf = create_pdf()
-    st.download_button("📥 PDFをダウンロード", data=pdf_buf,
-                       file_name="住宅ローン提案書.pdf", mime="application/pdf", key="btn_dl_pdf")
+    st.download_button(
+        "📥 PDFをダウンロード",
+        data=pdf_buf,
+        file_name="住宅ローン提案書.pdf",
+        mime="application/pdf",
+        key="btn_dl_pdf",
+    )
