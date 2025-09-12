@@ -92,7 +92,7 @@ def gh_raw(path: str) -> str:
 # 6) ヒーロー
 # ============================================
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png"
-st.image(gh_raw(top_img), use_column_width=True)
+st.image(gh_raw(top_img), use_container_width=True)
 
 st.title("不動産エージェント NAOKI")
 
@@ -136,7 +136,7 @@ st.divider()
 st.subheader("phase①　不安の解消")
 
 huan_img = "https://github.com/Naobro/fp/blob/main/assets/huan.png"
-st.image(gh_raw(huan_img), use_column_width=True)
+st.image(gh_raw(huan_img), use_container_width=True)
 
 st.markdown("## 🏠 不動産購入時の不安ランキング（調査対象：500人）")
 
@@ -202,7 +202,7 @@ st.info("“不安の解消は可視化して、専門家　データで解消�
 st.subheader("phase②　ライフプラン　予算")
 
 fp_img = "https://github.com/Naobro/fp/blob/main/assets/Fp.png"
-st.image(gh_raw(fp_img), use_column_width=True)
+st.image(gh_raw(fp_img), use_container_width=True)
 
 st.divider()
 st.header("フェーズ② ライフプラン／予算")
@@ -248,7 +248,7 @@ neage_imgs = [
 ]
 cols = st.columns(len(neage_imgs))
 for col, url in zip(cols, neage_imgs):
-    col.image(url, use_column_width=True)
+    col.image(url, use_container_width=True)
 
 st.markdown(
     """
@@ -298,7 +298,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.image("https://github.com/Naobro/fp/blob/main/assets/danshin.PNG?raw=1", use_column_width=True)
+st.image("https://github.com/Naobro/fp/blob/main/assets/danshin.PNG?raw=1", use_container_width=True)
 
 st.markdown(
     """
@@ -344,7 +344,7 @@ st.markdown(
 
 st.markdown("アジア主要都市の都心マンション価格と比較しても、東京はまだ割安感があるという見方")
 try:
-    st.image(asia_img, use_column_width=True)
+    st.image(asia_img, use_container_width=True)
 except Exception:
     pass
 
