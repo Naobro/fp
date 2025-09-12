@@ -1,5 +1,5 @@
 # /pages/住宅ローン提案.py
-# 住宅ローン 提案シミュレーター
+# 住宅ローン 提案シミュレーター（reportlab不使用 / fpdf2版）
 # 要件：
 # - st.session_state は一切参照しない
 # - “初期値に戻す” 概念なし（保存が無ければエラーで停止）
@@ -13,38 +13,16 @@ import json
 from datetime import datetime
 
 import streamlit as st
-
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.units import mm
-from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from fpdf import FPDF  # ← fpdf2 を使用（reportlab は使いません）
 
 # ===== 画面設定（最初に実行） =====
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
 
-# ===== フォント（日本語） =====
+# ===== フォント（日本語 TrueType; fpdf2 で使用） =====
 FONT_PATH = "NotoSansJP-Regular.ttf"
-try:
-    pdfmetrics.registerFont(TTFont("NotoSansJP", FONT_PATH))
-except Exception as e:
-    st.error(f"フォント読み込み失敗: {e}\n{FONT_PATH} をプロジェクト直下に置いてください。")
-    st.stop()
-
-def jp_style(size=11, align="CENTER", leading=15, bold=False, color=colors.black):
-    amap = {"LEFT": 0, "CENTER": 1, "RIGHT": 2}
-    return ParagraphStyle(
-        name=f"jp_{size}_{align}",
-        fontName="NotoSansJP",
-        fontSize=size,
-        leading=leading,
-        alignment=amap.get(align, 1),
-        textColor=color,
-        spaceAfter=2,
-        spaceBefore=2,
-    )
+FONT_OK = os.path.exists(FONT_PATH)
+if not FONT_OK:
+    st.warning(f"PDF用フォントが見つかりませんでした：{FONT_PATH} をプロジェクト直下に置いてください。")
 
 # ===== 固定定義 =====
 BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
@@ -435,89 +413,106 @@ for bank in BANKS:
 html += "</tr></tbody></table>"
 st.markdown(html, unsafe_allow_html=True)
 
-# ===== PDF出力 =====
+# ===== PDF出力（fpdf2） =====
 def create_pdf() -> io.BytesIO:
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=landscape(A4),
-        leftMargin=10*mm, rightMargin=10*mm, topMargin=13*mm, bottomMargin=13*mm
-    )
-    st_title = jp_style(size=21, align="CENTER", leading=31, bold=True)
-    st_head  = jp_style(size=13, align="CENTER", leading=24, bold=True, color=colors.HexColor("#226BB3"))
-    st_cell  = jp_style(size=12, align="CENTER", leading=24)
-    st_cellb = jp_style(size=15, align="CENTER", leading=19, bold=True, color=colors.HexColor("#1B232A"))
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.add_page()
 
-    elems = []
-    elems.append(Paragraph("住宅ローン提案書", st_title))
-    elems.append(Spacer(1, 5*mm))
-    elems.append(Paragraph(f"<b>■ 借入金額：¥{principal:,.0f}</b>", st_head))
-    elems.append(Spacer(1, 8*mm))
+    # フォント登録（日本語）
+    if not os.path.exists(FONT_PATH):
+        raise FileNotFoundError(f"PDF用フォントが見つかりません：{FONT_PATH}")
+    pdf.add_font("NotoSansJP", "", FONT_PATH, uni=True)
+    pdf.set_font("NotoSansJP", size=14)
 
-    data = []
-    header = [Paragraph("プラン", st_head)] + [Paragraph(b, st_head) for b in BANKS]
-    data.append(header)
+    # タイトル
+    pdf.cell(0, 10, txt="住宅ローン提案書", ln=1, align="C")
+    pdf.set_font("NotoSansJP", size=11)
+    pdf.cell(0, 8, txt=f"■ 借入金額：¥{principal:,.0f}", ln=1, align="C")
+    pdf.ln(2)
 
+    # 列幅
+    plan_w_mm = 45
+    bank_w_mm = 40
+    row_h = 16
+
+    # ヘッダ
+    pdf.set_font("NotoSansJP", size=10)
+    pdf.set_fill_color(242, 246, 250)
+    pdf.cell(plan_w_mm, 10, "プラン", border=1, align="C", fill=True)
+    for b in BANKS:
+        pdf.cell(bank_w_mm, 10, b, border=1, align="C", fill=True)
+    pdf.ln(10)
+
+    def fmt_cell(d):
+        if d["rate"] is None:
+            return ""
+        return f"{d['rate']*100:.3f}%\n¥{d['monthly']:,.0f}\n({d['years']}年)"
+
+    # 本体行
     for i, plan in enumerate(PLANS):
-        r = [Paragraph(plan, st_cell)]
-        for col_idx, bank in enumerate(BANKS):
-            d = table_rows[i][col_idx]
-            if d["rate"] is None:
-                r.append(Paragraph("", st_cell))
-            else:
-                txt = f"<b>{d['rate']*100:.3f}%</b><br/><b>¥{d['monthly']:,.0f}</b><br/><font size=10>({d['years']}年返済)</font>"
-                r.append(Paragraph(txt, st_cellb))
-        data.append(r)
+        pdf.set_font("NotoSansJP", size=10)
+        y_start = pdf.get_y()
+        pdf.cell(plan_w_mm, row_h, plan, border=1, align="C")
 
+        x = pdf.get_x()
+        y = y_start
+        for col_idx, _ in enumerate(BANKS):
+            pdf.set_xy(x, y)
+            txt = fmt_cell(table_rows[i][col_idx])
+            pdf.multi_cell(bank_w_mm, 5.5, txt=txt, border=1, align="C")
+            x += bank_w_mm
+
+        pdf.set_xy(10, y_start + row_h)  # 10mm は左余白の既定
+
+        # 「一般団信」の次に最長50年行
         if plan == "一般団信":
-            r50 = [Paragraph("最長50年", st_cell)]
-            for col_idx, bank in enumerate(BANKS):
-                d = row50[col_idx]
-                if d["rate"] is None:
-                    r50.append(Paragraph("", st_cell))
-                else:
-                    txt = f"<b>{d['rate']*100:.3f}%</b><br/><b>¥{d['monthly']:,.0f}</b><br/><font size=10>({d['years']}年返済)</font>"
-                    r50.append(Paragraph(txt, st_cellb))
-            data.append(r50)
+            pdf.set_font("NotoSansJP", size=10)
+            pdf.set_fill_color(249, 246, 239)
+            y_start = pdf.get_y()
+            pdf.cell(plan_w_mm, row_h, "最長50年", border=1, align="C", fill=True)
 
-    nrows = len(data)
-    rh = [36*mm]*nrows
-    cw = [58*mm] + [43*mm]*len(BANKS)
+            x = pdf.get_x()
+            y = y_start
+            for col_idx, _ in enumerate(BANKS):
+                pdf.set_xy(x, y)
+                txt = fmt_cell(row50[col_idx])
+                pdf.multi_cell(bank_w_mm, 5.5, txt=txt, border=1, align="C")
+                x += bank_w_mm
 
-    ts = TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.9, colors.HexColor("#bbb")),
-        ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#F2F6FA")),
-        ("LEFTPADDING", (0,0), (-1,-1), 14),
-        ("RIGHTPADDING", (0,0), (-1,-1), 14),
-        ("TOPPADDING", (0,0), (-1,-1), 13),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 13),
-    ])
+            pdf.set_xy(10, y_start + row_h)
 
-    # ハイライト
-    row_cursor = 1
-    for i, mins in enumerate(highlights):
-        for col_idx in mins:
-            ts.add("BACKGROUND", (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor("#FFF8C8"))
-        row_cursor += 1
-        if PLANS[i] == "一般団信":
-            for col_idx in mins50:
-                ts.add("BACKGROUND", (col_idx+1, row_cursor), (col_idx+1, row_cursor), colors.HexColor("#FFF8C8"))
-            row_cursor += 1
+    # 備考
+    pdf.ln(2)
+    pdf.set_font("NotoSansJP", size=9)
+    pdf.set_fill_color(252, 249, 240)
+    y_start = pdf.get_y()
+    pdf.cell(plan_w_mm, 10, "特記事項", border=1, align="C", fill=True)
 
-    tb = Table(data, colWidths=cw, rowHeights=rh)
-    tb.setStyle(ts)
-    elems.append(tb)
-    doc.build(elems)
-    buf.seek(0)
-    return buf
+    x = pdf.get_x()
+    y = y_start
+    for b in BANKS:
+        pdf.set_xy(x, y)
+        notes = "\n".join(SPECIAL_NOTES[b])
+        pdf.multi_cell(bank_w_mm, 5, txt=notes, border=1, align="L")
+        x += bank_w_mm
+    pdf.set_xy(10, y_start + 10)
+
+    # バッファに保存
+    out = io.BytesIO(pdf.output(dest="S").encode("latin1"))
+    out.seek(0)
+    return out
 
 if st.button("📄 PDFを作成", key="btn_make_pdf"):
-    pdf_buf = create_pdf()
-    st.download_button(
-        "📥 PDFをダウンロード",
-        data=pdf_buf,
-        file_name="住宅ローン提案書.pdf",
-        mime="application/pdf",
-        key="btn_dl_pdf",
-    )
+    try:
+        pdf_buf = create_pdf()
+        st.download_button(
+            "📥 PDFをダウンロード",
+            data=pdf_buf,
+            file_name="住宅ローン提案書.pdf",
+            mime="application/pdf",
+            key="btn_dl_pdf",
+        )
+    except FileNotFoundError as e:
+        st.error(str(e))
+    except Exception as e:
+        st.error(f"PDFの作成でエラー：{e}")
