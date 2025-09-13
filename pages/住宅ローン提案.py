@@ -1,5 +1,11 @@
 # /pages/住宅ローン提案.py
 # 住宅ローン 提案シミュレーター（reportlab不使用 / fpdf2版）
+# 要件：
+# - st.session_state は一切参照しない
+# - “初期値に戻す” 概念なし（保存が無ければエラーで停止）
+# - 保存は「金利を保存」ボタンでのみ
+# - パスワード一致後に編集UIを表示（状態フラグ不使用）
+# - 直感的な固定キー（ASCII）のみ使用
 
 import os
 import io
@@ -7,17 +13,13 @@ import json
 from pathlib import Path
 
 import streamlit as st
-from fpdf import FPDF  # fpdf2
+from fpdf import FPDF
 
 # ===== 画面設定 =====
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
 
 # ===== フォント探索 =====
 def _resolve_font_path() -> str | None:
-    """
-    NotoSansJP-Regular.ttf を複数候補から探索して、見つかった絶対パスを返す。
-    見つからなければ None。
-    """
     here = Path(__file__).resolve().parent
     candidates = [
         here / "NotoSansJP-Regular.ttf",
@@ -33,7 +35,7 @@ def _resolve_font_path() -> str | None:
             pass
     return None
 
-# ===== 共有定義 =====
+# ===== 固定定義 =====
 BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
 PLANS = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
@@ -58,7 +60,7 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
         return (0.2 if age < 40 else 0.4) if plan == "三大疾病" else 0.0
     return 0.0
 
-# ===== 保存（JSON） =====
+# ===== 保存（JSONのみ） =====
 SAVE_DIR = "data"
 SAVE_PATH = os.path.join(SAVE_DIR, "manual_rates.json")
 os.makedirs(SAVE_DIR, exist_ok=True)
@@ -121,7 +123,7 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int)
     raw = (m * n) if r == 0 else (m * (1 - (1 + r) ** -n) / r)
     return int(raw // 100000 * 100000)
 
-# ===== UI =====
+# ===== UI：基本入力 =====
 st.title("住宅ローン 提案シミュレーター")
 
 col1, col2, col3, col4 = st.columns(4)
@@ -141,13 +143,13 @@ years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=m
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1.0
 
-# 金利
+# ===== 金利の読込 =====
 rates = load_manual_rates()
 _missing = [b for b in BANKS if b not in rates or str(rates.get(b, "")).strip() == ""]
 if _missing:
     st.warning("未設定の金利があるため、該当銀行のセルは空欄になります： " + " / ".join(_missing))
 
-# 借入上限
+# ===== 借入上限額 =====
 banks_exam = {
     "SBI新生銀行": {"審査金利": 0.03,   "返済比率": 0.40},
     "三菱UFJ銀行": {"審査金利": 0.0354, "返済比率": 0.35},
@@ -173,7 +175,7 @@ for bank, val in rows_limit_html:
 tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
 
-# ===== 返済額テーブルのデータ作成 =====
+# ===== 返済額テーブル計算 =====
 def build_table(principal: float, years_req: int, age_now: int):
     def cap_years(bank_name: str, req: int) -> int:
         y = min(79 - age_now, req)
@@ -270,7 +272,7 @@ def build_table(principal: float, years_req: int, age_now: int):
 
 table_rows, highlights, row50, mins50 = build_table(principal, int(years), int(age))
 
-# ===== HTML（画面表示用） =====
+# ===== HTMLテーブル（画面表示） =====
 def td_cell(d: dict, is_min: bool, wcss: str) -> str:
     r, m, y = d["rate"], d["monthly"], d["years"]
     base = "text-align:center;vertical-align:middle;"
@@ -305,12 +307,12 @@ html += "</tr></thead><tbody>"
 
 for i, plan in enumerate(PLANS):
     html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:18px;'>{plan}</td>"
-    for col_idx, bank in enumerate(BANKS):
+    for col_idx, _ in enumerate(BANKS):
         cell = table_rows[i][col_idx]
         html += td_cell(cell, (col_idx in highlights[i] and cell["monthly"] is not None), bank_w)
     if plan == "一般団信":
         html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:17px;background-color:#F9F6EF;'>最長50年</td>"
-        for col_idx, bank in enumerate(BANKS):
+        for col_idx, _ in enumerate(BANKS):
             cell = row50[col_idx]
             html += td_cell(cell, (col_idx in mins50 and cell["monthly"] is not None), bank_w)
         html += "</tr>"
@@ -321,10 +323,9 @@ for bank in BANKS:
 html += "</tr></tbody></table>"
 st.markdown(html, unsafe_allow_html=True)
 
-# ===== PDF出力 =====
-def _pdf_to_bytesio(pdf: FPDF) -> io.BytesIO:
-    """fpdf2 の output(dest='S') を BytesIO に正規化して返す"""
-    pdf_bytes = pdf.output(dest="S")  # bytes / bytearray / memoryview など
+# ===== PDFヘルパ =====
+def _pdf_to_bytesio(pdf) -> io.BytesIO:
+    pdf_bytes = pdf.output(dest="S")
     if isinstance(pdf_bytes, memoryview):
         pdf_bytes = pdf_bytes.tobytes()
     elif not isinstance(pdf_bytes, (bytes, bytearray)):
@@ -333,11 +334,11 @@ def _pdf_to_bytesio(pdf: FPDF) -> io.BytesIO:
     out.seek(0)
     return out
 
+# ===== PDF出力（罫線を先描画→テキスト流し込みでズレ防止） =====
 def create_pdf() -> io.BytesIO:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
 
-    # 日本語フォント
     resolved = _resolve_font_path()
     if not resolved:
         searched = [
@@ -346,10 +347,8 @@ def create_pdf() -> io.BytesIO:
             "./NotoSansJP-Regular.ttf",
             "./fonts/NotoSansJP-Regular.ttf",
         ]
-        raise FileNotFoundError(
-            "PDF用フォントが見つかりません：NotoSansJP-Regular.ttf\n"
-            "探した場所:\n - " + "\n - ".join(searched)
-        )
+        raise FileNotFoundError("PDF用フォントが見つかりません：\n - " + "\n - ".join(searched))
+
     pdf.add_font("NotoSansJP", "", resolved, uni=True)
     pdf.set_font("NotoSansJP", size=14)
 
@@ -359,85 +358,100 @@ def create_pdf() -> io.BytesIO:
     pdf.cell(0, 8, txt=f"■ 借入金額：¥{principal:,.0f}", ln=1, align="C")
     pdf.ln(2)
 
-    # 列幅など
+    # 列幅・高さ
     plan_w_mm = 45
     bank_w_mm = 40
+    line_h = 5.4                 # 本体セルの1行高
+    cell_h = line_h * 3          # 本体セルは3行固定（% / 月額 / (年)）
+    x_left = 10
+    y_top = pdf.get_y()
 
-    # ヘッダ
+    # ヘッダ行
     pdf.set_font("NotoSansJP", size=10)
     pdf.set_fill_color(242, 246, 250)
-    pdf.cell(plan_w_mm, 10, "プラン", border=1, align="C", fill=True)
+    pdf.rect(x_left, y_top, plan_w_mm, 10, style="F")
+    pdf.rect(x_left, y_top, plan_w_mm, 10)
+    pdf.set_xy(x_left, y_top)
+    pdf.multi_cell(plan_w_mm, 10, "プラン", align="C", border=0)
+
+    x = x_left + plan_w_mm
     for b in BANKS:
-        pdf.cell(bank_w_mm, 10, b, border=1, align="C", fill=True)
-    pdf.ln(10)
+        pdf.rect(x, y_top, bank_w_mm, 10, style="F")
+        pdf.rect(x, y_top, bank_w_mm, 10)
+        pdf.set_xy(x, y_top)
+        pdf.multi_cell(bank_w_mm, 10, b, align="C", border=0)
+        x += bank_w_mm
 
-    # 固定高さグリッド（罫線→テキストの順で描画）
-    line_h = 5.4                 # 1行の高さ
-    cell_h = line_h * 3          # 各セルは3行固定
-    x_left = 10                  # 左余白
-    y_cursor = pdf.get_y()       # テーブル開始Y
+    y_cursor = y_top + 10  # ヘッダの下から本体
 
-    pdf.set_font("NotoSansJP", size=10)
-
-    def _cell_text(d: dict) -> list[str]:
+    def _cell_text(d: dict):
         if d["rate"] is None:
             return ["", "", ""]
         return [f"{d['rate']*100:.3f}%", f"¥{d['monthly']:,.0f}", f"({d['years']}年)"]
 
-    def _draw_row(label: str, cells: list[dict], y: float, fill: tuple | None = None):
-        # 罫線（枠）を先に描く
-        x = x_left
-        if fill:
-            pdf.set_fill_color(*fill)
-            pdf.rect(x, y, plan_w_mm, cell_h, style="F")
-        pdf.rect(x, y, plan_w_mm, cell_h)  # 見出し枠
-        x += plan_w_mm
-        for _ in BANKS:
-            pdf.rect(x, y, bank_w_mm, cell_h)
-            x += bank_w_mm
+    def _draw_row(label: str, cells: list[dict], y: float, fill_rgb: tuple | None = None, label_fill: tuple | None = None):
+        # 見出しセル
+        if label_fill:
+            pdf.set_fill_color(*label_fill)
+            pdf.rect(x_left, y, plan_w_mm, cell_h, style="F")
+        pdf.rect(x_left, y, plan_w_mm, cell_h)
+        pdf.set_xy(x_left, y + (cell_h - line_h) / 2)  # 真ん中行に寄せ
+        pdf.multi_cell(plan_w_mm, line_h, label, align="C", border=0)
 
-        # テキスト（枠は固定高なのでズレない）
-        pdf.set_xy(x_left, y + (cell_h - line_h) / 2)  # 見出しは中央行
-        pdf.multi_cell(plan_w_mm, line_h, label, border=0, align="C")
-
+        # 銀行セル：枠線→テキスト
         x = x_left + plan_w_mm
+        if fill_rgb:
+            pdf.set_fill_color(*fill_rgb)
         for d in cells:
+            if fill_rgb:
+                pdf.rect(x, y, bank_w_mm, cell_h, style="F")
+            pdf.rect(x, y, bank_w_mm, cell_h)
             t1, t2, t3 = _cell_text(d)
             pdf.set_xy(x, y)
-            pdf.multi_cell(bank_w_mm, line_h, t1, border=0, align="C")
+            pdf.multi_cell(bank_w_mm, line_h, t1, align="C", border=0)
             pdf.set_xy(x, y + line_h)
-            pdf.multi_cell(bank_w_mm, line_h, t2, border=0, align="C")
+            pdf.multi_cell(bank_w_mm, line_h, t2, align="C", border=0)
             pdf.set_xy(x, y + line_h * 2)
-            pdf.multi_cell(bank_w_mm, line_h, t3, border=0, align="C")
+            pdf.multi_cell(bank_w_mm, line_h, t3, align="C", border=0)
             x += bank_w_mm
 
-    # 6つのプラン行
+    # 本体6行＋「最長50年」行
+    pdf.set_font("NotoSansJP", size=10)
     for i, plan in enumerate(PLANS):
-        _draw_row(plan, table_rows[i], y_cursor, fill=None)
+        _draw_row(plan, table_rows[i], y_cursor)
         y_cursor += cell_h
         if plan == "一般団信":
-            _draw_row("最長50年", row50, y_cursor, fill=(249, 246, 239))
+            _draw_row("最長50年", row50, y_cursor, fill_rgb=(249, 246, 239), label_fill=(249, 246, 239))
             y_cursor += cell_h
 
-    # 備考
-    pdf.set_xy(x_left, y_cursor + 2)
+    # 特記事項行（固定高さで枠→テキスト）
     pdf.set_font("NotoSansJP", size=9)
-    pdf.set_fill_color(252, 249, 240)
-    y_start = pdf.get_y()
-    pdf.cell(plan_w_mm, 10, "特記事項", border=1, align="C", fill=True)
+    notes_h = 15.0
+    notes_line_h = 5.0
+    y_notes = y_cursor + 2
 
-    x = pdf.get_x()
-    y = y_start
+    # 見出し
+    pdf.set_fill_color(252, 249, 240)
+    pdf.rect(x_left, y_notes, plan_w_mm, notes_h, style="F")
+    pdf.rect(x_left, y_notes, plan_w_mm, notes_h)
+    pdf.set_xy(x_left, y_notes + (notes_h - notes_line_h) / 2)
+    pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
+
+    # 各銀行セル（固定高さで枠を先に）
+    x = x_left + plan_w_mm
     for b in BANKS:
-        pdf.set_xy(x, y)
-        notes = "\n".join(SPECIAL_NOTES[b])
-        pdf.multi_cell(bank_w_mm, 5, txt=notes, border=1, align="L")
+        pdf.rect(x, y_notes, bank_w_mm, notes_h)
+        # テキスト（高さ固定内に収める）
+        pdf.set_xy(x + 1, y_notes + 1)   # 少し内側に
+        pdf.multi_cell(bank_w_mm - 2, 4.5, "\n".join(SPECIAL_NOTES[b]), align="L", border=0)
         x += bank_w_mm
-    pdf.set_xy(10, y_start + 10)
+
+    # カーソル位置整理（次要素のため）
+    pdf.set_xy(x_left, y_notes + notes_h + 2)
 
     return _pdf_to_bytesio(pdf)
 
-# ===== PDF生成ボタン =====
+# ===== ダウンロードUI =====
 if st.button("📄 PDFを作成", key="btn_make_pdf"):
     try:
         pdf_buf = create_pdf()
@@ -453,7 +467,7 @@ if st.button("📄 PDFを作成", key="btn_make_pdf"):
     except Exception as e:
         st.error(f"PDFの作成でエラー：{e}")
 
-# ===== 金利修正（パスワード一致で展開） =====
+# ===== 金利修正（パスワード一致で表示） =====
 st.markdown("---")
 pwd = st.text_input("🔒 営業担当パスワード", type="password", key="pwd_rates_edit")
 exp_open = (pwd == "naoki0510")
