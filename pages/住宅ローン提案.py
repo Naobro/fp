@@ -424,29 +424,31 @@ def create_pdf() -> io.BytesIO:
             _draw_row("最長50年", row50, y_cursor, fill_rgb=(249, 246, 239), label_fill=(249, 246, 239))
             y_cursor += cell_h
 
-    # 特記事項行（固定高さで枠→テキスト）
+        # 特記事項行（内容に合わせて高さを自動調整）
     pdf.set_font("NotoSansJP", size=9)
-    notes_h = 15.0
-    notes_line_h = 5.0
-    y_notes = y_cursor + 2
+    notes_line_h = 5.0      # 1行の高さ（必要なら 4.8〜5.2 で微調整）
+    pad_v = 1.5             # 上下の余白
+    max_lines = max(len(SPECIAL_NOTES[b]) for b in BANKS)
+    notes_h = max_lines * notes_line_h + pad_v * 2
+    y_notes = y_cursor + 2  # 本体テーブルとの間に少し余白
 
-    # 見出し
+    # 見出しセル
     pdf.set_fill_color(252, 249, 240)
     pdf.rect(x_left, y_notes, plan_w_mm, notes_h, style="F")
     pdf.rect(x_left, y_notes, plan_w_mm, notes_h)
     pdf.set_xy(x_left, y_notes + (notes_h - notes_line_h) / 2)
     pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
 
-    # 各銀行セル（固定高さで枠を先に）
+    # 各銀行セル（全列を最大行数の高さで統一）
     x = x_left + plan_w_mm
     for b in BANKS:
-        pdf.rect(x, y_notes, bank_w_mm, notes_h)
-        # テキスト（高さ固定内に収める）
-        pdf.set_xy(x + 1, y_notes + 1)   # 少し内側に
-        pdf.multi_cell(bank_w_mm - 2, 4.5, "\n".join(SPECIAL_NOTES[b]), align="L", border=0)
+        txt = "\n".join(SPECIAL_NOTES[b])   # 行ごと改行
+        pdf.rect(x, y_notes, bank_w_mm, notes_h)        # 先に枠線
+        pdf.set_xy(x + 1, y_notes + pad_v)              # 少し内側に文字
+        pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)
         x += bank_w_mm
 
-    # カーソル位置整理（次要素のため）
+    # 次要素のためのカーソル整理
     pdf.set_xy(x_left, y_notes + notes_h + 2)
 
     return _pdf_to_bytesio(pdf)
