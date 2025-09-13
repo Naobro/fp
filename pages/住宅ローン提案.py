@@ -426,7 +426,7 @@ def create_pdf() -> io.BytesIO:
 
         # 特記事項行（内容に合わせて高さを自動調整）
     pdf.set_font("NotoSansJP", size=9)
-    notes_line_h = 10.0      # 1行の高さ（必要なら 4.8〜5.2 で微調整）
+    notes_line_h = 7.0      # 1行の高さ（必要なら 4.8〜5.2 で微調整）
     pad_v = 1.5             # 上下の余白
     max_lines = max(len(SPECIAL_NOTES[b]) for b in BANKS)
     notes_h = max_lines * notes_line_h + pad_v * 2
