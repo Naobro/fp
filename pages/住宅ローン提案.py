@@ -107,7 +107,7 @@ def save_manual_rates(d: dict) -> bool:
             if b not in d:
                 continue
             v = d[b]
-            if v is None:  # 空欄は無視（既存を上書きしない）
+            if v is None:
                 continue
             try:
                 fv = float(v)
@@ -120,13 +120,6 @@ def save_manual_rates(d: dict) -> bool:
         if not updated:
             return False
 
-        os.makedirs(SAVE_DIR, exist_ok=True)
-        with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump(merged, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception:
-        return False
-        # 保存
         os.makedirs(SAVE_DIR, exist_ok=True)
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
             json.dump(merged, f, ensure_ascii=False, indent=2)
@@ -464,7 +457,7 @@ def create_pdf() -> io.BytesIO:
             _draw_row("最長50年", row50, y_cursor, fill_rgb=(249, 246, 239), label_fill=(249, 246, 239))
             y_cursor += cell_h
 
-        # 特記事項行（内容に合わせて高さを自動調整）
+    # 特記事項行（内容に合わせて高さを自動調整）
     pdf.set_font("NotoSansJP", size=9)
     notes_line_h = 5.2      # 1行の高さ（必要なら 4.8〜5.2 で微調整）
     pad_v = 1.5             # 上下の余白
@@ -531,23 +524,23 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         new_rates_dict = {}
 
         for bank, col in zip(BANKS, cols):
-    with col:
-        key = bank_key_map[bank]
-        # 保存済みがあればその値を文字列で初期化、なければ空欄（0.000を入れない）
-        init_str = "" if bank not in current_saved else f"{float(current_saved[bank]):.3f}"
-        s = st.text_input(
-            f"{bank}（年利％）",
-            value=init_str,
-            key=key,
-            placeholder="未設定（例: 0.389）"
-        )
-        # 文字列→float（空欄や不正は None 扱い＝保存時に無視）
-        try:
-            new_rates_dict[bank] = float(s) if s.strip() != "" else None
-        except Exception:
-            new_rates_dict[bank] = None
+            with col:
+                key = bank_key_map[bank]
+                # 保存済みがあればその値を文字列で初期化、なければ空欄（0.000を入れない）
+                init_str = "" if bank not in current_saved else f"{float(current_saved[bank]):.3f}"
+                s = st.text_input(
+                    f"{bank}（年利％）",
+                    value=init_str,
+                    key=key,
+                    placeholder="未設定（例: 0.389）"
+                )
+                # 文字列→float（空欄や不正は None 扱い＝保存時に無視）
+                try:
+                    new_rates_dict[bank] = float(s) if s.strip() != "" else None
+                except Exception:
+                    new_rates_dict[bank] = None
 
-st.markdown("")
+        st.markdown("")
         if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
             if save_manual_rates(new_rates_dict):
                 st.success("✅ 金利を保存しました（上部の表にも反映されます）")
