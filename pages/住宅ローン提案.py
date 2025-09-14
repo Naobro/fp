@@ -85,13 +85,12 @@ def load_manual_rates() -> dict:
 def save_manual_rates(d: dict) -> bool:
     """
     『金利を保存』押下時のみ保存。
-    - 空文字や None は無視
-    - 0 / 0.0 は「未入力」と見なし既存値を維持（ゼロで上書きしない）
-    - 既存ファイルがあればマージ
+    - 空欄/None は無視（既存値を保持）
+    - 0.0 を含む有効な数値は保存
+    - 既存ファイルとマージ
     """
     try:
-        # 既存値を読み込み（無ければ空）
-        existing = {}
+        existing: dict[str, float] = {}
         if os.path.exists(SAVE_PATH):
             with open(SAVE_PATH, "r", encoding="utf-8") as f:
                 obj = json.load(f)
@@ -102,28 +101,31 @@ def save_manual_rates(d: dict) -> bool:
                         except Exception:
                             pass
 
-        # 入力値をクレンジングして既存にマージ
         merged = dict(existing)
+        updated = False
         for b in BANKS:
-            if b in d:
-                s = str(d[b]).strip()
-                if s == "" or s.lower() == "none":
-                    # 未入力は無視（既存を維持）
-                    continue
-                try:
-                    fv = float(s)
-                    if fv == 0.0:
-                        # 0.0 は未入力扱い：既存を維持
-                        continue
+            if b not in d:
+                continue
+            v = d[b]
+            if v is None:  # 空欄は無視（既存を上書きしない）
+                continue
+            try:
+                fv = float(v)
+                if b not in merged or merged[b] != fv:
                     merged[b] = fv
-                except Exception:
-                    # 数値化できなければ無視
-                    continue
+                    updated = True
+            except Exception:
+                continue
 
-        # 1件も更新が無ければ False を返す（上書きしない）
-        if merged == existing:
+        if not updated:
             return False
 
+        os.makedirs(SAVE_DIR, exist_ok=True)
+        with open(SAVE_PATH, "w", encoding="utf-8") as f:
+            json.dump(merged, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
         # 保存
         os.makedirs(SAVE_DIR, exist_ok=True)
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
@@ -529,22 +531,23 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         new_rates_dict = {}
 
         for bank, col in zip(BANKS, cols):
-            with col:
-                key = bank_key_map[bank]
-                default_val = float(current_saved.get(bank, 0.0))
-                val = st.number_input(
-                    f"{bank}（年利％）",
-                    value=default_val,
-                    step=0.001,
-                    format="%.3f",
-                    key=key,
-                )
-                try:
-                    new_rates_dict[bank] = float(val)
-                except Exception:
-                    new_rates_dict[bank] = default_val
+    with col:
+        key = bank_key_map[bank]
+        # 保存済みがあればその値を文字列で初期化、なければ空欄（0.000を入れない）
+        init_str = "" if bank not in current_saved else f"{float(current_saved[bank]):.3f}"
+        s = st.text_input(
+            f"{bank}（年利％）",
+            value=init_str,
+            key=key,
+            placeholder="未設定（例: 0.389）"
+        )
+        # 文字列→float（空欄や不正は None 扱い＝保存時に無視）
+        try:
+            new_rates_dict[bank] = float(s) if s.strip() != "" else None
+        except Exception:
+            new_rates_dict[bank] = None
 
-        st.markdown("")
+st.markdown("")
         if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
             if save_manual_rates(new_rates_dict):
                 st.success("✅ 金利を保存しました（上部の表にも反映されます）")
