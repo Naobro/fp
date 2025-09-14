@@ -83,13 +83,51 @@ def load_manual_rates() -> dict:
     return {}
 
 def save_manual_rates(d: dict) -> bool:
+    """
+    『金利を保存』押下時のみ保存。
+    - 空文字や None は無視
+    - 0 / 0.0 は「未入力」と見なし既存値を維持（ゼロで上書きしない）
+    - 既存ファイルがあればマージ
+    """
     try:
-        purified = {}
+        # 既存値を読み込み（無ければ空）
+        existing = {}
+        if os.path.exists(SAVE_PATH):
+            with open(SAVE_PATH, "r", encoding="utf-8") as f:
+                obj = json.load(f)
+                if isinstance(obj, dict):
+                    for k, v in obj.items():
+                        try:
+                            existing[k] = float(v)
+                        except Exception:
+                            pass
+
+        # 入力値をクレンジングして既存にマージ
+        merged = dict(existing)
         for b in BANKS:
-            if b in d and str(d[b]).strip() != "":
-                purified[b] = float(d[b])
+            if b in d:
+                s = str(d[b]).strip()
+                if s == "" or s.lower() == "none":
+                    # 未入力は無視（既存を維持）
+                    continue
+                try:
+                    fv = float(s)
+                    if fv == 0.0:
+                        # 0.0 は未入力扱い：既存を維持
+                        continue
+                    merged[b] = fv
+                except Exception:
+                    # 数値化できなければ無視
+                    continue
+
+        # 1件も更新が無ければ False を返す（上書きしない）
+        if merged == existing:
+            return False
+
+        # 保存
+        os.makedirs(SAVE_DIR, exist_ok=True)
         with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump(purified, f, ensure_ascii=False, indent=2)
+            json.dump(merged, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
         return False
