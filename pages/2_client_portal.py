@@ -1,66 +1,108 @@
-# fp/client_portal.py
-# 顧客ポータル（表紙）：?client=<ID> を受けて各機能ページへ誘導するだけ
+# /client_portal.py
+# 顧客ポータル（このページが“表紙”）
+# ・URLは必ず ルート + ?client=c-xxxxx で開く
+# ・ここから各機能ページへ遷移（クエリ client を引き継ぐ）
+# ・ログインや編集UIは一切なし（リンク集 + 進め方の入口だけ）
+# ・任意で Googleスプレッドシートへの外部リンク（?sheet=... を渡せば表示）
 
-import json
-from pathlib import Path
 import streamlit as st
 
-st.set_page_config(page_title="Client Portal", layout="centered")
+st.set_page_config(page_title="顧客ポータル", layout="wide")
 
-# ========== パラメタ ==========
-client_id = st.query_params.get("client", [""])[0] if hasattr(st, "query_params") else st.experimental_get_query_params().get("client", [""])[0]
+# ----- クエリ取得（新旧API両対応） -----
+def get_qp(name: str, default: str = "") -> str:
+    try:
+        # 新API
+        val = st.query_params.get(name, "")
+        # st.query_params.get は存在しない環境もあるため try/except
+        if isinstance(val, list):
+            return val[0] if val else default
+        return val or default
+    except Exception:
+        # 旧API
+        val = st.experimental_get_query_params().get(name, [default])
+        return val[0] if isinstance(val, list) else (val or default)
+
+def set_client_qp(client_id: str):
+    try:
+        # 新API（Mappingとして代入）
+        st.query_params["client"] = client_id
+    except Exception:
+        # 旧API
+        st.experimental_set_query_params(client=client_id)
+
+client_id = get_qp("client")
+sheet_url = get_qp("sheet", "")
+
 if not client_id:
     st.error("client パラメータがありません。例： /client_portal?client=c-xxxxx")
     st.stop()
 
-BASE = Path(__file__).resolve().parent
-DATA_DIR = (BASE / "data" / "clients" / client_id).resolve()
+# ----- ヘッダ -----
+st.title("お客さま専用ポータル")
+st.caption("このページから各機能に進めます。ブックマーク推奨。")
 
-meta_path = DATA_DIR / "meta.json"
-display_name = ""
-property_label = ""  # 物件名は“未決定”想定なので、表紙では使わない
-spreadsheet_url = None
-line_qr_url = None
-
-# ========== meta 読み込み（なければ最低限の案内のみ） ==========
-if meta_path.exists():
-    try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        display_name = meta.get("display_name") or meta.get("customer_name") or ""
-        spreadsheet_url = meta.get("spreadsheet_url") or None
-        line_qr_url = meta.get("line_qr_url") or None
-    except Exception:
-        pass
-
-# ========== ヘッダー（超シンプル） ==========
-st.markdown("### お客様ポータル")
-st.write(f"ID：`{client_id}`")
-if display_name:
-    st.write(f"お客様名：**{display_name}**")
-st.write("このページから各コンテンツへ移動できます。")
+with st.container():
+    c1, c2 = st.columns([0.7, 0.3])
+    with c1:
+        st.markdown(f"**顧客コード**：`{client_id}`")
+        st.write("※ 物件は未定です。まずはヒアリング → 仮審査 → 物件選定…の順で進めます。")
+    with c2:
+        if sheet_url:
+            st.link_button("📄 共有スプレッドシートを開く", url=sheet_url, help="進捗・タスク管理用（外部リンク）")
 
 st.divider()
 
-# ========== 機能リンク ==========
-def link(label: str, page_path: str):
-    st.link_button(label, f"{page_path}?client={client_id}", use_container_width=True)
-
+# ----- 機能タイル（この表紙から各ページへ遷移） -----
 st.subheader("メニュー")
-link("📄 住宅ローン提案（PDF）", "/pages/住宅ローン提案")
-link("🧾 諸費用明細（PDF）", "/pages/諸費用明細")
-link("✅ 必要書類チェックリスト（PDF）", "/pages/checklists")
-link("📝 事前審査入力（ヒアリング）", "/pages/hearing")
+
+def _goto(page_path: str):
+    # client を保持したままアプリ内ページへ遷移
+    set_client_qp(client_id)
+    st.switch_page(page_path)
+
+col = st.columns(4)
+
+with col[0]:
+    st.markdown("#### 📊 住宅ローン提案（PDF）")
+    st.write("各行・各銀行の返済額を比較し、提案書PDFを作成します。")
+    if st.button("開く", key="open_mortgage"):
+        _goto("pages/住宅ローン提案.py")
+
+with col[1]:
+    st.markdown("#### 🧾 諸費用明細（PDF）")
+    st.write("諸費用の概算→確定まで更新し続けられる明細PDF。")
+    if st.button("開く", key="open_costs"):
+        _goto("pages/諸費用明細.py")
+
+with col[2]:
+    st.markdown("#### ✅ 必要書類チェック（PDF）")
+    st.write("購入/売却の必要書類を整理し、チェック付きPDFを作成。")
+    if st.button("開く", key="open_checklist"):
+        _goto("pages/チェックリスト.py")
+
+with col[3]:
+    st.markdown("#### 📝 事前審査 入力")
+    st.write("仮審査のための基本情報入力フォーム。")
+    if st.button("開く", key="open_preexam"):
+        _goto("pages/事前審査入力.py")
 
 st.divider()
 
-# ========== 任意の外部リンク ==========
-if spreadsheet_url:
-    st.markdown("#### 共有スプレッドシート")
-    st.link_button("📊 スプレッドシートを開く", spreadsheet_url, use_container_width=True)
+# ----- 進め方（超簡易版のガイドのみ。編集機能は持たない） -----
+with st.expander("進め方（参考）", expanded=False):
+    st.markdown(
+        """
+1) **ヒアリング**  
+2) **仮審査**（各行の事前審査）  
+3) **物件選定**（内見・条件調整）  
+4) **売買契約**  
+5) **本審査**  
+6) **金消**（金銭消費貸借契約）  
+7) **決済**  
+        """
+    )
 
-if line_qr_url:
-    st.markdown("#### 連絡（LINE）")
-    st.image(line_qr_url, caption="LINE QR（既に交換済みなら表示不要）", use_column_width=True)
-
-# 余白
-st.write("")
+# ----- フッター -----
+st.markdown("---")
+st.caption("このページのURLと顧客コードはお客様と担当者のみで共有しています。")
