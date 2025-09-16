@@ -178,8 +178,15 @@ display_fee = number_input_commas(
     step=10_000,
 )
 
-# 事務手数料は「物件価格×2.2%」で見積（①の借入金と一致しやすい／循環参照を避ける）
-loan_fee = int(property_price * 0.022)
+# ============ 銀行事務手数料（借入金額ベース：自動計算＋手動修正可） ============
+st.markdown("#### 銀行事務手数料（借入金額ベース）")
+# ① 借入金額の入力欄（初期値は物件価格。循環参照を避けるため諸費用は含めない想定。必要に応じて手で修正）
+loan_amount_for_fee = number_input_commas("借入金額（事務手数料計算用・円）", property_price, step=100_000)
+# ② 事務手数料（基本は借入金額×2.2% を自動計算。金融機関により定額/割引があるため上書き可）
+auto_loan_fee = int(loan_amount_for_fee * 0.022)
+loan_fee = number_input_commas("銀行事務手数料（円：自動=借入×2.2%・編集可）", auto_loan_fee, step=1_000)
+
+# 付帯項目（従来どおり）
 kinko_stamp = number_input_commas("金銭消費貸借 印紙税（通常0円）", 0, step=1_000)
 fire_fee = number_input_commas("火災保険料（円・5年分概算）", 200_000, step=10_000)
 tekigo_fee = number_input_commas("適合証明書（フラット35の場合必須）", 55_000 if use_flat35 else 0, step=5_000)
