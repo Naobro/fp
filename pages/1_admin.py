@@ -281,11 +281,13 @@ if submitted:
     if ok:
         st.success("お客様用URLを発行しました。下のリンクを共有してください。")
         st.code(url, language="text")
+        # st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary") # key引数は不要
         st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
     else:
         # 直前のリラン等で重複呼び出されたケース（DBには既に存在）
         st.info("同じ操作がすでに登録済みです（重複作成は行っていません）。")
         st.code(url, language="text")
+        # st.link_button("➡️ お客様ページを開く（新規タブ）", url, type="primary") # key引数は不要
         st.link_button("➡️ お客様ページを開く（新規タブ）", url, type="primary")
 
     # 次の新規作成のためにキーをリセットするボタンを出す
@@ -387,10 +389,20 @@ else:
             st.write(c["created_jst"])
         with cols[2]:
             st.caption("共有URL")
-            st.code(url, language="text")
+            # urlが有効かチェックして表示
+            if url:
+                st.code(url, language="text")
+            else:
+                st.caption("URL生成エラー") # urlがNoneの場合
+
         with cols[3]:
             st.caption("操作")
-            st.link_button("開く（新規タブ）", url, type="primary", key=f"open-{c['id']}")
+            # DEBUG: st.write(f"DEBUG: url='{url}', client_id='{c['id']}'")
+            if url: # url が None や空文字列でないことを確認
+                # st.link_button は key 引数を受け付けないため削除
+                st.link_button("開く（新規タブ）", url, type="primary")
+            else:
+                st.warning("無効なURLです") # urlがNoneの場合
         with cols[4]:
             # 個別削除ボタンの確認フロー
             delete_confirmed = st.session_state.get(f"confirm_delete_{c['id']}", False)
@@ -451,9 +463,9 @@ with st.expander("🔧 データベース管理（デバッグ用）"):
     with col3:
         if st.button("⚠️ DB全削除（危険）"):
             st.warning("この操作は全データを削除します！実行前に必ずバックアップを取ってください。")
-            confirm_delete_all = st.text_input('本当に削除するには "DELETE ALL" と入力', key="confirm_delete_all")
+            confirm_delete_all = st.text_input('本当に削除するには "DELETE ALL" と入力', key="confirm_delete_all_input") # keyを変更
             if confirm_delete_all == "DELETE ALL":
-                if st.button("全データを削除", type="danger"):
+                if st.button("全データを削除", type="danger", key="confirm_delete_all_button"): # keyを変更
                     with get_db() as conn:
                         conn.execute("DELETE FROM clients")
                         conn.commit()
