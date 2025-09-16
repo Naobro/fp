@@ -1,5 +1,5 @@
 streamlit>=1.36,<2.0
-streamlit-gsheets>=0.3.0
+streamlit_gsheets
 
 # 科学計算系
 numpy>=1.26,<2.0
@@ -7,13 +7,13 @@ pandas>=2.1,<3.0
 matplotlib>=3.8,<4.0
 numpy-financial>=1.0,<2.0
 
-# PDF（fpdf2 は純Pythonでビルド不要）
+# PDF
 fpdf2>=2.7,<3.0
 
 # HTTP
 requests>=2.31,<3.0
 
-# サブ依存（ビルド不要の範囲）
+# サブ依存
 pillow>=10.2,<11.0
 kiwisolver>=1.4,<2.0
 cycler>=0.12,<1.0
@@ -23,6 +23,3 @@ pyparsing>=3.1,<4.0
 python-dateutil>=2.8,<3.0
 packaging>=23.2,<24.0
 tzdata>=2024.1,<2025.0
-
-# Supabase を使っていないなら行ごと削除
-# supabase>=2.6,<3.0
