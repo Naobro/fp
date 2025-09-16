@@ -1,20 +1,14 @@
-# /client_portal.py
-# 顧客ポータル（このページが“表紙”）
-# ・URLは必ず ルート + ?client=c-xxxxx で開く
-# ・ここから各機能ページへ遷移（クエリ client を引き継ぐ）
-# ・ログインや編集UIは一切なし（リンク集 + 進め方の入口だけ）
-# ・任意で Googleスプレッドシートへの外部リンク（?sheet=... を渡せば表示）
-
 import streamlit as st
+import json
+import os
 
-st.set_page_config(page_title="顧客ポータル", layout="wide")
+st.set_page_config(page_title="専用ページ", layout="wide")
 
 # ----- クエリ取得（新旧API両対応） -----
 def get_qp(name: str, default: str = "") -> str:
     try:
         # 新API
         val = st.query_params.get(name, "")
-        # st.query_params.get は存在しない環境もあるため try/except
         if isinstance(val, list):
             return val[0] if val else default
         return val or default
@@ -23,86 +17,90 @@ def get_qp(name: str, default: str = "") -> str:
         val = st.experimental_get_query_params().get(name, [default])
         return val[0] if isinstance(val, list) else (val or default)
 
-def set_client_qp(client_id: str):
-    try:
-        # 新API（Mappingとして代入）
-        st.query_params["client"] = client_id
-    except Exception:
-        # 旧API
-        st.experimental_set_query_params(client=client_id)
-
 client_id = get_qp("client")
-sheet_url = get_qp("sheet", "")
 
 if not client_id:
     st.error("client パラメータがありません。例： /client_portal?client=c-xxxxx")
     st.stop()
 
-# ----- ヘッダ -----
-st.title("お客さま専用ポータル")
-st.caption("このページから各機能に進めます。ブックマーク推奨。")
+# ----- JSONファイルから顧客情報をロード -----
+def load_client_data(client_id):
+    json_path = "clients.json"
+    if not os.path.exists(json_path):
+        st.error(f"顧客データファイルが見つかりません: {json_path}")
+        return {"name": "お客様", "property": None}
 
-with st.container():
-    c1, c2 = st.columns([0.7, 0.3])
-    with c1:
-        st.markdown(f"**顧客コード**：`{client_id}`")
-        st.write("※ 物件は未定です。まずはヒアリング → 仮審査 → 物件選定…の順で進めます。")
-    with c2:
-        if sheet_url:
-            st.link_button("📄 共有スプレッドシートを開く", url=sheet_url, help="進捗・タスク管理用（外部リンク）")
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get(client_id, {"name": "お客様", "property": None})
+    except json.JSONDecodeError:
+        st.error(f"顧客データファイルの形式が正しくありません: {json_path}")
+        return {"name": "お客様", "property": None}
+
+client_data = load_client_data(client_id)
+client_name = client_data["name"]
+property_name = client_data["property"]
+
+# ----- ヘッダー -----
+st.markdown(f"# {client_name} 様 専用ページ")
+if property_name:
+    st.markdown(f"<span style='font-size: small; color: grey;'>物件：{property_name}</span>", unsafe_allow_html=True)
+
+# ----- 導線（5つのピル） -----
+st.markdown("""
+<style>
+    .stButton > button {
+        border-radius: 20px;
+        padding: 5px 15px;
+        width: 100%;
+        margin-bottom: 5px; /* スマホでの縦並び用 */
+    }
+    .pill-container {
+        display: flex;
+        flex-wrap: wrap; /* スマホで折り返す */
+        gap: 10px;
+        justify-content: space-between;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+col1, col2, col3, col4, col5 = st.columns(5, gap="small")
+
+with col1:
+    st.link_button("① ヒアリング", f"/hearing?client={client_id}", use_container_width=True)
+with col2:
+    st.link_button("② 住宅ローン", f"/pages/住宅ローン提案?client={client_id}", use_container_width=True)
+with col3:
+    st.link_button("③ スケジュール", "https://docs.google.com/spreadsheets/...", use_container_width=True)
+with col4:
+    st.link_button("④ 物件比較", f"/compare?client={client_id}", use_container_width=True)
+with col5:
+    st.link_button("⑤ 諸費用明細", f"/pages/諸費用明細?client={client_id}", use_container_width=True)
 
 st.divider()
 
-# ----- 機能タイル（この表紙から各ページへ遷移） -----
-st.subheader("メニュー")
-
-def _goto(page_path: str):
-    # client を保持したままアプリ内ページへ遷移
-    set_client_qp(client_id)
-    st.switch_page(page_path)
-
-col = st.columns(4)
-
-with col[0]:
-    st.markdown("#### 📊 住宅ローン提案（PDF）")
-    st.write("各行・各銀行の返済額を比較し、提案書PDFを作成します。")
-    if st.button("開く", key="open_mortgage"):
-        _goto("pages/住宅ローン提案.py")
-
-with col[1]:
-    st.markdown("#### 🧾 諸費用明細（PDF）")
-    st.write("諸費用の概算→確定まで更新し続けられる明細PDF。")
-    if st.button("開く", key="open_costs"):
-        _goto("pages/諸費用明細.py")
-
-with col[2]:
-    st.markdown("#### ✅ 必要書類チェック（PDF）")
-    st.write("購入/売却の必要書類を整理し、チェック付きPDFを作成。")
-    if st.button("開く", key="open_checklist"):
-        _goto("pages/チェックリスト.py")
-
-with col[3]:
-    st.markdown("#### 📝 事前審査 入力")
-    st.write("仮審査のための基本情報入力フォーム。")
-    if st.button("開く", key="open_preexam"):
-        _goto("pages/事前審査入力.py")
+# ----- 小さめカード + QRコード -----
+with st.container(border=True):
+    col_text, col_qr = st.columns([0.7, 0.3])
+    with col_text:
+        st.markdown("このページはご案内の入口です。ご不明点はLINEでご連絡ください。", unsafe_allow_html=True)
+    with col_qr:
+        # 実際はここでQRコード画像を生成・表示
+        st.image("https://example.com/qr-code.png", width=100)
 
 st.divider()
 
-# ----- 進め方（超簡易版のガイドのみ。編集機能は持たない） -----
-with st.expander("進め方（参考）", expanded=False):
-    st.markdown(
-        """
-1) **ヒアリング**  
-2) **仮審査**（各行の事前審査）  
-3) **物件選定**（内見・条件調整）  
-4) **売買契約**  
-5) **本審査**  
-6) **金消**（金銭消費貸借契約）  
-7) **決済**  
-        """
-    )
+# ----- 各機能の1行説明 -----
+st.markdown("""
+- **ヒアリング**: ご希望条件や優先度の確認
+- **住宅ローン**: 金利設定済みの提案書PDF
+- **スケジュール**: 進行状況・ToDoはスプレッドシートで共有
+- **物件比較**: 候補の比較・内見チェック
+- **諸費用明細**: 概算→確定へ更新されるPDF
+""")
 
 # ----- フッター -----
 st.markdown("---")
 st.caption("このページのURLと顧客コードはお客様と担当者のみで共有しています。")
+st.markdown("TERASS / Naoki Nishiyama", help="担当者名", unsafe_allow_html=True)
