@@ -14,7 +14,7 @@ SPREADSHEET_NAME = "client_data" # スプレッドシート名
 WORKSHEET_NAME = "Sheet1" # シート名
 
 # 共有URL（本番URLを secrets で上書き可）
-BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/client_portal")
+BASE_URL = st.secrets.get("BASE_URL", "https://naobro-fp.streamlit.app/client_portal")
 
 # 定数
 CLIENT_ID_LENGTH = 6
@@ -219,7 +219,7 @@ else:
         with cols[3]:
             st.caption("操作")
             if url:
-                st.link_button("開く（新規タブ）", url, type="primary", key=f"open-{c['id']}")
+                st.link_button("開く（新規タブ）", url, type="primary") # 修正
             else:
                 st.warning("無効なURLです")
         with cols[4]:
