@@ -19,22 +19,64 @@ def get_db():
     finally:
         conn.close()
 
+def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    """指定されたテーブルに指定されたカラムが存在するかチェックする"""
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(r["name"] == col for r in rows)
+
+def ensure_schema():
+    """テーブル作成＋不足カラムの追加（admin.py からコピー）"""
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                client_id TEXT PRIMARY KEY,
+                created_at TEXT,
+                name TEXT,
+                phone TEXT,
+                email TEXT,
+                memo TEXT,
+                data TEXT NOT NULL
+            )
+        """)
+        if not _has_column(conn, "clients", "idempotency_key"):
+            try:
+                conn.execute("ALTER TABLE clients ADD COLUMN idempotency_key TEXT")
+            except sqlite3.OperationalError:
+                pass
+        if not _has_column(conn, "clients", "created_at_utc"):
+            try:
+                conn.execute("ALTER TABLE clients ADD COLUMN created_at_utc TEXT")
+            except sqlite3.OperationalError:
+                pass
+        try:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_idem ON clients(idempotency_key)")
+        except sqlite3.OperationalError:
+            pass
+        conn.commit()
+
+# スキーマを保証することで、DBファイルが存在しない場合は作成される
+ensure_schema()
+
+
 def load_client_from_db(client_id: str) -> dict | None:
     """指定されたクライアントIDのデータをデータベースから読み込む"""
     with get_db() as conn:
-        row = conn.execute("SELECT data FROM clients WHERE client_id = ?", (client_id,)).fetchone()
-        return json.loads(row["data"]) if row and row["data"] else None
+        # この行は既に存在するため、try-exceptブロックで保護
+        try:
+            row = conn.execute("SELECT data FROM clients WHERE client_id = ?", (client_id,)).fetchone()
+            return json.loads(row["data"]) if row and row["data"] else None
+        except sqlite3.OperationalError:
+            return None
+
 
 # ----- クエリ取得（新旧API両対応） -----
 def get_qp(name: str, default: str = "") -> str:
     try:
-        # 新API
         val = st.query_params.get(name, "")
         if isinstance(val, list):
             return val[0] if val else default
         return val or default
     except Exception:
-        # 旧API
         val = st.experimental_get_query_params().get(name, [default])
         return val[0] if isinstance(val, list) else (val or default)
 
@@ -55,9 +97,6 @@ if client_data_raw is None:
 client_meta = client_data_raw.get("meta", {})
 client_name = client_meta.get("name", "お客様")
 property_name = client_data_raw.get("property", None)
-# NOTE: admin.pyのコードには物件情報の保存部分が見当たらないため、
-# もし物件情報を表示したい場合は、admin側で物件名を保存するロジックを
-# 追加する必要があります。
 
 # ----- ヘッダー -----
 st.markdown(f"# {client_name} 様 専用ページ")
@@ -71,11 +110,11 @@ st.markdown("""
         border-radius: 20px;
         padding: 5px 15px;
         width: 100%;
-        margin-bottom: 5px; /* スマホでの縦並び用 */
+        margin-bottom: 5px;
     }
     .pill-container {
         display: flex;
-        flex-wrap: wrap; /* スマホで折り返す */
+        flex-wrap: wrap;
         gap: 10px;
         justify-content: space-between;
     }
@@ -103,7 +142,6 @@ with st.container(border=True):
     with col_text:
         st.markdown("このページはご案内の入口です。ご不明点はLINEでご連絡ください。", unsafe_allow_html=True)
     with col_qr:
-        # 実際はここでQRコード画像を生成・表示
         st.image("https://example.com/qr-code.png", width=100)
 
 st.divider()
