@@ -1,8 +1,29 @@
 import streamlit as st
 import json
+import sqlite3
 import os
+from contextlib import contextmanager
 
 st.set_page_config(page_title="専用ページ", layout="wide")
+
+# ----- admin.py からコピーする共通コード -----
+DB_PATH = "pages/clients.db"
+
+@contextmanager
+def get_db():
+    """データベース接続のコンテキストマネージャー"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def load_client_from_db(client_id: str) -> dict | None:
+    """指定されたクライアントIDのデータをデータベースから読み込む"""
+    with get_db() as conn:
+        row = conn.execute("SELECT data FROM clients WHERE client_id = ?", (client_id,)).fetchone()
+        return json.loads(row["data"]) if row and row["data"] else None
 
 # ----- クエリ取得（新旧API両対応） -----
 def get_qp(name: str, default: str = "") -> str:
@@ -23,24 +44,20 @@ if not client_id:
     st.error("client パラメータがありません。例： /client_portal?client=c-xxxxx")
     st.stop()
 
-# ----- JSONファイルから顧客情報をロード -----
-def load_client_data(client_id):
-    json_path = "pages/clients.json"
-    if not os.path.exists(json_path):
-        st.error(f"顧客データファイルが見つかりません: {json_path}")
-        return {"name": "お客様", "property": None}
+# ----- データベースから顧客情報をロード -----
+client_data_raw = load_client_from_db(client_id)
 
-    try:
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data.get(client_id, {"name": "お客様", "property": None})
-    except json.JSONDecodeError:
-        st.error(f"顧客データファイルの形式が正しくありません: {json_path}")
-        return {"name": "お客様", "property": None}
+if client_data_raw is None:
+    st.error(f"指定された顧客ID '{client_id}' は見つかりませんでした。")
+    st.stop()
 
-client_data = load_client_data(client_id)
-client_name = client_data["name"]
-property_name = client_data["property"]
+# 顧客名と物件名を取得
+client_meta = client_data_raw.get("meta", {})
+client_name = client_meta.get("name", "お客様")
+property_name = client_data_raw.get("property", None)
+# NOTE: admin.pyのコードには物件情報の保存部分が見当たらないため、
+# もし物件情報を表示したい場合は、admin側で物件名を保存するロジックを
+# 追加する必要があります。
 
 # ----- ヘッダー -----
 st.markdown(f"# {client_name} 様 専用ページ")
