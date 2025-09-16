@@ -7,7 +7,7 @@ pandas>=2.1,<3.0
 matplotlib>=3.8,<4.0
 numpy-financial>=1.0,<2.0
 
-# PDF（reportlab は削除。fpdf2 は純Pythonでビルド不要）
+# PDF（fpdf2 は純Pythonでビルド不要）
 fpdf2>=2.7,<3.0
 
 # HTTP
@@ -24,6 +24,5 @@ python-dateutil>=2.8,<3.0
 packaging>=23.2,<24.0
 tzdata>=2024.1,<2025.0
 
-# Supabase を使っていないなら行ごと削除（使う場合のみ有効化）
+# Supabase を使っていないなら行ごと削除
 # supabase>=2.6,<3.0
-reportlab>=3.6.13
