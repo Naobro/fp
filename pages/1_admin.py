@@ -219,7 +219,8 @@ else:
         with cols[3]:
             st.caption("操作")
             if url:
-                st.link_button("開く（新規タブ）", url, type="primary") # 修正
+                # 修正: key引数を削除
+                st.link_button("開く（新規タブ）", url, type="primary") 
             else:
                 st.warning("無効なURLです")
         with cols[4]:
