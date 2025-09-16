@@ -1,73 +1,14 @@
 import streamlit as st
 import json
-import sqlite3
-import os
-from contextlib import contextmanager
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
 st.set_page_config(page_title="専用ページ", layout="wide")
 
-# ----- admin.py からコピーする共通コード -----
-DB_PATH = "pages/clients.db"
-
-@contextmanager
-def get_db():
-    """データベース接続のコンテキストマネージャー"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
-    """指定されたテーブルに指定されたカラムが存在するかチェックする"""
-    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    return any(r["name"] == col for r in rows)
-
-def ensure_schema():
-    """テーブル作成＋不足カラムの追加（admin.py からコピー）"""
-    with get_db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS clients (
-                client_id TEXT PRIMARY KEY,
-                created_at TEXT,
-                name TEXT,
-                phone TEXT,
-                email TEXT,
-                memo TEXT,
-                data TEXT NOT NULL
-            )
-        """)
-        if not _has_column(conn, "clients", "idempotency_key"):
-            try:
-                conn.execute("ALTER TABLE clients ADD COLUMN idempotency_key TEXT")
-            except sqlite3.OperationalError:
-                pass
-        if not _has_column(conn, "clients", "created_at_utc"):
-            try:
-                conn.execute("ALTER TABLE clients ADD COLUMN created_at_utc TEXT")
-            except sqlite3.OperationalError:
-                pass
-        try:
-            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_idem ON clients(idempotency_key)")
-        except sqlite3.OperationalError:
-            pass
-        conn.commit()
-
-# スキーマを保証することで、DBファイルが存在しない場合は作成される
-ensure_schema()
-
-
-def load_client_from_db(client_id: str) -> dict | None:
-    """指定されたクライアントIDのデータをデータベースから読み込む"""
-    with get_db() as conn:
-        # この行は既に存在するため、try-exceptブロックで保護
-        try:
-            row = conn.execute("SELECT data FROM clients WHERE client_id = ?", (client_id,)).fetchone()
-            return json.loads(row["data"]) if row and row["data"] else None
-        except sqlite3.OperationalError:
-            return None
-
+# データベース設定
+conn = st.connection("gsheets", type=GSheetsConnection)
+SPREADSHEET_NAME = "client_data" # スプレッドシート名
+WORKSHEET_NAME = "Sheet1" # シート名
 
 # ----- クエリ取得（新旧API両対応） -----
 def get_qp(name: str, default: str = "") -> str:
@@ -87,20 +28,33 @@ if not client_id:
     st.stop()
 
 # ----- データベースから顧客情報をロード -----
-client_data_raw = load_client_from_db(client_id)
+def load_client_from_gsheets(client_id):
+    try:
+        df = conn.read(
+            spreadsheet=SPREADSHEET_NAME,
+            worksheet=WORKSHEET_NAME,
+            usecols=list(range(5)),
+            ttl=5 # 5秒間キャッシュ
+        )
+        df.columns = ["client_id", "name", "property", "created_at_utc", "data"]
+        row = df[df["client_id"] == client_id].iloc[0]
+        return row
+    except (pd.errors.EmptyDataError, IndexError):
+        return None
 
-if client_data_raw is None:
+client_data_row = load_client_from_gsheets(client_id)
+
+if client_data_row is None:
     st.error(f"指定された顧客ID '{client_id}' は見つかりませんでした。")
     st.stop()
 
 # 顧客名と物件名を取得
-client_meta = client_data_raw.get("meta", {})
-client_name = client_meta.get("name", "お客様")
-property_name = client_data_raw.get("property", None)
+client_name = client_data_row.get("name", "お客様")
+property_name = client_data_row.get("property", None)
 
 # ----- ヘッダー -----
 st.markdown(f"# {client_name} 様 専用ページ")
-if property_name:
+if property_name and property_name != "null":
     st.markdown(f"<span style='font-size: small; color: grey;'>物件：{property_name}</span>", unsafe_allow_html=True)
 
 # ----- 導線（5つのピル） -----
@@ -111,12 +65,6 @@ st.markdown("""
         padding: 5px 15px;
         width: 100%;
         margin-bottom: 5px;
-    }
-    .pill-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        justify-content: space-between;
     }
 </style>
 """, unsafe_allow_html=True)
