@@ -14,6 +14,10 @@ BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/client_port
 # データベース設定
 DB_PATH = "clients.db"
 
+# 定数
+CLIENT_ID_LENGTH = 6
+IDEMPOTENCY_KEY_LENGTH = 16
+
 # -------------------------------
 # データベース管理
 # -------------------------------
@@ -28,20 +32,9 @@ def get_db():
         conn.close()
 
 def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    """指定されたテーブルに指定されたカラムが存在するかチェックする"""
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(r["name"] == col for r in rows)
-
-def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
-    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    # RowFactory=Row なので名前で参照可。万一のためタプル位置1(name)も併用。
-    for r in rows:
-        try:
-            if r["name"] == col:
-                return True
-        except Exception:
-            if len(r) > 1 and r[1] == col:
-                return True
-    return False
 
 def ensure_schema():
     """
@@ -55,7 +48,7 @@ def ensure_schema():
         conn.execute("""
             CREATE TABLE IF NOT EXISTS clients (
                 client_id TEXT PRIMARY KEY,
-                created_at TEXT,
+                created_at TEXT, -- 互換性のために残すが、created_at_utc を優先
                 name TEXT,
                 phone TEXT,
                 email TEXT,
@@ -118,14 +111,19 @@ def to_jst_str(utc_iso: str) -> str:
         if utc_iso.endswith("Z"):
             dt = datetime.strptime(utc_iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         else:
+            # ISOフォーマットだがタイムゾーン情報がない場合はUTCと仮定
             dt = datetime.fromisoformat(utc_iso)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M")
-    except Exception:
-        return utc_iso
+    except ValueError:
+        # datetime.strptime や fromisoformat のフォーマットエラー
+        return f"Invalid date format: {utc_iso}"
+    except Exception as e:
+        # その他の予期せぬエラー
+        return f"Error converting date: {e} ({utc_iso})"
 
-def gen_id(n: int = 6) -> str:
+def gen_id(n: int = CLIENT_ID_LENGTH) -> str:
     """クライアントID生成"""
     alphabet = string.ascii_lowercase + string.digits
     return "c-" + "".join(secrets.choice(alphabet) for _ in range(n))
@@ -138,6 +136,7 @@ def save_client(client_id: str, payload: dict, idempotency_key: str) -> bool:
     meta = payload.get("meta", {})
     with get_db() as conn:
         # SQLite 3.24+ で有効（Streamlit Cloudは対応）
+        # created_at (ローカル時刻) は互換性のために残すが、created_at_utc を主に使用
         conn.execute("""
             INSERT INTO clients
                 (client_id, idempotency_key, created_at_utc, created_at, name, phone, email, memo, data)
@@ -148,7 +147,7 @@ def save_client(client_id: str, payload: dict, idempotency_key: str) -> bool:
             client_id,
             idempotency_key,
             meta.get("created_at_utc"),
-            meta.get("created_at"),  # 互換のため残す（将来未使用でも可）
+            meta.get("created_at"),  # 互換のため残す
             meta.get("name"),
             meta.get("phone"),
             meta.get("email"),
@@ -193,7 +192,11 @@ def delete_client(client_id: str) -> bool:
             cur = conn.execute("DELETE FROM clients WHERE client_id = ?", (client_id,))
             conn.commit()
             return cur.rowcount > 0
-    except Exception:
+    except sqlite3.OperationalError as e:
+        st.error(f"データベースエラーが発生しました: {e}")
+        return False
+    except Exception as e:
+        st.error(f"予期せぬエラーが発生しました: {e}")
         return False
 
 def share_url_for(cid: str) -> str:
@@ -213,8 +216,8 @@ with st.form("new_client"):
     c1, c2 = st.columns(2)
     with c1:
         name  = st.text_input("お客様名")
-        phone = st.text_input("電話番号（任意）")
     with c2:
+        phone = st.text_input("電話番号（任意）")
         email = st.text_input("メール（任意）")
         memo  = st.text_area("管理メモ（任意）", height=80)
     submitted = st.form_submit_button("新規作成", type="primary")
@@ -224,70 +227,71 @@ if submitted:
     name_clean = (name or "").strip()
     if not name_clean:
         st.error("お客様名は必須です。空欄では作成できません。")
+        st.session_state["__create_idem__"] = None # 再試行のためにキーをリセット
+        st.stop() # Streamlit アプリの実行を停止
+
+    # 余計な空白を正規化
+    name_clean = " ".join(name_clean.split())
+
+    # 初回クリック時にのみ idempotency_key を採番して保持
+    idem = st.session_state.get("__create_idem__")
+    if not idem:
+        idem = secrets.token_hex(IDEMPOTENCY_KEY_LENGTH)  # 一意キー
+        st.session_state["__create_idem__"] = idem
+
+    client_id = gen_id()
+    payload = {
+        "meta": {
+            "client_id": client_id,
+            "created_at_utc": utc_now_iso(),
+            "created_at": datetime.now().isoformat(),  # 互換のため残す
+            "name": name_clean,
+            "phone": (phone or "").strip(),
+            "email": (email or "").strip(),
+            "memo": memo or "",
+        },
+        "baseline": {
+            "housing_cost_m": None,
+            "walk_min": None,
+            "area_m2": None,
+            "floor": None,
+            "corner": None,
+            "inner_corridor": None,
+            "balcony_type": None,
+            "balcony_aspect": None,
+            "view": None,
+            "husband_commute_min": None,
+            "wife_commute_min": None,
+            "spec_current": {}
+        },
+        "prefs": {
+            "importance": {"price": 3, "location": 3, "size_layout": 3, "spec": 3, "management": 3},
+            "budget_max_m": None,
+            "min_floor": None,
+            "min_floor_tolerance": 0,
+            "spec_wish": {}
+        },
+        "listings": []
+    }
+
+    # ★ 重要：idempotency_key を渡して保存（多重作成を防ぐ）
+    ok = save_client(client_id, payload, idempotency_key=idem)
+
+    url = share_url_for(client_id)
+    if ok:
+        st.success("お客様用URLを発行しました。下のリンクを共有してください。")
+        st.code(url, language="text")
+        st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
     else:
-        # 余計な空白を正規化
-        name_clean = " ".join(name_clean.split())
+        # 直前のリラン等で重複呼び出されたケース（DBには既に存在）
+        st.info("同じ操作がすでに登録済みです（重複作成は行っていません）。")
+        st.code(url, language="text")
+        st.link_button("➡️ お客様ページを開く（新規タブ）", url, type="primary")
 
-        # 初回クリック時にのみ idempotency_key を採番して保持
-        idem = st.session_state.get("__create_idem__")
-        if not idem:
-            idem = secrets.token_hex(16)  # 一意キー
-            st.session_state["__create_idem__"] = idem
-
-        client_id = gen_id()
-        payload = {
-            "meta": {
-                "client_id": client_id,
-                # 表示用に残すローカル時刻（JST）ではなく、保存は UTC を優先
-                "created_at_utc": utc_now_iso(),
-                "created_at": datetime.now().isoformat(),  # 互換のため残す
-                "name": name_clean,
-                "phone": (phone or "").strip(),
-                "email": (email or "").strip(),
-                "memo": memo or "",
-            },
-            "baseline": {
-                "housing_cost_m": None,
-                "walk_min": None,
-                "area_m2": None,
-                "floor": None,
-                "corner": None,
-                "inner_corridor": None,
-                "balcony_type": None,
-                "balcony_aspect": None,
-                "view": None,
-                "husband_commute_min": None,
-                "wife_commute_min": None,
-                "spec_current": {}
-            },
-            "prefs": {
-                "importance": {"price": 3, "location": 3, "size_layout": 3, "spec": 3, "management": 3},
-                "budget_max_m": None,
-                "min_floor": None,
-                "min_floor_tolerance": 0,
-                "spec_wish": {}
-            },
-            "listings": []
-        }
-
-        # ★ 重要：idempotency_key を渡して保存（多重作成を防ぐ）
-        ok = save_client(client_id, payload, idempotency_key=idem)
-
-        url = share_url_for(client_id)
-        if ok:
-            st.success("お客様用URLを発行しました。下のリンクを共有してください。")
-            st.code(url, language="text")
-            st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
-        else:
-            # 直前のリラン等で重複呼び出されたケース（DBには既に存在）
-            st.info("同じ操作がすでに登録済みです（重複作成は行っていません）。")
-            st.code(url, language="text")
-            st.link_button("➡️ お客様ページを開く（新規タブ）", url, type="primary")
-
-        # 次の新規作成のためにキーをリセットするボタンを出す
-        if st.button("＋ もう一件登録する"):
-            st.session_state["__create_idem__"] = None
-            st.rerun()
+    # 次の新規作成のためにキーをリセットするボタンを出す
+    if st.button("＋ もう一件登録する"):
+        st.session_state["__create_idem__"] = None
+        st.rerun()
 
 st.divider()
 
@@ -335,25 +339,34 @@ with left:
         key="bulk_delete_select"
     )
 with right:
+    st.warning("この操作は取り消せません。慎重に実行してください。")
     confirm_text = st.text_input('最終確認：DELETE と入力で実行', value="", key="bulk_delete_confirm")
     do_bulk = st.button("選択を削除する", type="secondary")
 
 if do_bulk:
     if confirm_text.strip() != "DELETE":
-        st.warning("削除を実行するには、確認欄に DELETE と入力してください。")
+        st.error("削除を実行するには、確認欄に DELETE と入力してください。")
     else:
         deleted = 0
         pick_ids = []
         for label in ids_for_delete:
             if "（" in label and "）" in label:
                 cid = label.split("（")[-1].split("）")[0]
-                pick_ids.append(cid)
-        for cid in pick_ids:
-            if delete_client(cid):
-                deleted += 1
-        if deleted > 0:
-            st.success(f"{deleted} 件削除しました。")
-            st.rerun()
+            else:
+                cid = label # ラベル形式が異なる場合も考慮（念のため）
+            pick_ids.append(cid)
+        
+        if not pick_ids:
+            st.info("削除対象が選択されていません。")
+        else:
+            for cid in pick_ids:
+                if delete_client(cid):
+                    deleted += 1
+            if deleted > 0:
+                st.success(f"{deleted} 件削除しました。")
+                st.rerun()
+            else:
+                st.info("削除対象が見つからなかったか、すでに削除されています。")
 
 st.divider()
 
@@ -377,14 +390,30 @@ else:
             st.code(url, language="text")
         with cols[3]:
             st.caption("操作")
-            st.link_button("開く（新規タブ）", url, type="primary")
+            st.link_button("開く（新規タブ）", url, type="primary", key=f"open-{c['id']}")
         with cols[4]:
-            if st.button("🗑️", key=f"del-{c['id']}"):
-                if delete_client(c["id"]):
-                    st.success("削除しました")
-                    st.rerun()
-                else:
-                    st.error("削除に失敗しました")
+            # 個別削除ボタンの確認フロー
+            delete_confirmed = st.session_state.get(f"confirm_delete_{c['id']}", False)
+            if not delete_confirmed:
+                if st.button("🗑️", key=f"del_prompt-{c['id']}"):
+                    st.session_state[f"confirm_delete_{c['id']}"] = True
+                    st.rerun() # 確認表示のために再描画
+            else:
+                st.warning(f"本当に {c['name']} を削除しますか？")
+                confirm_col1, confirm_col2 = st.columns(2)
+                with confirm_col1:
+                    if st.button("はい、削除する", key=f"del_yes-{c['id']}"):
+                        if delete_client(c["id"]):
+                            st.success("削除しました")
+                            del st.session_state[f"confirm_delete_{c['id']}"] # 状態をリセット
+                            st.rerun()
+                        else:
+                            st.error("削除に失敗しました")
+                with confirm_col2:
+                    if st.button("キャンセル", key=f"del_no-{c['id']}"):
+                        del st.session_state[f"confirm_delete_{c['id']}"] # 状態をリセット
+                        st.rerun()
+        st.markdown("---") # 区切り線で各行を見やすくする
 
 # -------------------------------
 # データベース管理ユーティリティ（デバッグ用）
@@ -396,8 +425,12 @@ with st.expander("🔧 データベース管理（デバッグ用）"):
         if st.button("DB統計表示"):
             with get_db() as conn:
                 count = conn.execute("SELECT COUNT(*) as cnt FROM clients").fetchone()["cnt"]
-                oldest = conn.execute("SELECT MIN(created_at_utc) as oldest FROM clients").fetchone()["oldest"]
-                newest = conn.execute("SELECT MAX(created_at_utc) as newest FROM clients").fetchone()["newest"]
+                oldest_row = conn.execute("SELECT MIN(created_at_utc) as oldest FROM clients").fetchone()
+                newest_row = conn.execute("SELECT MAX(created_at_utc) as newest FROM clients").fetchone()
+                
+                oldest = oldest_row["oldest"] if oldest_row else "N/A"
+                newest = newest_row["newest"] if newest_row else "N/A"
+
                 st.write(f"総レコード数: {count}")
                 st.write(f"最古(UTC): {oldest}")
                 st.write(f"最新(UTC): {newest}")
@@ -418,3 +451,11 @@ with st.expander("🔧 データベース管理（デバッグ用）"):
     with col3:
         if st.button("⚠️ DB全削除（危険）"):
             st.warning("この操作は全データを削除します！実行前に必ずバックアップを取ってください。")
+            confirm_delete_all = st.text_input('本当に削除するには "DELETE ALL" と入力', key="confirm_delete_all")
+            if confirm_delete_all == "DELETE ALL":
+                if st.button("全データを削除", type="danger"):
+                    with get_db() as conn:
+                        conn.execute("DELETE FROM clients")
+                        conn.commit()
+                        st.success("全データを削除しました。")
+                        st.rerun()
