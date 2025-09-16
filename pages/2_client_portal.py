@@ -25,7 +25,7 @@ if not client_id:
 
 # ----- JSONファイルから顧客情報をロード -----
 def load_client_data(client_id):
-    json_path = "clients.json"
+    json_path = "pages/clients.json"
     if not os.path.exists(json_path):
         st.error(f"顧客データファイルが見つかりません: {json_path}")
         return {"name": "お客様", "property": None}
