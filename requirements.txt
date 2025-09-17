@@ -1,5 +1,5 @@
 streamlit>=1.36,<2.0
-streamlit_gsheets
+st-gsheets-connection
 
 # 科学計算系
 numpy>=1.26,<2.0
