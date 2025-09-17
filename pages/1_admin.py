@@ -2,7 +2,7 @@ import streamlit as st
 import json, secrets, string
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from streamlit_gsheets import GSheetsConnection
+from st_gsheets_connection import GSheetsConnection
 import pandas as pd
 
 # 画面設定
