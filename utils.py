@@ -3,7 +3,7 @@ from pathlib import Path
 from fpdf import FPDF
 
 # ===== 絶対パス（GitHubの配置: /fonts/NotoSansJP-*.ttf を直参照） =====
-PROJECT_ROOT = Path(__file__).resolve().parents[1]   # /mount/src
+PROJECT_ROOT = Path(__file__).resolve().parent   # /mount/src
 FONT_DIR     = PROJECT_ROOT / "fonts"                # /mount/src/fonts
 FONT_REGULAR = FONT_DIR / "NotoSansJP-Regular.ttf"
 FONT_BOLD    = FONT_DIR / "NotoSansJP-Bold.ttf"
