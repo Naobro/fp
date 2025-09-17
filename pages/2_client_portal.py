@@ -1,252 +1,108 @@
+# /client_portal.py
+# 顧客ポータル（このページが“表紙”）
+# ・URLは必ず ルート + ?client=c-xxxxx で開く
+# ・ここから各機能ページへ遷移（クエリ client を引き継ぐ）
+# ・ログインや編集UIは一切なし（リンク集 + 進め方の入口だけ）
+# ・任意で Googleスプレッドシートへの外部リンク（?sheet=... を渡せば表示）
+
 import streamlit as st
-import json
-import base64
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-import pandas as pd
-import numpy as np
-import numpy_financial as npf
-from fpdf import FPDF
-import re
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-import sqlite3
 
-# Set Streamlit page config
-st.set_page_config(page_title="お客様ページ", layout="wide")
+st.set_page_config(page_title="顧客ポータル", layout="wide")
 
-# --- Database & Config ---
-# SQLiteを永続化するための接続
-conn = st.connection("sqlite_db", type="sql")
-
-# テーブルが存在しない場合は作成する
-with conn.session as s:
-    s.execute("""
-        CREATE TABLE IF NOT EXISTS clients (
-            client_id TEXT PRIMARY KEY,
-            name TEXT,
-            property TEXT,
-            created_at_utc TEXT,
-            data TEXT
-        );
-    """)
-    s.commit()
-
-def load_client_from_db(client_id: str) -> dict | None:
-    """指定されたクライアントIDのデータをデータベースから読み込む"""
-    query = "SELECT data FROM clients WHERE client_id = ?;"
-    df = conn.query(query, params=[client_id])
-    
-    if not df.empty:
-        row = df.iloc[0]
-        if row["data"]:
-            return json.loads(row["data"])
-    return None
-
-def update_client_in_db(client_id: str, new_data: dict):
-    """データベース内のクライアントデータを更新する"""
-    new_data_str = json.dumps(new_data, ensure_ascii=False)
-    property_name = new_data.get("property_info", {}).get("property_name")
-    
-    with conn.session as s:
-        # 既存の行を見つける
-        update_query = """
-            UPDATE clients 
-            SET name = ?, property = ?, data = ?
-            WHERE client_id = ?;
-        """
-        s.execute(update_query, (new_data.get("meta", {}).get("name", ""), property_name, new_data_str, client_id))
-        rows_updated = s.rowcount
-        s.commit()
-    return rows_updated > 0
-
-# --- Utility functions ---
-def get_query_param(param_name):
-    """URLクエリパラメータを取得する（新旧API両対応）"""
-    return st.experimental_get_query_params().get(param_name, [None])[0]
-
-def to_jst_str(utc_iso: str) -> str:
-    """UTC(ISO) → JST 文字列"""
-    if not utc_iso:
-        return "-"
+# ----- クエリ取得（新旧API両対応） -----
+def get_qp(name: str, default: str = "") -> str:
     try:
-        if utc_iso.endswith("Z"):
-            dt = datetime.strptime(utc_iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        else:
-            dt = datetime.fromisoformat(utc_iso)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M")
-    except ValueError:
-        return f"Invalid date format: {utc_iso}"
-    except Exception as e:
-        return f"Error converting date: {e} ({utc_iso})"
-
-def get_real_estate_data(property_url):
-    # This is a placeholder for your web scraping logic
-    st.info("物件情報の取得は現在開発中の機能です。")
-    return None
-
-def calculate_finance(loan_amount, interest_rate, years):
-    try:
-        rate = interest_rate / 12 / 100
-        nper = years * 12
-        pmt = npf.pmt(rate, nper, -loan_amount)
-        return round(pmt)
+        # 新API
+        val = st.query_params.get(name, "")
+        # st.query_params.get は存在しない環境もあるため try/except
+        if isinstance(val, list):
+            return val[0] if val else default
+        return val or default
     except Exception:
-        return 0
+        # 旧API
+        val = st.experimental_get_query_params().get(name, [default])
+        return val[0] if isinstance(val, list) else (val or default)
 
-def create_financial_plan(plan_data):
-    # This is a placeholder for your PDF generation logic
-    st.info("PDF作成機能は現在開発中です。")
-    return None
-
-def create_download_link(file_data, filename, file_type):
-    b64 = base64.b64encode(file_data).decode()
-    href = f'<a href="data:{file_type};base64,{b64}" download="{filename}">ダウンロード</a>'
-    return href
-
-def generate_pdf_financial_plan(plan_data):
+def set_client_qp(client_id: str):
     try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.add_font("meiryo", "", "Meiryo.ttf", uni=True)
-        pdf.set_font("meiryo", size=12)
-        
-        pdf.cell(200, 10, txt="住宅ローン返済計画書", ln=1, align="C")
-        pdf.ln(10)
-        
-        pdf.cell(200, 10, txt=f"お客様名: {plan_data.get('client_info', {}).get('name', '未設定')}", ln=1)
-        pdf.cell(200, 10, txt=f"物件名: {plan_data.get('property_info', {}).get("property_name", '未設定')}", ln=1)
-        
-        pdf_output = pdf.output(dest="S").encode("latin-1")
-        return pdf_output
-    except Exception as e:
-        st.error(f"PDF生成エラー: {e}")
-        return None
+        # 新API（Mappingとして代入）
+        st.query_params["client"] = client_id
+    except Exception:
+        # 旧API
+        st.experimental_set_query_params(client=client_id)
 
-# --- Main app flow ---
-client_id = get_query_param("client")
+client_id = get_qp("client")
+sheet_url = get_qp("sheet", "")
 
 if not client_id:
-    st.error("有効なクライアントIDがURLに指定されていません。")
+    st.error("client パラメータがありません。例： /client_portal?client=c-xxxxx")
     st.stop()
 
-# --- データベースから顧客情報をロード ---
-client_data_raw = load_client_from_db(client_id)
+# ----- ヘッダ -----
+st.title("お客さま専用ポータル")
+st.caption("このページから各機能に進めます。ブックマーク推奨。")
 
-if client_data_raw is None:
-    st.error(f"指定された顧客ID '{client_id}' は見つかりませんでした。URLを確認してください。")
-    st.stop()
+with st.container():
+    c1, c2 = st.columns([0.7, 0.3])
+    with c1:
+        st.markdown(f"**顧客コード**：`{client_id}`")
+        st.write("※ 物件は未定です。まずはヒアリング → 仮審査 → 物件選定…の順で進めます。")
+    with c2:
+        if sheet_url:
+            st.link_button("📄 共有スプレッドシートを開く", url=sheet_url, help="進捗・タスク管理用（外部リンク）")
 
-# --- データをセッションステートに初期化 ---
-if "client_data" not in st.session_state or st.session_state["client_data"].get("meta", {}).get("client_id") != client_id:
-    st.session_state["client_data"] = client_data_raw
-    st.session_state["data_changed"] = False
+st.divider()
 
-client_data = st.session_state["client_data"]
-meta = client_data.get("meta", {})
-plan_data = client_data.get("plan_data", {})
-client_info = plan_data.get("client_info", {})
-property_info = plan_data.get("property_info", {})
-loan_info = plan_data.get("loan_info", {})
+# ----- 機能タイル（この表紙から各ページへ遷移） -----
+st.subheader("メニュー")
 
-st.title(f"{meta.get('name', 'お客様')}様")
-st.subheader("住宅購入シミュレーション・資金計画書")
+def _goto(page_path: str):
+    # client を保持したままアプリ内ページへ遷移
+    set_client_qp(client_id)
+    st.switch_page(page_path)
 
-# --- Tab UI ---
-tab1, tab2, tab3 = st.tabs(["資金計画", "シミュレーション", "共有・ダウンロード"])
+col = st.columns(4)
 
-with tab1:
-    st.header("資金計画書")
-    
-    with st.expander("お客様情報", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("お客様名", value=client_info.get("name", ""), key="input_name")
-        with col2:
-            email = st.text_input("メールアドレス", value=client_info.get("email", ""), key="input_email")
-        
-        if st.button("お客様情報を更新", key="update_client_info"):
-            client_data["plan_data"]["client_info"]["name"] = name
-            client_data["plan_data"]["client_info"]["email"] = email
-            st.session_state["data_changed"] = True
-            st.rerun()
+with col[0]:
+    st.markdown("#### 📊 住宅ローン提案（PDF）")
+    st.write("各行・各銀行の返済額を比較し、提案書PDFを作成します。")
+    if st.button("開く", key="open_mortgage"):
+        _goto("pages/住宅ローン提案.py")
 
-    with st.expander("物件情報", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            property_name = st.text_input("物件名", value=property_info.get("property_name", ""), key="input_prop_name")
-        with col2:
-            property_price = st.number_input("物件価格（万円）", value=property_info.get("property_price", 0), min_value=0, step=10, key="input_prop_price")
+with col[1]:
+    st.markdown("#### 🧾 諸費用明細（PDF）")
+    st.write("諸費用の概算→確定まで更新し続けられる明細PDF。")
+    if st.button("開く", key="open_costs"):
+        _goto("pages/諸費用明細.py")
 
-        st.markdown("---")
-        property_url = st.text_input("物件URLから自動入力", value=st.session_state.get("property_url_input", ""), key="input_prop_url")
-        if st.button("物件情報を取得", key="fetch_prop_info"):
-            st.session_state["property_url_input"] = property_url
-            if property_url:
-                with st.spinner("物件情報を取得中..."):
-                    fetched_data = get_real_estate_data(property_url)
-                    if fetched_data:
-                        client_data["plan_data"]["property_info"].update(fetched_data)
-                        st.session_state["data_changed"] = True
-                        st.rerun()
-            else:
-                st.warning("物件URLを入力してください。")
-        
-        if st.button("物件情報を更新", key="update_prop_info"):
-            client_data["plan_data"]["property_info"]["property_name"] = property_name
-            client_data["plan_data"]["property_info"]["property_price"] = property_price
-            st.session_state["data_changed"] = True
-            st.rerun()
+with col[2]:
+    st.markdown("#### ✅ 必要書類チェック（PDF）")
+    st.write("購入/売却の必要書類を整理し、チェック付きPDFを作成。")
+    if st.button("開く", key="open_checklist"):
+        _goto("pages/チェックリスト.py")
 
-with tab2:
-    st.header("住宅ローンシミュレーション")
+with col[3]:
+    st.markdown("#### 📝 事前審査 入力")
+    st.write("仮審査のための基本情報入力フォーム。")
+    if st.button("開く", key="open_preexam"):
+        _goto("pages/事前審査入力.py")
 
-    with st.expander("ローン条件", expanded=True):
-        loan_amount = st.number_input("借入希望額（万円）", value=loan_info.get("loan_amount", 3000), min_value=10, step=10, key="input_loan_amount")
-        interest_rate = st.number_input("金利（年利％）", value=loan_info.get("interest_rate", 1.0), min_value=0.01, max_value=10.0, step=0.01, key="input_interest_rate")
-        loan_years = st.number_input("返済期間（年）", value=loan_info.get("loan_years", 35), min_value=1, max_value=50, step=1, key="input_loan_years")
-        
-        if st.button("シミュレーションを実行", key="run_simulation"):
-            client_data["plan_data"]["loan_info"]["loan_amount"] = loan_amount
-            client_data["plan_data"]["loan_info"]["interest_rate"] = interest_rate
-            client_data["plan_data"]["loan_info"]["loan_years"] = loan_years
-            st.session_state["data_changed"] = True
-            st.rerun()
+st.divider()
 
-    st.subheader("結果")
-    monthly_payment = calculate_finance(loan_amount * 10000, interest_rate, loan_years)
-    st.metric("毎月の返済額", f"¥{monthly_payment:,}", "円")
+# ----- 進め方（超簡易版のガイドのみ。編集機能は持たない） -----
+with st.expander("進め方（参考）", expanded=False):
+    st.markdown(
+        """
+1) **ヒアリング**  
+2) **仮審査**（各行の事前審査）  
+3) **物件選定**（内見・条件調整）  
+4) **売買契約**  
+5) **本審査**  
+6) **金消**（金銭消費貸借契約）  
+7) **決済**  
+        """
+    )
 
-with tab3:
-    st.header("共有とダウンロード")
-    
-    st.info("このページは、お客様がいつでもアクセスできる専用のURLです。")
-    
-    st.subheader("資金計画書のPDF")
-    
-    if st.button("PDFを作成"):
-        with st.spinner("PDFを作成中..."):
-            pdf_data = generate_pdf_financial_plan(plan_data)
-            if pdf_data:
-                b64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-                st.markdown(
-                    f"""
-                    <a href="data:application/pdf;base64,{b64_pdf}" download="資金計画書_{meta['name']}.pdf">
-                        <button style="background-color:#4CAF50;color:white;padding:10px 20px;border-radius:5px;border:none;">
-                            ダウンロード
-                        </button>
-                    </a>
-                    """,
-                    unsafe_allow_html=True
-                )
-            else:
-                st.error("PDFの作成に失敗しました。")
-
-# --- セッションステートの更新とデータベースへの保存 ---
-if st.session_state.get("data_changed", False):
-    with st.spinner("変更内容を保存中..."):
-        update_client_in_db(client_id, st.session_state["client_data"])
-        st.session_state["data_changed"] = False
-        st.success("変更が保存されました！")
+# ----- フッター -----
+st.markdown("---")
+st.caption("このページのURLと顧客コードはお客様と担当者のみで共有しています。")

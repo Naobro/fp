@@ -1,176 +1,191 @@
+# pages/1_admin.py  — 管理画面（新規発行・一覧・検索・即アクセス・削除）
 import streamlit as st
 import json, secrets, string
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-import pandas as pd
 import sqlite3
-import os
+from datetime import datetime
+from contextlib import contextmanager
 
 # 画面設定
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
 
-# データベース設定
-# Streamlit Cloudの永続化パス
-DB_PATH = os.path.join(os.path.dirname(__file__), 'client_data.db')
+# 共有URL（本番URLを secrets で上書き可）
+BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/client_portal")
 
-def get_db_connection():
-    """SQLiteデータベースへの接続を確立する"""
+# データベース設定
+DB_PATH = "clients.db"
+
+# -------------------------------
+# データベース管理
+# -------------------------------
+@contextmanager
+def get_db():
+    """データベース接続のコンテキストマネージャー"""
     conn = sqlite3.connect(DB_PATH)
-    return conn
+    conn.row_factory = sqlite3.Row  # 辞書形式でアクセス可能
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db():
-    """データベースとテーブルを初期化する"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS clients (
-            client_id TEXT PRIMARY KEY,
-            name TEXT,
-            property TEXT,
-            created_at_utc TEXT,
-            data TEXT
-        );
-    """)
-    conn.commit()
-    conn.close()
+    """データベース初期化"""
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                client_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                name TEXT,
+                phone TEXT,
+                email TEXT,
+                memo TEXT,
+                data TEXT NOT NULL  -- JSON文字列として全データを保存
+            )
+        """)
+        conn.commit()
 
-# アプリ起動時にデータベースを初期化
+# アプリ起動時にDB初期化
 init_db()
 
-# 共有URL（本番URLを secrets で上書き可）
-BASE_URL = st.secrets.get("BASE_URL", "https://naobro-fp.streamlit.app/client_portal")
-
-# 定数
-CLIENT_ID_LENGTH = 6
-IDEMPOTENCY_KEY_LENGTH = 16
-
 # -------------------------------
-# データ管理
+# 共通ユーティリティ
 # -------------------------------
-def load_all_clients():
-    """SQLiteから全クライアントを読み込む"""
-    conn = get_db_connection()
-    df = pd.read_sql_query("SELECT * FROM clients;", conn)
-    conn.close()
-
-    df.columns = ["client_id", "name", "property", "created_at_utc", "data"]
-    df = df.dropna(subset=["client_id"])
-    
-    items = []
-    for _, row in df.iterrows():
-        items.append({
-            "id": row["client_id"],
-            "name": row["name"] or "(無名)",
-            "created_utc": row["created_at_utc"],
-            "created_jst": to_jst_str(row["created_at_utc"]),
-            "raw": json.loads(row["data"]) if row["data"] else {}
-        })
-    return items
-
-def gen_id(n: int = CLIENT_ID_LENGTH) -> str:
+def gen_id(n: int = 6) -> str:
     """クライアントID生成"""
     alphabet = string.ascii_lowercase + string.digits
     return "c-" + "".join(secrets.choice(alphabet) for _ in range(n))
 
-def save_client(client_id: str, name: str, payload: dict):
-    """SQLiteにクライアントを保存"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO clients (client_id, name, created_at_utc, data) VALUES (?, ?, ?, ?);",
-                  (client_id, name, utc_now_iso(), json.dumps(payload, ensure_ascii=False)))
+def save_client(client_id: str, payload: dict):
+    """クライアントデータをデータベースに保存"""
+    meta = payload.get("meta", {})
+    with get_db() as conn:
+        conn.execute("""
+            INSERT OR REPLACE INTO clients 
+            (client_id, created_at, name, phone, email, memo, data)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            client_id,
+            meta.get("created_at"),
+            meta.get("name"),
+            meta.get("phone"),
+            meta.get("email"),
+            meta.get("memo"),
+            json.dumps(payload, ensure_ascii=False)
+        ))
         conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        # 重複エラー
-        return False
-    finally:
-        conn.close()
+
+def load_client(client_id: str) -> dict:
+    """特定のクライアントデータを読み込み"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT data FROM clients WHERE client_id = ?", 
+            (client_id,)
+        ).fetchone()
+        if row:
+            return json.loads(row["data"])
+        return None
+
+def load_all_clients():
+    """全クライアントデータを読み込み"""
+    clients = []
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT client_id, created_at, name, phone, email, memo, data 
+            FROM clients 
+            ORDER BY created_at DESC
+        """).fetchall()
+        
+        for row in rows:
+            try:
+                created = datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
+            except Exception:
+                created = None
+                
+            clients.append({
+                "id": row["client_id"],
+                "name": row["name"] or "(無名)",
+                "created": created,
+                "phone": row["phone"],
+                "email": row["email"],
+                "memo": row["memo"],
+                "raw": json.loads(row["data"]) if row["data"] else {}
+            })
+    return clients
 
 def delete_client(client_id: str) -> bool:
-    """SQLiteからクライアントを削除"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM clients WHERE client_id = ?;", (client_id,))
-    rows_deleted = c.rowcount
-    conn.commit()
-    conn.close()
-    return rows_deleted > 0
+    """クライアントを削除"""
+    try:
+        with get_db() as conn:
+            cursor = conn.execute(
+                "DELETE FROM clients WHERE client_id = ?", 
+                (client_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except Exception:
+        return False
 
 def share_url_for(cid: str) -> str:
+    """共有URL生成"""
     base = BASE_URL.rstrip("/")
     return f"{base}?client={cid}"
 
-def utc_now_iso() -> str:
-    """UTCのISO8601（末尾Z）"""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-def to_jst_str(utc_iso: str) -> str:
-    """UTC(ISO) → JST 文字列"""
-    if not utc_iso:
-        return "-"
-    try:
-        if utc_iso.endswith("Z"):
-            dt = datetime.strptime(utc_iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        else:
-            dt = datetime.fromisoformat(utc_iso)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M")
-    except ValueError:
-        return f"Invalid date format: {utc_iso}"
-    except Exception as e:
-        return f"Error converting date: {e} ({utc_iso})"
-
 # -------------------------------
-# 新規発行
+# 新規発行（PINなし）
 # -------------------------------
-st.header("お客様ページの新規発行")
-
-if "__create_idem__" not in st.session_state:
-    st.session_state["__create_idem__"] = None
+st.header("お客様ページの新規発行（PINなし）")
 
 with st.form("new_client"):
-    name = st.text_input("お客様名")
+    c1, c2 = st.columns(2)
+    with c1:
+        name  = st.text_input("お客様名")
+        phone = st.text_input("電話番号（任意）")
+    with c2:
+        email = st.text_input("メール（任意）")
+        memo  = st.text_area("管理メモ（任意）", height=80)
     submitted = st.form_submit_button("新規作成", type="primary")
 
 if submitted:
-    name_clean = (name or "").strip()
-    if not name_clean:
-        st.error("お客様名は必須です。")
-        st.session_state["__create_idem__"] = None
-        st.stop()
-    
-    idem = st.session_state.get("__create_idem__")
-    if not idem:
-        idem = secrets.token_hex(IDEMPOTENCY_KEY_LENGTH)
-        st.session_state["__create_idem__"] = idem
-    
     client_id = gen_id()
-    
     payload = {
         "meta": {
             "client_id": client_id,
-            "name": name_clean,
-            "created_at_utc": utc_now_iso()
-        }
+            "created_at": datetime.now().isoformat(),
+            "name": name,
+            "phone": phone,
+            "email": email,
+            "memo": memo,
+        },
+        "baseline": {
+            "housing_cost_m": None,
+            "walk_min": None,
+            "area_m2": None,
+            "floor": None,
+            "corner": None,
+            "inner_corridor": None,
+            "balcony_type": None,
+            "balcony_aspect": None,
+            "view": None,
+            "husband_commute_min": None,
+            "wife_commute_min": None,
+            "spec_current": {}
+        },
+        "prefs": {
+            "importance": {"price": 3, "location": 3, "size_layout": 3, "spec": 3, "management": 3},
+            "budget_max_m": None,
+            "min_floor": None,
+            "min_floor_tolerance": 0,
+            "spec_wish": {}
+        },
+        "listings": []
     }
     
-    ok = save_client(client_id, name_clean, payload)
+    # データベースに保存
+    save_client(client_id, payload)
 
     url = share_url_for(client_id)
-    if ok:
-        st.success("お客様用URLを発行しました。")
-        st.code(url, language="text")
-        st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
-    else:
-        st.info("同じ操作がすでに登録済みです。")
-        st.code(url, language="text")
-        st.link_button("➡️ お客様ページを開く（新規タブ）", url, type="primary")
-
-    if st.button("＋ もう一件登録する"):
-        st.session_state["__create_idem__"] = None
-        st.rerun()
+    st.success("お客様用URLを発行しました。下のリンクを共有してください。")
+    st.code(url, language="text")
+    st.link_button("➡️ このままお客様ページを開く（新規タブ）", url, type="primary")
 
 st.divider()
 
@@ -179,6 +194,7 @@ st.divider()
 # -------------------------------
 st.header("お客様ページ 一覧")
 
+# 検索・並び替え
 clients = load_all_clients()
 total = len(clients)
 
@@ -196,19 +212,57 @@ if q:
     clients = [c for c in clients if q_lower in (c["name"] or "").lower() or q_lower in (c["id"] or "").lower()]
 
 # ソート
-def jst_sort_key(c):
-    return c["created_jst"] or ""
+def default_time(d):  # None対策
+    return d or datetime.fromtimestamp(0)
 
 if sort_key == "作成が新しい順":
-    clients.sort(key=jst_sort_key, reverse=True)
+    clients.sort(key=lambda x: default_time(x["created"]), reverse=True)
 elif sort_key == "作成が古い順":
-    clients.sort(key=jst_sort_key)
+    clients.sort(key=lambda x: default_time(x["created"]))
 elif sort_key == "名前（A→Z）":
     clients.sort(key=lambda x: (x["name"] or "").lower())
 else:
     clients.sort(key=lambda x: (x["name"] or "").lower(), reverse=True)
 
-# 行表示
+# 一括削除UI
+st.subheader("一括削除")
+left, right = st.columns([3, 2])
+with left:
+    ids_for_delete = st.multiselect(
+        "削除したいお客様を選択",
+        options=[f'{c["name"]}（{c["id"]}）' for c in clients],
+        key="bulk_delete_select"
+    )
+with right:
+    confirm_text = st.text_input('最終確認：DELETE と入力で実行', value="", key="bulk_delete_confirm")
+    do_bulk = st.button("選択を削除する", type="secondary")
+
+if do_bulk:
+    if confirm_text.strip() != "DELETE":
+        st.warning("削除を実行するには、確認欄に DELETE と入力してください。")
+    else:
+        deleted = 0
+        # 選択表示から id 抜き出し
+        pick_ids = []
+        for label in ids_for_delete:
+            # "名前（c-xxxxx）" から ()内のIDを抽出
+            if "（" in label and "）" in label:
+                cid = label.split("（")[-1].split("）")[0]
+                pick_ids.append(cid)
+        
+        for cid in pick_ids:
+            if delete_client(cid):
+                deleted += 1
+                
+        if deleted > 0:
+            st.success(f"{deleted} 件削除しました。")
+            st.rerun()  # 画面を再読込
+
+st.divider()
+
+# 行表示（即アクセス＋個別削除）
+st.subheader("一覧")
+
 if not clients:
     st.info("該当データはありません。")
 else:
@@ -219,39 +273,58 @@ else:
             st.write(f"**{c['name']}**")
             st.caption(f"ID: {c['id']}")
         with cols[1]:
-            st.caption("作成日時（JST）")
-            st.write(c["created_jst"])
+            st.caption("作成日時")
+            st.write(c["created"].strftime("%Y-%m-%d %H:%M") if c["created"] else "-")
         with cols[2]:
             st.caption("共有URL")
-            if url:
-                st.code(url, language="text")
-            else:
-                st.caption("URL生成エラー")
+            st.code(url, language="text")
         with cols[3]:
             st.caption("操作")
-            if url:
-                st.link_button("開く（新規タブ）", url, type="primary")
-            else:
-                st.warning("無効なURLです")
+            st.link_button("開く（新規タブ）", url, type="primary")
         with cols[4]:
-            delete_confirmed = st.session_state.get(f"confirm_delete_{c['id']}", False)
-            if not delete_confirmed:
-                if st.button("🗑️", key=f"del_prompt-{c['id']}"):
-                    st.session_state[f"confirm_delete_{c['id']}"] = True
+            # 個別削除
+            if st.button("🗑️", key=f"del-{c['id']}"):
+                if delete_client(c["id"]):
+                    st.success("削除しました")
                     st.rerun()
-            else:
-                st.warning(f"本当に {c['name']} を削除しますか？")
-                confirm_col1, confirm_col2 = st.columns(2)
-                with confirm_col1:
-                    if st.button("はい、削除する", key=f"del_yes-{c['id']}"):
-                        if delete_client(c["id"]):
-                            st.success("削除しました")
-                            del st.session_state[f"confirm_delete_{c['id']}"]
-                            st.rerun()
-                        else:
-                            st.error("削除に失敗しました")
-                with confirm_col2:
-                    if st.button("キャンセル", key=f"del_no-{c['id']}"):
-                        del st.session_state[f"confirm_delete_{c['id']}"]
-                        st.rerun()
-        st.markdown("---")
+                else:
+                    st.error("削除に失敗しました")
+
+# -------------------------------
+# データベース管理ユーティリティ（デバッグ用）
+# -------------------------------
+with st.expander("🔧 データベース管理（デバッグ用）"):
+    st.caption("データベースの状態確認・メンテナンス用")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("DB統計表示"):
+            with get_db() as conn:
+                count = conn.execute("SELECT COUNT(*) as cnt FROM clients").fetchone()["cnt"]
+                oldest = conn.execute("SELECT MIN(created_at) as oldest FROM clients").fetchone()["oldest"]
+                newest = conn.execute("SELECT MAX(created_at) as newest FROM clients").fetchone()["newest"]
+                
+                st.write(f"総レコード数: {count}")
+                st.write(f"最古: {oldest}")
+                st.write(f"最新: {newest}")
+    
+    with col2:
+        if st.button("DBバックアップ作成"):
+            backup_data = []
+            with get_db() as conn:
+                rows = conn.execute("SELECT * FROM clients").fetchall()
+                for row in rows:
+                    backup_data.append(dict(row))
+            
+            backup_json = json.dumps(backup_data, ensure_ascii=False, indent=2)
+            st.download_button(
+                "📥 バックアップダウンロード",
+                backup_json,
+                file_name=f"clients_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
+    
+    with col3:
+        if st.button("⚠️ DB全削除（危険）"):
+            st.warning("この操作は全データを削除します！実行前に必ずバックアップを取ってください。")
