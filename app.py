@@ -30,9 +30,10 @@ except Exception:
     client_id = (qp.get("client", [""])[0])
 
 if client_id:
-    # client_id があれば必ず専用ポータルへ遷移
-    st.switch_page("client_portal.py")
+    import client_portal
+    client_portal.render(client_id=client_id)
     st.stop()
+    
 
 
 
