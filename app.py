@@ -24,7 +24,8 @@ st.set_page_config(
 # ============================================
 q = st.query_params
 if q.get("client"):
-   st.switch_page("pages/client_portal.py")
+   st.switch_page("Client Portal")
+
 
 
 # ============================================
