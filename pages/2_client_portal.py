@@ -3,7 +3,7 @@ import json
 import base64
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from streamlit_gsheets import GSheetsConnection
+from st_gsheets_connection import GSheetsConnection
 import pandas as pd
 import numpy as np
 import numpy_financial as npf
