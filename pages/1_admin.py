@@ -9,9 +9,7 @@ from contextlib import contextmanager
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
 
 # 共有URL（本番URLを secrets で上書き可）
-BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/client_portal")
-
-# データベース設定
+BASE_URL = st.secrets.get("BASE_URL", "/")  # ルートで開く → /?client=ID
 DB_PATH = "clients.db"
 
 # -------------------------------
