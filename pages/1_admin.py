@@ -2,17 +2,27 @@ import streamlit as st
 import json, secrets, string
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-import st_gsheets_connection
-from st_gsheets_connection.st_gsheets_connection import GSheetsConnection
 import pandas as pd
+import sqlite3
 
 # 画面設定
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
 
 # データベース設定
-conn = st.connection("gsheets", type=GSheetsConnection)
-SPREADSHEET_NAME = "client_data"  # スプレッドシート名
-WORKSHEET_NAME = "Sheet1"         # シート名
+conn = st.connection("sqlite_db", type="sql")
+
+# テーブルが存在しない場合は作成する
+with conn.session as s:
+    s.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            client_id TEXT PRIMARY KEY,
+            name TEXT,
+            property TEXT,
+            created_at_utc TEXT,
+            data TEXT
+        );
+    """)
+    s.commit()
 
 # 共有URL（本番URLを secrets で上書き可）
 BASE_URL = st.secrets.get("BASE_URL", "https://naobro-fp.streamlit.app/client_portal")
@@ -25,8 +35,8 @@ IDEMPOTENCY_KEY_LENGTH = 16
 # データ管理
 # -------------------------------
 def load_all_clients():
-    """スプレッドシートから全クライアントを読み込む"""
-    df = conn.read(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME, usecols=list(range(5)))
+    """SQLiteから全クライアントを読み込む"""
+    df = conn.query("SELECT * FROM clients;")
     df.columns = ["client_id", "name", "property", "created_at_utc", "data"]
     df = df.dropna(subset=["client_id"])
     
@@ -47,43 +57,25 @@ def gen_id(n: int = CLIENT_ID_LENGTH) -> str:
     return "c-" + "".join(secrets.choice(alphabet) for _ in range(n))
 
 def save_client(client_id: str, name: str, payload: dict):
-    """スプレッドシートにクライアントを保存"""
-    existing_df = conn.read(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME, usecols=list(range(5)), ttl=5)
-    
-    # 重複チェック
-    if client_id in existing_df["client_id"].values:
-        return False
-        
-    data_to_append = pd.DataFrame([{
-        "client_id": client_id,
-        "name": name,
-        "property": None,  # 物件情報は admin にないので None に
-        "created_at_utc": utc_now_iso(),
-        "data": json.dumps(payload, ensure_ascii=False)
-    }])
-    
-    conn.append(
-        spreadsheet=SPREADSHEET_NAME,
-        worksheet=WORKSHEET_NAME,
-        data=data_to_append
-    )
+    """SQLiteにクライアントを保存"""
+    with conn.session as s:
+        # 重複チェック
+        count = s.execute("SELECT COUNT(*) FROM clients WHERE client_id = ?;", (client_id,)).fetchone()[0]
+        if count > 0:
+            return False
+            
+        s.execute("INSERT INTO clients (client_id, name, created_at_utc, data) VALUES (?, ?, ?, ?);",
+                  (client_id, name, utc_now_iso(), json.dumps(payload, ensure_ascii=False)))
+        s.commit()
     return True
 
 def delete_client(client_id: str) -> bool:
-    """スプレッドシートからクライアントを削除"""
-    df = conn.read(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME, usecols=list(range(5)))
-    if client_id not in df["client_id"].values:
-        return False
-        
-    df_new = df[df["client_id"] != client_id]
-    
-    conn.clear(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME)
-    conn.append(
-        spreadsheet=SPREADSHEET_NAME,
-        worksheet=WORKSHEET_NAME,
-        data=df_new
-    )
-    return True
+    """SQLiteからクライアントを削除"""
+    with conn.session as s:
+        s.execute("DELETE FROM clients WHERE client_id = ?;", (client_id,))
+        rows_deleted = s.rowcount
+        s.commit()
+    return rows_deleted > 0
 
 def share_url_for(cid: str) -> str:
     base = BASE_URL.rstrip("/")
