@@ -12,23 +12,18 @@ st.set_page_config(page_title="顧客ポータル", layout="wide")
 # ----- クエリ取得（新旧API両対応） -----
 def get_qp(name: str, default: str = "") -> str:
     try:
-        # 新API
         val = st.query_params.get(name, "")
-        # st.query_params.get は存在しない環境もあるため try/except
         if isinstance(val, list):
             return val[0] if val else default
         return val or default
     except Exception:
-        # 旧API
         val = st.experimental_get_query_params().get(name, [default])
         return val[0] if isinstance(val, list) else (val or default)
 
 def set_client_qp(client_id: str):
     try:
-        # 新API（Mappingとして代入）
         st.query_params["client"] = client_id
     except Exception:
-        # 旧API
         st.experimental_set_query_params(client=client_id)
 
 client_id = get_qp("client")
@@ -57,7 +52,6 @@ st.divider()
 st.subheader("メニュー")
 
 def _goto(page_path: str):
-    # client を保持したままアプリ内ページへ遷移
     set_client_qp(client_id)
     st.switch_page(page_path)
 
@@ -89,7 +83,7 @@ with col[3]:
 
 st.divider()
 
-# ----- 進め方（超簡易版のガイドのみ。編集機能は持たない） -----
+# ----- 進め方（参考） -----
 with st.expander("進め方（参考）", expanded=False):
     st.markdown(
         """
