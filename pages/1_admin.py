@@ -10,7 +10,8 @@ st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide
 
 # 共有URL（本番URLを secrets で上書き可）
 # 既定は ルート直下 /?client=ID を発行（TOPでルータが client_portal を描画）
-BASE_URL = st.secrets.get("BASE_URL", "/")
+BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/")
+
 DB_PATH = "clients.db"
 
 def share_url_for(cid: str) -> str:
