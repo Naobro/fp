@@ -10,8 +10,8 @@ st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide
 
 # データベース設定
 conn = st.connection("gsheets", type=GSheetsConnection)
-SPREADSHEET_NAME = "client_data" # スプレッドシート名
-WORKSHEET_NAME = "Sheet1" # シート名
+SPREADSHEET_NAME = "client_data"  # スプレッドシート名
+WORKSHEET_NAME = "Sheet1"         # シート名
 
 # 共有URL（本番URLを secrets で上書き可）
 BASE_URL = st.secrets.get("BASE_URL", "https://naobro-fp.streamlit.app/client_portal")
@@ -30,7 +30,7 @@ def load_all_clients():
     df = df.dropna(subset=["client_id"])
     
     items = []
-    for index, row in df.iterrows():
+    for _, row in df.iterrows():
         items.append({
             "id": row["client_id"],
             "name": row["name"] or "(無名)",
@@ -46,9 +46,7 @@ def gen_id(n: int = CLIENT_ID_LENGTH) -> str:
     return "c-" + "".join(secrets.choice(alphabet) for _ in range(n))
 
 def save_client(client_id: str, name: str, payload: dict):
-    """
-    スプレッドシートにクライアントを保存
-    """
+    """スプレッドシートにクライアントを保存"""
     existing_df = conn.read(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME, usecols=list(range(5)), ttl=5)
     
     # 重複チェック
@@ -58,7 +56,7 @@ def save_client(client_id: str, name: str, payload: dict):
     data_to_append = pd.DataFrame([{
         "client_id": client_id,
         "name": name,
-        "property": None, # 物件情報は admin にないので None に
+        "property": None,  # 物件情報は admin にないので None に
         "created_at_utc": utc_now_iso(),
         "data": json.dumps(payload, ensure_ascii=False)
     }])
@@ -219,8 +217,7 @@ else:
         with cols[3]:
             st.caption("操作")
             if url:
-                # 修正: key引数を削除
-                st.link_button("開く（新規タブ）", url, type="primary") 
+                st.link_button("開く（新規タブ）", url, type="primary")
             else:
                 st.warning("無効なURLです")
         with cols[4]:
