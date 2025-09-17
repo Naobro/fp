@@ -19,9 +19,8 @@ st.set_page_config(
 )
 
 # ============================================
-# 3) URLにclientがあれば直接お客様ページへ（PINは見ない）
+# 3) URLに client があればどのパスでもお客様ページへ（PINは見ない）
 # ============================================
-
 # クエリ取得（新旧API対応）
 try:
     qp = st.query_params
@@ -31,9 +30,9 @@ except Exception:
     client_id = (qp.get("client", [""])[0])
 
 if client_id:
-    # ルート直下にある client_portal.py にページ遷移
+    # client_id があれば必ず専用ポータルへ遷移
     st.switch_page("client_portal.py")
-
+    st.stop()
 
 
 
