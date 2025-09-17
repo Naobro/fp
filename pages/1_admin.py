@@ -13,7 +13,8 @@ st.set_page_config(page_title="お客様 専用ページ", layout="wide")
 # 設定（admin と同じDBを使用／Streamlit以外＝SQLiteで永続化）
 # -------------------------------
 DB_PATH = "clients.db"  # pages/1_admin.py と同じパスを利用
-BASE_URL = st.secrets.get("BASE_URL", None)  # 例: https://naokifp.streamlit.app/client_portal
+BASE_URL = st.secrets.get("BASE_URL", "/client_portal")  # 例: /client_portal または https://<app>/client_portal
+
 
 # -------------------------------
 # DBユーティリティ（読み取り専用運用）
