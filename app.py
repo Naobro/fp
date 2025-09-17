@@ -24,7 +24,7 @@ st.set_page_config(
 # ============================================
 q = st.query_params
 if q.get("client"):
-   　st.switch_page("client_portal.py")  # ← 実ファイル名に合わせる（今はこれでOK）
+   st.switch_page("client_portal.py")  # ← 実ファイル名に合わせる（今はこれでOK）
 
 # ============================================
 # 4) Keep-Alive機能（UptimeRobotと連携）
