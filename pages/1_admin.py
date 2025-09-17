@@ -9,8 +9,16 @@ from contextlib import contextmanager
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
 
 # 共有URL（本番URLを secrets で上書き可）
-BASE_URL = "/"  # 共有URLをルート固定 → /?client=ID に遷移
+# 既定は ルート直下 /?client=ID を発行（TOPでルータが client_portal を描画）
+BASE_URL = st.secrets.get("BASE_URL", "/")
 DB_PATH = "clients.db"
+
+def share_url_for(cid: str) -> str:
+    """共有URL生成（https指定時は完全URL／未指定は /?client=ID）"""
+    base = (BASE_URL or "/").rstrip("/")
+    if base.startswith("http"):
+        return f"{base}/?client={cid}"
+    return f"{base}?client={cid}"
 
 # -------------------------------
 # データベース管理
@@ -122,11 +130,6 @@ def delete_client(client_id: str) -> bool:
     except Exception:
         return False
 
-def share_url_for(cid: str) -> str:
-    """共有URL生成"""
-    base = BASE_URL.rstrip("/")
-    return f"{base}?client={cid}"
-
 # -------------------------------
 # 新規発行（PINなし）
 # -------------------------------
@@ -218,7 +221,7 @@ if sort_key == "作成が新しい順":
 elif sort_key == "作成が古い順":
     clients.sort(key=lambda x: default_time(x["created"]))
 elif sort_key == "名前（A→Z）":
-    clients.sort(key=lambda x: (x["name"] or "").lower())
+    clients.sort(key=lambda x: (c["name"] or "").lower())
 else:
     clients.sort(key=lambda x: (x["name"] or "").lower(), reverse=True)
 
