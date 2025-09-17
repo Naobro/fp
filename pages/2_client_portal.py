@@ -3,57 +3,62 @@ import json
 import base64
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from st_gsheets_connection import GSheetsConnection
 import pandas as pd
 import numpy as np
 import numpy_financial as npf
 from fpdf import FPDF
-import requests
 import re
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import sqlite3
 
 # Set Streamlit page config
 st.set_page_config(page_title="お客様ページ", layout="wide")
 
 # --- Database & Config ---
-conn = st.connection("gsheets", type=GSheetsConnection)
-SPREADSHEET_NAME = "client_data"
-WORKSHEET_NAME = "Sheet1"
+# SQLiteを永続化するための接続
+conn = st.connection("sqlite_db", type="sql")
+
+# テーブルが存在しない場合は作成する
+with conn.session as s:
+    s.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            client_id TEXT PRIMARY KEY,
+            name TEXT,
+            property TEXT,
+            created_at_utc TEXT,
+            data TEXT
+        );
+    """)
+    s.commit()
 
 def load_client_from_db(client_id: str) -> dict | None:
     """指定されたクライアントIDのデータをデータベースから読み込む"""
-    df = conn.read(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME, ttl=5)
-    df.columns = ["client_id", "name", "property", "created_at_utc", "data"]
+    query = "SELECT data FROM clients WHERE client_id = ?;"
+    df = conn.query(query, params=[client_id])
     
-    row = df[df["client_id"] == client_id].iloc[0] if not df[df["client_id"] == client_id].empty else None
-    
-    if row is not None and row["data"]:
-        return json.loads(row["data"])
+    if not df.empty:
+        row = df.iloc[0]
+        if row["data"]:
+            return json.loads(row["data"])
     return None
 
 def update_client_in_db(client_id: str, new_data: dict):
     """データベース内のクライアントデータを更新する"""
-    df = conn.read(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME, ttl=5)
-    df.columns = ["client_id", "name", "property", "created_at_utc", "data"]
+    new_data_str = json.dumps(new_data, ensure_ascii=False)
+    property_name = new_data.get("property_info", {}).get("property_name")
     
-    # 既存の行を見つける
-    row_index = df[df["client_id"] == client_id].index
-    
-    if not row_index.empty:
-        # 新しいデータをJSON文字列に変換
-        df.loc[row_index, "data"] = json.dumps(new_data, ensure_ascii=False)
-        df.loc[row_index, "property"] = new_data.get("property_info", {}).get("property_name")
-        
-        # シート全体を更新
-        conn.clear(spreadsheet=SPREADSHEET_NAME, worksheet=WORKSHEET_NAME)
-        conn.append(
-            spreadsheet=SPREADSHEET_NAME,
-            worksheet=WORKSHEET_NAME,
-            data=df
-        )
-        return True
-    return False
+    with conn.session as s:
+        # 既存の行を見つける
+        update_query = """
+            UPDATE clients 
+            SET name = ?, property = ?, data = ?
+            WHERE client_id = ?;
+        """
+        s.execute(update_query, (new_data.get("meta", {}).get("name", ""), property_name, new_data_str, client_id))
+        rows_updated = s.rowcount
+        s.commit()
+    return rows_updated > 0
 
 # --- Utility functions ---
 def get_query_param(param_name):
@@ -112,7 +117,7 @@ def generate_pdf_financial_plan(plan_data):
         pdf.ln(10)
         
         pdf.cell(200, 10, txt=f"お客様名: {plan_data.get('client_info', {}).get('name', '未設定')}", ln=1)
-        pdf.cell(200, 10, txt=f"物件名: {plan_data.get('property_info', {}).get('property_name', '未設定')}", ln=1)
+        pdf.cell(200, 10, txt=f"物件名: {plan_data.get('property_info', {}).get("property_name", '未設定')}", ln=1)
         
         pdf_output = pdf.output(dest="S").encode("latin-1")
         return pdf_output
