@@ -18,22 +18,22 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ============================================
 # 3) URLにclientがあれば直接お客様ページへ（PINは見ない）
-import client_portal
+# ============================================
 
 # クエリ取得（新旧API対応）
 try:
     qp = st.query_params
     client_id = qp.get("client") or ""
-    sheet_url = qp.get("sheet") or ""
 except Exception:
     qp = st.experimental_get_query_params()
     client_id = (qp.get("client", [""])[0])
-    sheet_url = (qp.get("sheet", [""])[0])
 
 if client_id:
-    client_portal.render(client_id=client_id, sheet_url=sheet_url)
-    st.stop()
+    # ルート直下にある client_portal.py にページ遷移
+    st.switch_page("client_portal.py")
+
 
 
 
