@@ -18,15 +18,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ============================================
 # 3) URLにclientがあれば直接お客様ページへ（PINは見ない）
-#    ※ set_page_config より前に st.* を置かないこと
-# ============================================
+from importlib import import_module
+
 q = st.query_params
 if q.get("client"):
-   import importlib
-importlib.import_module("client_portal")
-st.stop()
+    import_module("client_portal")
+    st.stop()
 
 
 
