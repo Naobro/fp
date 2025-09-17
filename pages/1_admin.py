@@ -4,16 +4,25 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import pandas as pd
 import sqlite3
+import os
 
 # 画面設定
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
 
 # データベース設定
-conn = st.connection("sqlite_db", type="sql")
+# Streamlit Cloudの永続化パス
+DB_PATH = os.path.join(os.path.dirname(__file__), 'client_data.db')
 
-# テーブルが存在しない場合は作成する
-with conn.session as s:
-    s.execute("""
+def get_db_connection():
+    """SQLiteデータベースへの接続を確立する"""
+    conn = sqlite3.connect(DB_PATH)
+    return conn
+
+def init_db():
+    """データベースとテーブルを初期化する"""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
         CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
             name TEXT,
@@ -22,7 +31,11 @@ with conn.session as s:
             data TEXT
         );
     """)
-    s.commit()
+    conn.commit()
+    conn.close()
+
+# アプリ起動時にデータベースを初期化
+init_db()
 
 # 共有URL（本番URLを secrets で上書き可）
 BASE_URL = st.secrets.get("BASE_URL", "https://naobro-fp.streamlit.app/client_portal")
@@ -36,7 +49,10 @@ IDEMPOTENCY_KEY_LENGTH = 16
 # -------------------------------
 def load_all_clients():
     """SQLiteから全クライアントを読み込む"""
-    df = conn.query("SELECT * FROM clients;")
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM clients;", conn)
+    conn.close()
+
     df.columns = ["client_id", "name", "property", "created_at_utc", "data"]
     df = df.dropna(subset=["client_id"])
     
@@ -58,23 +74,27 @@ def gen_id(n: int = CLIENT_ID_LENGTH) -> str:
 
 def save_client(client_id: str, name: str, payload: dict):
     """SQLiteにクライアントを保存"""
-    with conn.session as s:
-        # 重複チェック
-        count = s.execute("SELECT COUNT(*) FROM clients WHERE client_id = ?;", (client_id,)).fetchone()[0]
-        if count > 0:
-            return False
-            
-        s.execute("INSERT INTO clients (client_id, name, created_at_utc, data) VALUES (?, ?, ?, ?);",
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO clients (client_id, name, created_at_utc, data) VALUES (?, ?, ?, ?);",
                   (client_id, name, utc_now_iso(), json.dumps(payload, ensure_ascii=False)))
-        s.commit()
-    return True
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        # 重複エラー
+        return False
+    finally:
+        conn.close()
 
 def delete_client(client_id: str) -> bool:
     """SQLiteからクライアントを削除"""
-    with conn.session as s:
-        s.execute("DELETE FROM clients WHERE client_id = ?;", (client_id,))
-        rows_deleted = s.rowcount
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM clients WHERE client_id = ?;", (client_id,))
+    rows_deleted = c.rowcount
+    conn.commit()
+    conn.close()
     return rows_deleted > 0
 
 def share_url_for(cid: str) -> str:
