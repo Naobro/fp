@@ -90,7 +90,7 @@ _init_db()
 
 def load_manual_rates() -> dict:
     """
-    DBから現在の金利を読み込む（Streamlit無関係）。
+    DBから現在の金利を読み込む。
     戻り値: {銀行名: 金利(％のfloat)}
     """
     try:
@@ -110,14 +110,14 @@ def load_manual_rates() -> dict:
 def save_manual_rates(d: dict) -> bool:
     """
     『金利を保存』押下時のみ保存。
-    - 空欄/None は無視（既存値を保持）
-    - 0.000 を含む有効な数値は保存
-    - 既存レコードと比較し、変更があればUPSERT
+    - 空欄/None は無視（既存保持）
+    - 0.0 は更新禁止 → 前の値を残す
+    - 有効な数値は保存
     """
     try:
         now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
-        # 既存の取得
+        # 既存値を取得
         existing: dict[str, float] = {}
         with _db_conn() as conn:
             cur = conn.execute("SELECT bank, rate FROM mortgage_rates")
@@ -127,7 +127,6 @@ def save_manual_rates(d: dict) -> bool:
                 except Exception:
                     continue
 
-        # 変更検出とUPSERT
         updates: list[tuple[str, float, str]] = []
         for b in BANKS:
             if b not in d:
@@ -139,6 +138,11 @@ def save_manual_rates(d: dict) -> bool:
                 fv = float(v)
             except Exception:
                 continue
+
+            if fv == 0.0:
+                # 0は無効 → 既存値を保持（更新しない）
+                continue
+
             if (b not in existing) or (existing[b] != fv):
                 updates.append((b, fv, now))
 
@@ -160,7 +164,6 @@ def save_manual_rates(d: dict) -> bool:
     except Exception:
         return False
 
-# ===== 計算 =====
 # ===== 計算 =====
 def monthly_payment(principal: float, annual_rate: float, years: int) -> float:
     r = annual_rate / 12.0
