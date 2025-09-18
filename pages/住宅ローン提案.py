@@ -60,49 +60,75 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
         return (0.2 if age < 40 else 0.4) if plan == "三大疾病" else 0.0
     return 0.0
 
-# ===== 保存（JSONのみ） =====
-SAVE_DIR = "data"
-SAVE_PATH = os.path.join(SAVE_DIR, "manual_rates.json")
-os.makedirs(SAVE_DIR, exist_ok=True)
+# ===== 保存（SQLite） =====
+import sqlite3
+from datetime import datetime
 
-def load_manual_rates() -> dict:
+SAVE_DIR = "data"
+os.makedirs(SAVE_DIR, exist_ok=True)
+DB_PATH = os.path.join(SAVE_DIR, "manual_rates.sqlite3")
+
+def _db_conn():
+    return sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
+
+def _init_db():
     try:
-        if os.path.exists(SAVE_PATH):
-            with open(SAVE_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            out = {}
-            if isinstance(data, dict):
-                for k, v in data.items():
-                    try:
-                        out[k] = float(v)
-                    except Exception:
-                        pass
-            return out
+        with _db_conn() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mortgage_rates (
+                    bank TEXT PRIMARY KEY,
+                    rate REAL NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
     except Exception:
         pass
-    return {}
+
+_init_db()
+
+def load_manual_rates() -> dict:
+    """
+    DBから現在の金利を読み込む（Streamlit無関係）。
+    戻り値: {銀行名: 金利(％のfloat)}
+    """
+    try:
+        with _db_conn() as conn:
+            cur = conn.execute("SELECT bank, rate FROM mortgage_rates")
+            rows = cur.fetchall()
+        out: dict[str, float] = {}
+        for bank, rate in rows:
+            try:
+                out[str(bank)] = float(rate)
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return {}
 
 def save_manual_rates(d: dict) -> bool:
     """
     『金利を保存』押下時のみ保存。
     - 空欄/None は無視（既存値を保持）
-    - 0.0 を含む有効な数値は保存
-    - 既存ファイルとマージ
+    - 0.000 を含む有効な数値は保存
+    - 既存レコードと比較し、変更があればUPSERT
     """
     try:
-        existing: dict[str, float] = {}
-        if os.path.exists(SAVE_PATH):
-            with open(SAVE_PATH, "r", encoding="utf-8") as f:
-                obj = json.load(f)
-                if isinstance(obj, dict):
-                    for k, v in obj.items():
-                        try:
-                            existing[k] = float(v)
-                        except Exception:
-                            pass
+        now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
-        merged = dict(existing)
-        updated = False
+        # 既存の取得
+        existing: dict[str, float] = {}
+        with _db_conn() as conn:
+            cur = conn.execute("SELECT bank, rate FROM mortgage_rates")
+            for bank, rate in cur.fetchall():
+                try:
+                    existing[str(bank)] = float(rate)
+                except Exception:
+                    continue
+
+        # 変更検出とUPSERT
+        updates: list[tuple[str, float, str]] = []
         for b in BANKS:
             if b not in d:
                 continue
@@ -111,22 +137,30 @@ def save_manual_rates(d: dict) -> bool:
                 continue
             try:
                 fv = float(v)
-                if b not in merged or merged[b] != fv:
-                    merged[b] = fv
-                    updated = True
             except Exception:
                 continue
+            if (b not in existing) or (existing[b] != fv):
+                updates.append((b, fv, now))
 
-        if not updated:
+        if not updates:
             return False
 
-        os.makedirs(SAVE_DIR, exist_ok=True)
-        with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump(merged, f, ensure_ascii=False, indent=2)
+        with _db_conn() as conn:
+            conn.executemany(
+                """
+                INSERT INTO mortgage_rates (bank, rate, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(bank) DO UPDATE SET
+                    rate=excluded.rate,
+                    updated_at=excluded.updated_at
+                """,
+                updates,
+            )
         return True
     except Exception:
         return False
 
+# ===== 計算 =====
 # ===== 計算 =====
 def monthly_payment(principal: float, annual_rate: float, years: int) -> float:
     r = annual_rate / 12.0
