@@ -60,43 +60,42 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
         return (0.2 if age < 40 else 0.4) if plan == "三大疾病" else 0.0
     return 0.0
 
-# ===== 保存（SQLite） =====
-import sqlite3
+# ===== 保存（PostgreSQL / Supabase） =====
+import psycopg2
 from datetime import datetime
 
-SAVE_DIR = "data"
-os.makedirs(SAVE_DIR, exist_ok=True)
-DB_PATH = os.path.join(SAVE_DIR, "manual_rates.sqlite3")
+@st.cache_resource
+def init_connection():
+    return psycopg2.connect(**st.secrets["postgres"])
 
-def _db_conn():
-    return sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
-
-def _init_db():
+def _ensure_table():
+    """テーブル初期化"""
     try:
-        with _db_conn() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS mortgage_rates (
-                    bank TEXT PRIMARY KEY,
-                    rate REAL NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
-    except Exception:
-        pass
+        with init_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS mortgage_rates (
+                        bank TEXT PRIMARY KEY,
+                        rate DOUBLE PRECISION NOT NULL,
+                        updated_at TIMESTAMPTZ NOT NULL
+                    )
+                """)
+            conn.commit()
+    except Exception as e:
+        st.error(f"DB初期化エラー: {e}")
 
-_init_db()
+_ensure_table()
 
 def load_manual_rates() -> dict:
     """
-    DBから現在の金利を読み込む。
+    PostgreSQLから現在の金利を読み込む。
     戻り値: {銀行名: 金利(％のfloat)}
     """
     try:
-        with _db_conn() as conn:
-            cur = conn.execute("SELECT bank, rate FROM mortgage_rates")
-            rows = cur.fetchall()
+        with init_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT bank, rate FROM mortgage_rates")
+                rows = cur.fetchall()
         out: dict[str, float] = {}
         for bank, rate in rows:
             try:
@@ -104,30 +103,32 @@ def load_manual_rates() -> dict:
             except Exception:
                 continue
         return out
-    except Exception:
+    except Exception as e:
+        st.error(f"金利読込エラー: {e}")
         return {}
 
 def save_manual_rates(d: dict) -> bool:
     """
     『金利を保存』押下時のみ保存。
-    - 空欄/None は無視（既存保持）
+    - None/空欄は無視（既存保持）
     - 0.0 は更新禁止 → 前の値を残す
-    - 有効な数値は保存
+    - 有効な数値はUPSERT
     """
     try:
-        now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        now = datetime.utcnow()
+        updates: list[tuple[str, float, datetime]] = []
 
-        # 既存値を取得
+        # 既存値
         existing: dict[str, float] = {}
-        with _db_conn() as conn:
-            cur = conn.execute("SELECT bank, rate FROM mortgage_rates")
-            for bank, rate in cur.fetchall():
-                try:
-                    existing[str(bank)] = float(rate)
-                except Exception:
-                    continue
+        with init_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT bank, rate FROM mortgage_rates")
+                for bank, rate in cur.fetchall():
+                    try:
+                        existing[str(bank)] = float(rate)
+                    except Exception:
+                        continue
 
-        updates: list[tuple[str, float, str]] = []
         for b in BANKS:
             if b not in d:
                 continue
@@ -138,33 +139,32 @@ def save_manual_rates(d: dict) -> bool:
                 fv = float(v)
             except Exception:
                 continue
-
             if fv == 0.0:
-                # 0は無効 → 既存値を保持（更新しない）
+                # 0は保存禁止 → 既存保持
                 continue
-
             if (b not in existing) or (existing[b] != fv):
                 updates.append((b, fv, now))
 
         if not updates:
             return False
 
-        with _db_conn() as conn:
-            conn.executemany(
-                """
-                INSERT INTO mortgage_rates (bank, rate, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(bank) DO UPDATE SET
-                    rate=excluded.rate,
-                    updated_at=excluded.updated_at
-                """,
-                updates,
-            )
+        with init_connection() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO mortgage_rates (bank, rate, updated_at)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (bank) DO UPDATE SET
+                        rate = EXCLUDED.rate,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    updates,
+                )
+            conn.commit()
         return True
-    except Exception:
+    except Exception as e:
+        st.error(f"金利保存エラー: {e}")
         return False
-
-# ===== 計算 =====
 def monthly_payment(principal: float, annual_rate: float, years: int) -> float:
     r = annual_rate / 12.0
     n = years * 12
