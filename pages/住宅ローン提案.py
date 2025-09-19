@@ -66,10 +66,11 @@ from datetime import datetime
 
 @st.cache_resource
 def init_connection():
+    # Streamlit Secrets（[postgres]）から接続
     return psycopg2.connect(**st.secrets["postgres"])
 
 def _ensure_table():
-    """テーブル初期化"""
+    """初回だけテーブル作成（存在すれば何もしない）"""
     try:
         with init_connection() as conn:
             with conn.cursor() as cur:
@@ -109,16 +110,14 @@ def load_manual_rates() -> dict:
 
 def save_manual_rates(d: dict) -> bool:
     """
-    『金利を保存』押下時のみ保存。
+    『金利を保存』押下時のみ保存（UPSERT）。
     - None/空欄は無視（既存保持）
-    - 0.0 は更新禁止 → 前の値を残す
-    - 有効な数値はUPSERT
+    - 0.0 は更新禁止 → 既存値を保持
+    - 有効な数値は UPSERT
     """
     try:
         now = datetime.utcnow()
-        updates: list[tuple[str, float, datetime]] = []
-
-        # 既存値
+        # 既存値の読み込み
         existing: dict[str, float] = {}
         with init_connection() as conn:
             with conn.cursor() as cur:
@@ -129,6 +128,7 @@ def save_manual_rates(d: dict) -> bool:
                     except Exception:
                         continue
 
+        updates: list[tuple[str, float, datetime]] = []
         for b in BANKS:
             if b not in d:
                 continue
@@ -140,7 +140,7 @@ def save_manual_rates(d: dict) -> bool:
             except Exception:
                 continue
             if fv == 0.0:
-                # 0は保存禁止 → 既存保持
+                # 0 は無効 → 更新しない
                 continue
             if (b not in existing) or (existing[b] != fv):
                 updates.append((b, fv, now))
@@ -158,7 +158,7 @@ def save_manual_rates(d: dict) -> bool:
                         rate = EXCLUDED.rate,
                         updated_at = EXCLUDED.updated_at
                     """,
-                    updates,
+                    updates
                 )
             conn.commit()
         return True
