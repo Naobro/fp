@@ -28,6 +28,4 @@ tzdata>=2024.1,<2025.0
 supabase-py>=2.6,<3.0
 
 # DB接続やPDFで使うもの
-streamlit
-fpdf2
-psycopg2-binary
+psycopg2-binary>=2.9,<3.0
