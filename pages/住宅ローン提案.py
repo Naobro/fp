@@ -61,79 +61,49 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
     return 0.0
 
 # ===== 保存（PostgreSQL / Supabase） =====
-import psycopg2
+# ※ 直Postgres接続（psycopg2）をやめ、Supabase REST（anon key）で保存/読込します
+#    これで 5432 接続エラーを根本回避します（Cloudでも安定）
+
 from datetime import datetime
+from typing import Dict, Any
+from supabase import create_client
+import streamlit as st
 
-@st.cache_resource
-def init_connection():
-    """Postgres接続：IPv6で失敗する環境を回避し、IPv4を優先"""
-    import socket
-    cfg = st.secrets["postgres"]
-    host = cfg["host"]
-    port = int(cfg.get("port", 5432))
+# 使うテーブル：client_portal_records（既に作成済み）
+# record_type = 'mortgage_rates' に、payload として {銀行名: 金利%} を保存
+TABLE_RECORDS  = st.secrets.get("SUPABASE_TABLE_RECORDS", "client_portal_records")
 
-    # IPv4解決
-    ipv4 = None
-    try:
-        infos = socket.getaddrinfo(host, port, family=socket.AF_INET, type=socket.SOCK_STREAM)
-        if infos:
-            ipv4 = infos[0][4][0]
-    except Exception:
-        ipv4 = None
-
-    kwargs = dict(
-        user=cfg["user"],
-        password=cfg["password"],
-        dbname=cfg.get("database", "postgres"),
-        port=port,
-        sslmode=cfg.get("sslmode", "require"),
-        connect_timeout=10,
-        application_name="streamlit-mortgage",
-    )
-
-    try:
-        if ipv4:
-            conn = psycopg2.connect(hostaddr=ipv4, **kwargs)
-        else:
-            conn = psycopg2.connect(host=host, **kwargs)
-    except Exception:
-        conn = psycopg2.connect(host=host, **kwargs)
-
-    conn.autocommit = True
-    return conn
-
-def _ensure_table():
-    """初回だけテーブル作成（存在すれば何もしない）"""
-    try:
-        with init_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS mortgage_rates (
-                        bank TEXT PRIMARY KEY,
-                        rate DOUBLE PRECISION NOT NULL,
-                        updated_at TIMESTAMPTZ NOT NULL
-                    )
-                """)
-            conn.commit()
-    except Exception as e:
-        st.error(f"DB初期化エラー: {e}")
-
-_ensure_table()
+@st.cache_resource(show_spinner=False)
+def get_sb():
+    url  = st.secrets["SUPABASE_URL"]
+    key  = st.secrets["SUPABASE_ANON_KEY"]
+    return create_client(url, key)
 
 def load_manual_rates() -> dict:
     """
-    PostgreSQLから現在の金利を読み込む。
-    戻り値: {銀行名: 金利(％のfloat)}
+    Supabase から最新の金利辞書を取得。
+    client_id='global', record_type='mortgage_rates' の最新1件を読む。
     """
     try:
-        with init_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT bank, rate FROM mortgage_rates")
-                rows = cur.fetchall()
-        out: dict[str, float] = {}
-        for bank, rate in rows:
+        sb = get_sb()
+        res = (
+            sb.table(TABLE_RECORDS)
+              .select("payload")
+              .eq("client_id", "global")
+              .eq("record_type", "mortgage_rates")
+              .order("created_at", desc=True)
+              .limit(1)
+              .execute()
+        )
+        data = getattr(res, "data", []) or []
+        if not data:
+            return {}
+        payload = data[0].get("payload") or {}
+        # 期待型に整形（{銀行名:str/float} → float）
+        out: Dict[str, float] = {}
+        for k, v in payload.items():
             try:
-                out[str(bank)] = float(rate)
+                out[str(k)] = float(v)
             except Exception:
                 continue
         return out
@@ -143,57 +113,41 @@ def load_manual_rates() -> dict:
 
 def save_manual_rates(d: dict) -> bool:
     """
-    『金利を保存』押下時のみ保存（UPSERT）。
-    - None/空欄は無視（既存保持）
-    - 0.0 は更新禁止 → 既存値を保持
-    - 有効な数値は UPSERT
+    入力された金利を Supabase に保存（新規行として append）。
+    仕様:
+      - 空欄(None)や不正値は無視
+      - 0.0 は保存しない（未設定扱い）
+      - 何も有効値がなければ False
     """
     try:
-        now = datetime.utcnow()
-        # 既存値の読み込み
-        existing: dict[str, float] = {}
-        with init_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT bank, rate FROM mortgage_rates")
-                for bank, rate in cur.fetchall():
-                    try:
-                        existing[str(bank)] = float(rate)
-                    except Exception:
-                        continue
-
-        updates: list[tuple[str, float, datetime]] = []
-        for b in BANKS:
-            if b not in d:
-                continue
-            v = d[b]
-            if v is None:
+        # 既存を読み、差分マージ（空欄は既存を温存）
+        current = load_manual_rates()
+        merged: Dict[str, Any] = dict(current)
+        updated_any = False
+        for bank, val in d.items():
+            if val is None:
                 continue
             try:
-                fv = float(v)
+                fv = float(val)
             except Exception:
                 continue
             if fv == 0.0:
-                # 0 は無効 → 更新しない
                 continue
-            if (b not in existing) or (existing[b] != fv):
-                updates.append((b, fv, now))
+            if bank not in merged or float(merged[bank]) != fv:
+                merged[bank] = fv
+                updated_any = True
 
-        if not updates:
+        if not updated_any:
             return False
 
-        with init_connection() as conn:
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """
-                    INSERT INTO mortgage_rates (bank, rate, updated_at)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (bank) DO UPDATE SET
-                        rate = EXCLUDED.rate,
-                        updated_at = EXCLUDED.updated_at
-                    """,
-                    updates
-                )
-            conn.commit()
+        sb = get_sb()
+        row = {
+            "client_id": "global",
+            "record_type": "mortgage_rates",
+            "payload": merged,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        sb.table(TABLE_RECORDS).insert(row).execute()
         return True
     except Exception as e:
         st.error(f"金利保存エラー: {e}")
