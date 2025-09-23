@@ -66,8 +66,41 @@ from datetime import datetime
 
 @st.cache_resource
 def init_connection():
-    # Streamlit Secrets（[postgres]）から接続
-    return psycopg2.connect(**st.secrets["postgres"])
+    """Postgres接続：IPv6で失敗する環境を回避し、IPv4を優先"""
+    import socket
+    cfg = st.secrets["postgres"]
+    host = cfg["host"]
+    port = int(cfg.get("port", 5432))
+
+    # IPv4解決
+    ipv4 = None
+    try:
+        infos = socket.getaddrinfo(host, port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+        if infos:
+            ipv4 = infos[0][4][0]
+    except Exception:
+        ipv4 = None
+
+    kwargs = dict(
+        user=cfg["user"],
+        password=cfg["password"],
+        dbname=cfg.get("database", "postgres"),
+        port=port,
+        sslmode=cfg.get("sslmode", "require"),
+        connect_timeout=10,
+        application_name="streamlit-mortgage",
+    )
+
+    try:
+        if ipv4:
+            conn = psycopg2.connect(hostaddr=ipv4, **kwargs)
+        else:
+            conn = psycopg2.connect(host=host, **kwargs)
+    except Exception:
+        conn = psycopg2.connect(host=host, **kwargs)
+
+    conn.autocommit = True
+    return conn
 
 def _ensure_table():
     """初回だけテーブル作成（存在すれば何もしない）"""
