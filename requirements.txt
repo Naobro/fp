@@ -25,7 +25,9 @@ packaging>=23.2,<24.0
 tzdata>=2024.1,<2025.0
 
 # Supabase → 本当に必要な場合だけ残す
-# supabase>=2.6,<3.0
+supabase-py>=2.6,<3.0
+
+# DB接続やPDFで使うもの
 streamlit
 fpdf2
 psycopg2-binary
