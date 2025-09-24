@@ -11,7 +11,6 @@ except Exception:
     create_client = None
     Client = None
 
-# ---------------- Supabase ----------------
 def get_sb() -> "Client|None":
     if create_client is None:
         return None
@@ -40,7 +39,6 @@ def get_links(client_id: str) -> list[Dict[str, str]]:
         return res.data[0].get("extra_links") or []
     return []
 
-# ---------------- URL生成 ----------------
 APP_BASE = "https://naokifp.streamlit.app"
 PAGES = {
     "ヒアリング": "/hearing",
@@ -67,12 +65,13 @@ def build_url(path: str, cid: str) -> str:
     safe_path = urllib.parse.quote(path, safe="/")
     return f"{APP_BASE}{safe_path}?client={urllib.parse.quote(cid)}"
 
-# ---------------- Main ----------------
-def main():
+def main(client_id: str | None = None):
     st.set_page_config(page_title="クライアント専用ポータル", layout="wide")
     st.title("👤 クライアント専用ページ")
 
-    client_id = get_client_code()
+    if not client_id:
+        client_id = get_client_code()
+
     st.info(f"クライアントID: **{client_id}**")
 
     st.subheader("📋 固定リンク")
@@ -84,7 +83,6 @@ def main():
     st.subheader("🔗 外部リンク（管理者用）")
     links = get_links(client_id)
 
-    # 既存リンクの編集
     for i, link in enumerate(links):
         col1, col2, col3 = st.columns([3, 6, 2])
         with col1:
@@ -98,7 +96,6 @@ def main():
                 st.rerun()
         link["title"], link["url"] = t, u
 
-    # 新しいリンク追加
     with st.form("new_link", clear_on_submit=True):
         nt = st.text_input("新しいリンク名")
         nu = st.text_input("新しいURL")
@@ -111,6 +108,9 @@ def main():
     if st.button("💾 保存"):
         upsert_links(client_id, links)
         st.success("保存しました")
+
+def render(client_id: str | None = None):
+    main(client_id)
 
 if __name__ == "__main__":
     main()
