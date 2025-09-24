@@ -7,12 +7,7 @@ from pathlib import Path
 st.set_page_config(page_title="住信SBIネット銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
 # ========== Styles ==========
-st.markdown("""
-<style>
-.block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
-.big-link { font-size: 1.4rem; font-weight: bold; margin: 1rem 0; }
-.table-wrap { overflow-x: auto; }
-th, td { font-size: .98rem; }
+
 
 /* 今月の基準金利バナー */
 .rate-banner {
