@@ -2,14 +2,16 @@
 import streamlit as st
 from utils.rates import month_label, get_base_rates_for_current_month
 from pages.住宅ローン提案 import load_manual_rates
-from pathlib import Path
 
 st.set_page_config(page_title="住信SBIネット銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
 # ========== Styles ==========
 st.markdown("""
 <style>
-
+.block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
+.big-link { font-size: 1.4rem; font-weight: bold; margin: 1rem 0; }
+.table-wrap { overflow-x: auto; }
+th, td { font-size: .98rem; }
 
 /* 今月の基準金利バナー */
 .rate-banner {
@@ -26,21 +28,15 @@ st.markdown("""
 # ========== Title ==========
 st.title("住信SBIネット銀行｜住宅ローン")
 
-# ========== デバッグ用 JSON 表示 ==========
-st.subheader("📊 デバッグ：保存されている金利レコード")
-rates_debug = load_manual_rates()
-st.json(rates_debug)
-
-# ========== 今月の基準金利（最上段）=====
+# ===== 今月の基準金利（最上段）=====
 rates = load_manual_rates()
 base = get_base_rates_for_current_month()
 
-# 修正：キー名は "住信SBI銀行" と判明している
+# キー名は "住信SBI銀行"
 sbi_rate = rates.get("住信SBI銀行", base.get("住信SBI銀行"))
 
 if sbi_rate is not None:
     base_rate = float(sbi_rate)
-    # 団信加算例
     rate_gan50 = base_rate + 0.10
     rate_gan100 = base_rate + 0.20
 
