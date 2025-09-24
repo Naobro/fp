@@ -56,8 +56,10 @@ def load_bytes(p: Path) -> bytes:
 st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 
 # ===== 今月の基準金利（最上段）=====
+from pages.住宅ローン提案 import load_manual_rates  # ← Supabaseから金利を読む関数を利用
+
 base_rates = get_base_rates_for_current_month()
-manual = st.session_state.get("manual_rates", {})
+manual = load_manual_rates()  # ← st.session_state ではなく DB から読む
 
 sbi_rate = manual.get("SBI新生銀行", base_rates.get("SBI新生銀行"))
 if sbi_rate is not None:
@@ -71,7 +73,6 @@ if sbi_rate is not None:
         """,
         unsafe_allow_html=True
     )
-
 # ===== 事前審査用紙 =====
 st.subheader("事前審査用紙（ダウンロード）")
 st.markdown("""
