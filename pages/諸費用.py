@@ -18,6 +18,7 @@ from pathlib import Path
 import streamlit as st
 import requests
 from fpdf import FPDF  # ← FPDF_FONT_DIR は使いません（動的にTTFを登録）
+from client_portal import db_insert_record, db_log_event, now_iso
 
 # ============ 表示設定 ============
 st.set_page_config(page_title="資金計画書（諸費用明細）", layout="centered")
@@ -506,6 +507,26 @@ try:
         need_at_contract=need_at_contract,
         bikou=bikou,
     )
+    # ===== Supabase 保存ボタン =====
+if st.button("💾 諸費用データを保存"):
+    client_id = st.query_params.get("client", "unknown")
+    payload = {
+        "customer_name": st.session_state.get("customer_name", ""),
+        "property_name": st.session_state.get("property_name", ""),
+        "property_price": property_price,
+        "deposit": deposit,
+        "total_expenses": total_expenses,
+        "total": total,
+        "monthly_full": monthly_full,
+        "monthly_only": monthly_only,
+        "monthly_A": monthly_A,
+        "monthly_B": monthly_B,
+        "saved_at": now_iso(),
+    }
+    ok = db_insert_record(client_id, "fees_detail", payload)
+    if ok:
+        db_log_event(client_id, "save_fees_detail", {"total_expenses": total_expenses})
+        st.success("諸費用データを保存しました ✅")
     st.download_button(
     label="📄 資金計画書.pdf をダウンロード",
     data=pdf_bytes,
