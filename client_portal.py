@@ -25,20 +25,27 @@ def get_sb() -> "Client|None":
 
 SB = get_sb()
 
+# ----------- 外部リンク保存を profile 内に格納する -----------
 def upsert_links(client_id: str, links: list[Dict[str, str]]):
     if SB is None:
         return
-    data = {"client_id": client_id, "extra_links": links, "updated_at": datetime.now().isoformat()}
+    data = {
+        "client_id": client_id,
+        "profile": {"extra_links": links},
+        "updated_at": datetime.now().isoformat()
+    }
     SB.table("client_profiles").upsert(data, on_conflict="client_id").execute()
 
 def get_links(client_id: str) -> list[Dict[str, str]]:
     if SB is None:
         return []
-    res = SB.table("client_profiles").select("extra_links").eq("client_id", client_id).limit(1).execute()
+    res = SB.table("client_profiles").select("profile").eq("client_id", client_id).limit(1).execute()
     if res.data:
-        return res.data[0].get("extra_links") or []
+        profile = res.data[0].get("profile") or {}
+        return profile.get("extra_links", [])
     return []
 
+# ---------------- URL生成 ----------------
 APP_BASE = "https://naokifp.streamlit.app"
 PAGES = {
     "ヒアリング": "/hearing",
@@ -65,6 +72,7 @@ def build_url(path: str, cid: str) -> str:
     safe_path = urllib.parse.quote(path, safe="/")
     return f"{APP_BASE}{safe_path}?client={urllib.parse.quote(cid)}"
 
+# ---------------- Main ----------------
 def main(client_id: str | None = None):
     st.set_page_config(page_title="クライアント専用ポータル", layout="wide")
     st.title("👤 クライアント専用ページ")
