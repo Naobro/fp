@@ -146,8 +146,8 @@ st.markdown("""
     </tr>
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">リフォーム</td>
-      <td style="border:1px solid #aaa; padding:12px;" align="center">△</td>
-      <td style="border:1px solid #aaa; padding:12px;">個別相談（別途条件あり）</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">×</td>
+      <td style="border:1px solid #aaa; padding:12px;">リフォーム費用NG</td>
     </tr>
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
