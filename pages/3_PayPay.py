@@ -63,8 +63,6 @@ if paypay_rate is not None:
         unsafe_allow_html=True
     )
 
-paypay_rate = float(manual["PayPay銀行"])
-
 st.markdown(
     f"""
     <div class="rate-banner">
