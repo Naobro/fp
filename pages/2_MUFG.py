@@ -35,27 +35,13 @@ def load_bytes(p: Path) -> bytes:
 
 st.title("三菱UFJ銀行｜住宅ローン")
 
-# ========= 基準金利の参照（統一フォーマット）=========
-# 1) セッションの manual_rates を見る（なければ空dict）
-manual = st.session_state.get("manual_rates")
-if manual is None or not isinstance(manual, dict):
-    # 2) JSONがあれば読む（シミュレーターで自動保存されている想定）
-    manual = {}
-    try:
-        from json import loads
-        json_path = Path("data/manual_rates.json")
-        if json_path.exists():
-            manual = loads(json_path.read_text(encoding="utf-8"))
-    except Exception:
-        manual = {}
+# ===== 今月の基準金利（最上段）=====
+from pages.住宅ローン提案 import load_manual_rates  # 共通の金利読込を利用
 
-# 3) 今月の基準（金庫の初期値）
+rates = load_manual_rates()
 base = get_base_rates_for_current_month()
 
-# 4) 表示する金利：手動 > 今月基準
-mufg_rate = (manual.get("三菱UFJ銀行")
-             if isinstance(manual, dict) and "三菱UFJ銀行" in manual
-             else base.get("三菱UFJ銀行"))
+mufg_rate = rates.get("三菱UFJ銀行", base.get("三菱UFJ銀行"))
 
 if mufg_rate is not None:
     st.markdown(
@@ -68,7 +54,6 @@ if mufg_rate is not None:
         """,
         unsafe_allow_html=True
     )
-
 # ─ 商品説明（PDF 配布）
 st.subheader("商品説明（PDF）")
 st.download_button(
