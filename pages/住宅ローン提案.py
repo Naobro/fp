@@ -233,7 +233,7 @@ if st.button("💾 入力条件を保存", type="primary"):
         # 最新の金利を取得
         current_rates = load_manual_rates()
 
-         row = {
+        row = {
             "client_id": client_id,
             "borrow_amount": int(principal),
             "own_fund": int(self_fund),
@@ -249,6 +249,11 @@ if st.button("💾 入力条件を保存", type="primary"):
             "rate_sumishin_sbi": float(current_rates.get("住信SBI銀行", 0.0))
         }
 
+        sb.table("mortgage_detail").insert(row).execute()
+        st.success("✅ 入力条件と金利を保存しました")
+
+    except Exception as e:
+        st.error(f"保存エラー: {e}")
 # LTV概算
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1.0
