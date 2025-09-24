@@ -62,18 +62,6 @@ if paypay_rate is not None:
         """,
         unsafe_allow_html=True
     )
-
-st.markdown(
-    f"""
-    <div class="rate-banner">
-      <div class="label">🗓 {month_label()} の基準金利（PayPay銀行）</div>
-      <div class="value">{paypay_rate:.3f}%</div>
-      <div class="note">がん団信など条件で加算</div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
 # 提携住宅ローン｜事前審査
 st.subheader("提携住宅ローン｜事前審査")
 st.markdown(
