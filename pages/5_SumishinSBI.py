@@ -28,6 +28,11 @@ th, td { font-size: .98rem; }
 # ========== Title ==========
 st.title("住信SBIネット銀行｜住宅ローン")
 
+# ===== デバッグ表示（保存されている金利レコード）=====
+st.subheader("📊 デバッグ：保存されている金利レコード")
+rates_debug = load_manual_rates()
+st.json(rates_debug)
+
 # ===== 今月の基準金利（最上段）=====
 rates = load_manual_rates()
 base = get_base_rates_for_current_month()
@@ -145,7 +150,7 @@ st.markdown("""
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
       <td style="border:1px solid #aaa; padding:12px;" align="center">△</td>
-      <td style="border:1px solid #aaa; padding:12px;">6か月以内の売却条件で返済比率含めない　　大手仲介4社の最低署が必要。1年分の通帳履歴確認。</td>
+      <td style="border:1px solid #aaa; padding:12px;">6か月以内の売却条件で返済比率含めない。大手仲介4社の最低査定が必要。1年分の通帳履歴確認。</td>
     </tr>
   </tbody>
 </table>
