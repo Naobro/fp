@@ -7,6 +7,8 @@ from pathlib import Path
 st.set_page_config(page_title="住信SBIネット銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
 # ========== Styles ==========
+st.markdown("""
+<style>
 
 
 /* 今月の基準金利バナー */
