@@ -42,23 +42,26 @@ def load_bytes(p: Path) -> bytes:
 # ========== Title ==========
 st.title("PayPay銀行｜住宅ローン")
 
-# ========== 基準金利の参照（手入力のみ／フォールバックなし） ==========
-manual = st.session_state.get("manual_rates")
-if manual is None or not isinstance(manual, dict):
-    # セッションに無ければ JSON を読む（シミュレーターが自動保存したもの）
-    try:
-        import json
-        json_path = Path("data/manual_rates.json")
-        if json_path.exists():
-            manual = json.loads(json_path.read_text(encoding="utf-8"))
-        else:
-            manual = None
-    except Exception:
-        manual = None
+# ===== 今月の基準金利（最上段）=====
+from pages.住宅ローン提案 import load_manual_rates
+from utils.rates import get_base_rates_for_current_month
 
-if not manual or "PayPay銀行" not in manual:
-    st.error("基準金利が未設定です。先にホーム（シミュレーター）で金利を入力・保存してください。")
-    st.stop()
+rates = load_manual_rates()
+base = get_base_rates_for_current_month()
+
+paypay_rate = rates.get("PayPay銀行", base.get("PayPay銀行"))
+
+if paypay_rate is not None:
+    st.markdown(
+        f"""
+        <div class="rate-banner">
+          <div class="label">🗓 {month_label()} の基準金利（PayPay銀行）</div>
+          <div class="value">{float(paypay_rate):.3f}%</div>
+          <div class="note">がん団信など条件で加算</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 paypay_rate = float(manual["PayPay銀行"])
 
