@@ -526,7 +526,7 @@ try:
         }
         ok = db_insert_record(client_id, "fees_detail", payload)
         if ok:
-            db_log_event(client_id, "save_fees_detail", {"total_expenses": total_expenses})
+           
             st.success("諸費用データを保存しました ✅")
 
     # ===== PDF ダウンロードボタン =====
