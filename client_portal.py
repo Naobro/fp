@@ -122,3 +122,30 @@ def render(client_id: str | None = None):
 
 if __name__ == "__main__":
     main()
+# ============ 共通DBユーティリティ（諸費用などで使用） ============
+
+def now_iso():
+    """現在時刻を ISO8601 文字列で返す"""
+    import datetime
+    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+def db_insert_record(client_id: str, table: str, payload: dict) -> bool:
+    """SupabaseにレコードをINSERT"""
+    try:
+        res = SB.table(table).insert({**payload, "client_id": client_id}).execute()
+        return True if res.data else False
+    except Exception as e:
+        st.error(f"DB保存エラー: {e}")
+        return False
+
+def db_log_event(client_id: str, event: str, payload: dict) -> None:
+    """操作ログを記録"""
+    try:
+        SB.table("event_logs").insert({
+            "client_id": client_id,
+            "event": event,
+            "payload": payload,
+            "created_at": now_iso(),
+        }).execute()
+    except Exception as e:
+        st.warning(f"ログ保存失敗: {e}")
