@@ -126,4 +126,37 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ========== 特殊項目 ==========
+st.subheader("特殊項目")
+st.markdown("""
+<div class="table-wrap">
+<table style="width:100%; border-collapse:collapse; background:#fff;">
+  <thead>
+    <tr style="background:#FCF9F0;">
+      <th style="border:1px solid #aaa; padding:12px; width:22%;">項目</th>
+      <th style="border:1px solid #aaa; padding:12px; width:10%;">取扱</th>
+      <th style="border:1px solid #aaa; padding:12px;">備考</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border:1px solid #aaa; padding:12px;">諸費用</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
+      <td style="border:1px solid #aaa; padding:12px;">物件価格の10%まで借入可能</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #aaa; padding:12px;">リフォーム</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">△</td>
+      <td style="border:1px solid #aaa; padding:12px;">個別相談（別途条件あり）</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
+      <td style="border:1px solid #aaa; padding:12px;">現自宅ローンを含めた返済比率で審査</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+""", unsafe_allow_html=True)
+
 st.caption("※本ページは案内用ダイジェスト。正式条件は銀行公表資料をご確認ください。")
