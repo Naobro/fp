@@ -224,13 +224,9 @@ with col4:
 
 max_year = max(1, 79 - int(age))
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(35, max_year), key="inp_years")
-# --- 保存ボタン（住宅ローン入力値を Supabase に保存） ---
-# --- 保存ボタン（住宅ローン入力値＋銀行ごとの金利を Supabase に保存） ---
-# --- 保存ボタン（住宅ローン入力値＋銀行ごとの金利を Supabase に保存） ---
 if st.button("💾 入力条件を保存", type="primary"):
     try:
         sb = get_sb()
-        # 最新の金利を取得
         current_rates = load_manual_rates()
 
         row = {
@@ -246,7 +242,10 @@ if st.button("💾 入力条件を保存", type="primary"):
             "rate_mufg": float(current_rates.get("三菱UFJ銀行", 0.0)),
             "rate_paypay": float(current_rates.get("PayPay銀行", 0.0)),
             "rate_jibun": float(current_rates.get("じぶん銀行", 0.0)),
-            "rate_sumishin_sbi": float(current_rates.get("住信SBI銀行", 0.0))
+            "rate_sumishin_sbi": float(current_rates.get("住信SBI銀行", 0.0)),
+
+            # これを追加
+            "saved_at": datetime.utcnow().isoformat()
         }
 
         sb.table("mortgage_detail").insert(row).execute()
