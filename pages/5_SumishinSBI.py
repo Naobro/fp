@@ -2,6 +2,7 @@
 import streamlit as st
 from utils.rates import month_label, get_base_rates_for_current_month
 from pages.住宅ローン提案 import load_manual_rates
+from pathlib import Path
 
 st.set_page_config(page_title="住信SBIネット銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
@@ -28,19 +29,21 @@ th, td { font-size: .98rem; }
 # ========== Title ==========
 st.title("住信SBIネット銀行｜住宅ローン")
 
-# ===== デバッグ表示（保存されている金利レコード）=====
+# ========== デバッグ用 JSON 表示 ==========
 st.subheader("📊 デバッグ：保存されている金利レコード")
 rates_debug = load_manual_rates()
 st.json(rates_debug)
 
-# ===== 今月の基準金利（最上段）=====
+# ========== 今月の基準金利（最上段）=====
 rates = load_manual_rates()
 base = get_base_rates_for_current_month()
 
-sbi_rate = rates.get("住信SBIネット銀行", base.get("住信SBIネット銀行"))
+# 修正：キー名は "住信SBI銀行" と判明している
+sbi_rate = rates.get("住信SBI銀行", base.get("住信SBI銀行"))
 
 if sbi_rate is not None:
     base_rate = float(sbi_rate)
+    # 団信加算例
     rate_gan50 = base_rate + 0.10
     rate_gan100 = base_rate + 0.20
 
@@ -64,26 +67,29 @@ if sbi_rate is not None:
         """,
         unsafe_allow_html=True
     )
+else:
+    st.warning("金利情報が設定されていません。管理画面で金利を保存してください。")
 
 # ========== 特徴 ==========
 st.subheader("特徴")
 st.markdown("""
 - 事務手数料は借入額×2.2%  
-- がん50%団信、がん100%団信を選択可能（それぞれ金利上乗せあり）  
+- がん50%団信、がん100%団信を選択可能（金利加算あり）  
 - **全疾病保障＋三大疾病50%が標準付帯**  
 - LTVに応じた金利帯（80％以下で優遇 等）  
-- 125%ルールなし（繰上・借換の説明が楽）  
+- 125%ルールなし（繰上返済・借換説明が楽）  
 - 外国籍・転職後1年未満でも審査事例あり  
 - 審査スピードが比較的早い  
 """)
 
-# ========== 入力方法リンク ==========
-st.subheader("③ 事前審査｜入力方法")
+# ========== 事前審査用紙リンク ==========
+st.subheader("事前審査用紙（PDF）")
+pdf_url = "https://www.netbk.co.jp/contents/resources/pdf/hl_loan_form.pdf"
 st.markdown(
-    """
+    f"""
     <div class="big-link">
-      👉 <a href="https://www.netbk.co.jp/contents/lp/homeloan/" target="_blank">
-      住信SBIネット銀行 住宅ローン 公式サイト（事前審査）
+      👉 <a href="{pdf_url}" target="_blank">
+      住信SBIネット銀行 住宅ローン 仮審査申込書（PDF）
       </a>
     </div>
     """,
@@ -115,7 +121,7 @@ st.markdown("""
         <ul>
           <li>事務手数料が高額（借入額×2.2%）</li>
           <li>がん団信は金利上乗せ（50%:+0.10%, 100%:+0.20%）</li>
-          <li>特殊案件（自主管理, 借地権等）はNG</li>
+          <li>特殊案件（自主管理, 借地権など）は扱い難）</li>
         </ul>
       </td>
     </tr>
@@ -150,7 +156,7 @@ st.markdown("""
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
       <td style="border:1px solid #aaa; padding:12px;" align="center">△</td>
-      <td style="border:1px solid #aaa; padding:12px;">6か月以内の売却条件で返済比率含めない。大手仲介4社の最低査定が必要。1年分の通帳履歴確認。</td>
+      <td style="border:1px solid #aaa; padding:12px;">6か月以内の売却条件で返済比率含めない。大手仲介4社の最低査定が必要。1年通帳履歴確認。</td>
     </tr>
   </tbody>
 </table>
