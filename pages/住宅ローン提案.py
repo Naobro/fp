@@ -621,10 +621,10 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
                 except Exception:
                     new_rates_dict[bank] = None
 
-        st.markdown("")
+             st.markdown("")
         if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
-    ok = save_manual_rates(new_rates_dict)
-    if ok:
-        st.success("✅ 金利を保存しました（上部の表にも反映されます）")
-    else:
-        st.info("ℹ️ 入力に変更がなかったため保存していません")
+            ok = save_manual_rates(new_rates_dict)
+            if ok:
+                st.success("✅ 金利を保存しました（上部の表にも反映されます）")
+            else:
+                st.info("ℹ️ 入力に変更がなかったため保存していません")
