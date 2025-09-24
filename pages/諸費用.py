@@ -479,7 +479,7 @@ def build_pdf(
     pdf_bytes = out.encode("latin-1") if isinstance(out, str) else bytes(out)
     return pdf_bytes
 
-# ============ 出力（ワンクリックDL） ============
+# ============ 出力（ワンクリックDL＋保存） ============
 try:
     pdf_bytes = build_pdf(
         customer_name=st.session_state.get("customer_name", ""),
@@ -507,31 +507,35 @@ try:
         need_at_contract=need_at_contract,
         bikou=bikou,
     )
+
     # ===== Supabase 保存ボタン =====
-if st.button("💾 諸費用データを保存"):
-    client_id = st.query_params.get("client", "unknown")
-    payload = {
-        "customer_name": st.session_state.get("customer_name", ""),
-        "property_name": st.session_state.get("property_name", ""),
-        "property_price": property_price,
-        "deposit": deposit,
-        "total_expenses": total_expenses,
-        "total": total,
-        "monthly_full": monthly_full,
-        "monthly_only": monthly_only,
-        "monthly_A": monthly_A,
-        "monthly_B": monthly_B,
-        "saved_at": now_iso(),
-    }
-    ok = db_insert_record(client_id, "fees_detail", payload)
-    if ok:
-        db_log_event(client_id, "save_fees_detail", {"total_expenses": total_expenses})
-        st.success("諸費用データを保存しました ✅")
+    if st.button("💾 諸費用データを保存"):
+        client_id = st.query_params.get("client", "unknown")
+        payload = {
+            "customer_name": st.session_state.get("customer_name", ""),
+            "property_name": st.session_state.get("property_name", ""),
+            "property_price": property_price,
+            "deposit": deposit,
+            "total_expenses": total_expenses,
+            "total": total,
+            "monthly_full": monthly_full,
+            "monthly_only": monthly_only,
+            "monthly_A": monthly_A,
+            "monthly_B": monthly_B,
+            "saved_at": now_iso(),
+        }
+        ok = db_insert_record(client_id, "fees_detail", payload)
+        if ok:
+            db_log_event(client_id, "save_fees_detail", {"total_expenses": total_expenses})
+            st.success("諸費用データを保存しました ✅")
+
+    # ===== PDF ダウンロードボタン =====
     st.download_button(
-    label="📄 資金計画書.pdf をダウンロード",
-    data=pdf_bytes,
-    file_name=f"{st.session_state.get('property_name', '資金計画書')}　諸費用明細.pdf",
-    mime="application/pdf",
-)
+        label="📄 資金計画書.pdf をダウンロード",
+        data=pdf_bytes,
+        file_name=f"{st.session_state.get('property_name', '資金計画書')}　諸費用明細.pdf",
+        mime="application/pdf",
+    )
+
 except Exception as e:
     st.error(f"PDF生成エラー: {e}")
