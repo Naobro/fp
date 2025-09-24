@@ -1,8 +1,6 @@
 # pages/4_Jibun.py
 import streamlit as st
 from pathlib import Path
-
-# 金利関連の関数を正しくインポート
 from utils.rates import month_label, get_base_rates_for_current_month
 from pages.住宅ローン提案 import load_manual_rates
 
@@ -38,28 +36,57 @@ base = get_base_rates_for_current_month()
 jibun_rate = rates.get("じぶん銀行", base.get("じぶん銀行"))
 
 if jibun_rate is not None:
+    base_rate = float(jibun_rate)
+    rate_gan100 = base_rate + 0.054
+    rate_premium = base_rate + 0.154
+
     st.markdown(
         f"""
         <div class="rate-banner">
           <div class="label">🗓 {month_label()} の基準金利（じぶん銀行）</div>
-          <div class="value">{float(jibun_rate):.3f}%</div>
-          <div class="note">団信オプションなど条件で加算</div>
+          <div class="value">{base_rate:.3f}%</div>
+          <div class="note">一般団信</div>
+        </div>
+        <div class="rate-banner">
+          <div class="label">がん100% 団信</div>
+          <div class="value">{rate_gan100:.3f}%</div>
+          <div class="note">+0.054% 加算</div>
+        </div>
+        <div class="rate-banner">
+          <div class="label">プレミアム団信</div>
+          <div class="value">{rate_premium:.3f}%</div>
+          <div class="note">+0.154% 加算</div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-# ========== 事前審査リンク ==========
-st.subheader("提携住宅ローン｜事前審査")
+# ========== 特徴 ==========
+st.subheader("特徴")
+st.markdown("""
+■金利優遇割は以下の4種類から組み合わせ自由です■  
+(1) モバイル割 ▲0.07%  
+(2) でんき割 ▲0.03%  
+(3) ネット割 ▲0.03% ※戸建てのみ適用可  
+(4) TV割 ▲0.02% ※戸建てのみ適用可  
+
+👉 詳細は [auじぶん銀行公式サイト](https://www.jibunbank.co.jp/products/homeloan/customer/) をご確認ください。  
+
+■大きな特徴3つ■  
+① 諸費用も物件価格の10%まで可能！  
+② 最大借入期間50年での申込が可能！  
+※借入期間を35年超～50年とした場合は金利が0.1%上乗せとなります。  
+③ 審査期間も借入期間に含まれるため借入上限金額が伸びます。  
+""")
+
+# ========== 入力方法リンク ==========
+st.subheader("③ 事前審査｜入力方法")
 st.markdown(
     """
     <div class="big-link">
       👉 <a href="https://pitch.com/v/web-xtdvtr" target="_blank">
-      事前審査の入力方法はこちら（Pitch資料）
+      じぶん銀行 事前審査 入力方法はこちら
       </a>
-    </div>
-    <div>
-      <b>諸費用まで借入可能・金利優遇あり</b> など、公式サイトからの個人申込よりも有利な条件でご利用いただけます。
     </div>
     """,
     unsafe_allow_html=True
@@ -80,19 +107,17 @@ st.markdown("""
     <tr>
       <td style="border:1px solid #d1d5db; padding:12px;">
         <ul>
-          <li><b>KDDI・三菱UFJの共同出資</b>で安心感</li>
-          <li>がん50％・がん100％・7大疾病など団信オプション充実</li>
-          <li><b>最長50年</b> の超長期ローンが可能（+0.1%）</li>
-          <li>ネット銀行ならではの低金利水準</li>
-          <li>一部繰上返済手数料無料</li>
+          <li>団信プランが充実（がん100%, プレミアム団信）</li>
+          <li>金利優遇割（最大 ▲0.15%）が使える</li>
+          <li>最長50年借入可能</li>
+          <li>諸費用も借入対象（物件価格の10%まで）</li>
         </ul>
       </td>
       <td style="border:1px solid #d1d5db; padding:12px; vertical-align: top;">
         <ul>
-          <li>リフォーム費用の融資は原則不可</li>
-          <li><b>125%・5年ルールなし</b></li>
-          <li>物件評価が厳しめ（担保余力を重視）</li>
-          <li>個人事業主にはやや厳しい傾向</li>
+          <li>借入期間35年超は金利+0.1%</li>
+          <li>優遇割の一部は戸建て限定（ネット割・TV割）</li>
+          <li>個人事業主への対応は限定的</li>
         </ul>
       </td>
     </tr>
@@ -101,37 +126,4 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ========== 特殊項目 ==========
-st.subheader("特殊項目")
-st.markdown("""
-<div class="table-wrap">
-<table style="width:100%; border-collapse:collapse; background:#fff;">
-  <thead>
-    <tr style="background:#FCF9F0;">
-      <th style="border:1px solid #aaa; padding:12px; width:22%;">項目</th>
-      <th style="border:1px solid #aaa; padding:12px; width:10%;">取扱</th>
-      <th style="border:1px solid #aaa; padding:12px;">備考</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="border:1px solid #aaa; padding:12px;">諸費用</td>
-      <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
-      <td style="border:1px solid #aaa; padding:12px;">相談</td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #aaa; padding:12px;">リフォーム</td>
-      <td style="border:1px solid #aaa; padding:12px;" align="center">❎</td>
-      <td style="border:1px solid #aaa; padding:12px;">原則不可</td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
-      <td style="border:1px solid #aaa; padding:12px;" align="center">◯</td>
-      <td style="border:1px solid #aaa; padding:12px;">ダブルローンは原則不可。売却完了を前提とする。</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-""", unsafe_allow_html=True)
-
-st.caption("※本ページの数値は案内用です。正式条件は銀行公表資料をご確認ください。")
+st.caption("※本ページは案内用ダイジェスト。正式条件は銀行公表資料をご確認ください。")
