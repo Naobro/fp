@@ -19,6 +19,36 @@ import streamlit as st
 import requests
 from fpdf import FPDF  # ← FPDF_FONT_DIR は使いません（動的にTTFを登録）
 from client_portal import db_insert_record, db_log_event, now_iso
+from client_portal import db_insert_record, db_log_event, now_iso, get_sb
+
+SB = get_sb()  # ← これを追加
+
+# --- DBから過去保存データを読み込み ---
+def load_saved_data(client_id: str):
+    if not SB:
+        return None
+    try:
+        res = SB.table("fees_detail").select("*").eq("client_id", client_id).order("saved_at", desc=True).limit(1).execute()
+        if res.data:
+            return res.data[0]
+    except Exception as e:
+        st.warning(f"保存データの読み込み失敗: {e}")
+    return None
+
+client_id = st.query_params.get("client", "unknown")
+saved = load_saved_data(client_id)
+
+if saved:
+    st.session_state["customer_name"] = saved.get("customer_name", "")
+    st.session_state["property_name"] = saved.get("property_name", "")
+    st.session_state["deposit"] = saved.get("deposit", 0)
+    st.session_state["property_price"] = saved.get("property_price", 0)
+    st.session_state["total_expenses"] = saved.get("total_expenses", 0)
+    st.session_state["total"] = saved.get("total", 0)
+    st.session_state["monthly_full"] = saved.get("monthly_full", 0)
+    st.session_state["monthly_only"] = saved.get("monthly_only", 0)
+    st.session_state["monthly_A"] = saved.get("monthly_A", 0)
+    st.session_state["monthly_B"] = saved.get("monthly_B", 0)
 
 # ============ 表示設定 ============
 st.set_page_config(page_title="資金計画書（諸費用明細）", layout="centered")
