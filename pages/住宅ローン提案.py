@@ -14,6 +14,7 @@ from pathlib import Path
 
 import streamlit as st
 from fpdf import FPDF
+from client_portal import db_insert_record, now_iso
 
 # ===== 画面設定 =====
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
@@ -182,6 +183,34 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int)
 
 # ===== UI：基本入力 =====
 st.title("住宅ローン 提案シミュレーター")
+# --- DBから過去保存データを読み込み ---
+def load_saved_mortgage(client_id: str):
+    try:
+        sb = get_sb()
+        res = (
+            sb.table("mortgage_detail")
+              .select("*")
+              .eq("client_id", client_id)
+              .order("saved_at", desc=True)
+              .limit(1)
+              .execute()
+        )
+        if res.data:
+            return res.data[0]
+    except Exception as e:
+        st.warning(f"保存データの読み込み失敗: {e}")
+    return None
+
+client_id = st.query_params.get("client", "unknown")
+saved = load_saved_mortgage(client_id)
+
+if saved:
+    principal = saved.get("borrow_amount", 50000000)  # 借入額
+    self_fund = saved.get("own_fund", 0)              # 自己資金
+    annual_income = saved.get("income", 0)            # 年収
+    age = saved.get("age", 35)                        # 年齢
+    years = saved.get("period", 35)                   # 返済期間
+    rate = saved.get("rate", 0.5)                     # 金利
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -195,6 +224,37 @@ with col4:
 
 max_year = max(1, 79 - int(age))
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(35, max_year), key="inp_years")
+# --- 保存ボタン（住宅ローン入力値を Supabase に保存） ---
+# --- 保存ボタン（住宅ローン入力値＋銀行ごとの金利を Supabase に保存） ---
+# --- 保存ボタン（住宅ローン入力値＋銀行ごとの金利を Supabase に保存） ---
+if st.button("💾 入力条件を保存", type="primary"):
+    try:
+        sb = get_sb()
+        # 最新の金利を取得
+        current_rates = load_manual_rates()
+
+        row = {
+            "client_id": client_id,
+            "borrow_amount": int(principal),
+            "own_fund": int(self_fund),
+            "income": int(annual_income),
+            "age": int(age),
+            "period": int(years),
+            "rate": float(current_rates.get("住信SBI銀行", 0.0)),  # 代表値として保存
+
+            # 銀行ごとの金利を個別に保存（新しく追加したカラム）
+            "rate_sbi_shinsei": float(current_rates.get("SBI新生銀行", 0.0)),
+            "rate_mufg": float(current_rates.get("三菱UFJ銀行", 0.0)),
+            "rate_paypay": float(current_rates.get("PayPay銀行", 0.0)),
+            "rate_jibun": float(current_rates.get("じぶん銀行", 0.0)),
+            "rate_sumishin_sbi": float(current_rates.get("住信SBI銀行", 0.0)),
+
+            "saved_at": datetime.utcnow().isoformat()
+        }
+        sb.table("mortgage_detail").insert(row).execute()
+        st.success("✅ 入力条件と金利を保存しました")
+    except Exception as e:
+        st.error(f"保存エラー: {e}")
 
 # LTV概算
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
