@@ -134,8 +134,8 @@ st.markdown("""
   <tbody>
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">諸費用</td>
-      <td style="border:1px solid #aaa; padding:12px;" align="center">×</td>
-      <td style="border:1px solid #aaa; padding:12px;">諸費用借入は不可</td>
+      <td style="border:1px solid #aaa; padding:12px;" align="center">△</td>
+      <td style="border:1px solid #aaa; padding:12px;">500万円まで</td>
     </tr>
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">リフォーム</td>
@@ -145,7 +145,7 @@ st.markdown("""
     <tr>
       <td style="border:1px solid #aaa; padding:12px;">買い替え</td>
       <td style="border:1px solid #aaa; padding:12px;" align="center">△</td>
-      <td style="border:1px solid #aaa; padding:12px;">売却前提で審査可能だが制約あり</td>
+      <td style="border:1px solid #aaa; padding:12px;">6か月以内の売却条件で返済比率含めない　　大手仲介4社の最低署が必要。1年分の通帳履歴確認。</td>
     </tr>
   </tbody>
 </table>
