@@ -233,7 +233,7 @@ if st.button("💾 入力条件を保存", type="primary"):
         # 最新の金利を取得
         current_rates = load_manual_rates()
 
-                row = {
+         row = {
             "client_id": client_id,
             "borrow_amount": int(principal),
             "own_fund": int(self_fund),
