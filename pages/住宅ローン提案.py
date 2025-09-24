@@ -244,15 +244,15 @@ if st.button("💾 入力条件を保存", type="primary"):
             "rate_jibun": float(current_rates.get("じぶん銀行", 0.0)),
             "rate_sumishin_sbi": float(current_rates.get("住信SBI銀行", 0.0)),
 
-            # これを追加
             "saved_at": datetime.utcnow().isoformat()
         }
 
-        sb.table("mortgage_detail").insert(row).execute()
+        res = sb.table("mortgage_detail").insert(row).execute()
+        st.write("🔎 Supabase返却:", res)   # ← デバッグ出力
         st.success("✅ 入力条件と金利を保存しました")
 
     except Exception as e:
-        st.error(f"保存エラー: {e}")
+        st.error(f"保存エラー詳細: {e}")
 # LTV概算
 property_price_guess = (principal + self_fund) / 1.07 if 1.07 != 0 else (principal + self_fund)
 ltv = principal / property_price_guess if property_price_guess else 1.0
