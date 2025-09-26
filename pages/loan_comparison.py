@@ -2,13 +2,12 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="住宅ローン比較（変動 vs フラット）", page_icon="🏠", layout="wide")
+st.set_page_config(page_title="住宅ローン比較", page_icon="🏠", layout="wide")
 
-# ===============================
-# 計算ユーティリティ
-# ===============================
+# -------------------------------
+# 返済額計算（元利均等）
+# -------------------------------
 def monthly_payment(balance: float, annual_rate: float, months: int) -> float:
-    """元利均等返済の月額を計算"""
     r = (annual_rate / 100) / 12
     if months <= 0:
         return 0.0
@@ -17,9 +16,7 @@ def monthly_payment(balance: float, annual_rate: float, months: int) -> float:
     return balance * r * (1 + r) ** months / ((1 + r) ** months - 1)
 
 def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkpoints: list[int]):
-    """金利スケジュールに基づき年次ごとの金利・月額・累計を返す"""
     balance = principal * 10000
-    total_paid = 0
     results = {}
     total_months = years * 12
     monthly = 0
@@ -27,48 +24,55 @@ def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkp
 
     for m in range(1, total_months + 1):
         year = (m - 1) // 12 + 1
-        if year in rate_schedule:
+        if year in rate_schedule and (m - 1) % 12 == 0:
             current_rate = rate_schedule[year]
             monthly = monthly_payment(balance, current_rate, total_months - m + 1)
 
+        # 1か月返済
         interest = balance * (current_rate / 100 / 12)
         principal_payment = monthly - interest
         balance -= principal_payment
-        total_paid += monthly
 
+        # 年末に記録
         if m % 12 == 0 and year in checkpoints:
             results[year] = {
                 "金利": round(current_rate, 2),
                 "月額": round(monthly / 10000, 1),
-                "累計": round(total_paid / 10000, 0),
+                "残債": round(balance / 10000, 0),
             }
     return results
 
-# ===============================
-# UI 入力
-# ===============================
+# -------------------------------
+# UI
+# -------------------------------
 st.title("🏠 住宅ローン比較（変動 vs フラット35）")
 
 col1, col2 = st.columns(2)
 with col1:
-    principal = st.number_input("借入金額（万円）", min_value=100, value=5000, step=100)
+    principal = st.number_input("借入金額（万円）", value=5000, step=100)
 with col2:
-    years = st.number_input("返済期間（年）", min_value=1, max_value=50, value=35)
+    years = st.number_input("返済期間（年）", value=35, min_value=1, max_value=50)
 
-base_var = st.number_input("変動金利 初期値（％）", value=0.52, step=0.01, format="%.2f")
+base_rate = st.number_input("変動金利 初期値（％）", value=0.52, step=0.01, format="%.2f")
 flat_rate = st.number_input("フラット35 基準金利（％）", value=1.89, step=0.01, format="%.2f")
 
 checkpoints = [1, 5, 10, 20, 30, 35, 45, 50]
 
-# ===============================
-# 金利シナリオ定義
-# ===============================
-rate_scenarios = {}
+# -------------------------------
+# 金利シナリオ
+# -------------------------------
+scenarios = {}
 
-# 変動 現状維持
-rate_scenarios["変動 現状維持"] = {y: base_var for y in range(1, years + 1)}
+# 現状維持
+scenarios["変動 現状維持"] = {y: base_rate for y in range(1, years + 1)}
 
-# 変動 BAD（指定のテーブルに従う）
+# GOOD（毎年-0.01%, 下限0.25）
+good = {}
+for y in range(1, years + 1):
+    good[y] = max(base_rate - 0.01 * (y - 1), 0.25)
+scenarios["変動 GOOD"] = good
+
+# BAD（指定テーブル）
 bad_rates = {
     1: 0.52, 2: 0.686, 3: 0.852, 4: 1.018, 5: 1.184, 6: 1.35,
     7: 1.44, 8: 1.53, 9: 1.62, 10: 1.71, 11: 1.80, 12: 1.89,
@@ -77,59 +81,45 @@ bad_rates = {
     25: 2.70, 26: 2.75, 27: 2.80, 28: 2.85, 29: 2.90, 30: 2.95,
     31: 3.00, 32: 3.05, 33: 3.10, 34: 3.15, 35: 3.20, 36: 3.25
 }
-rate_scenarios["変動 BAD"] = {y: bad_rates.get(y, bad_rates[max(bad_rates.keys())]) for y in range(1, years + 1)}
+scenarios["変動 BAD"] = {y: bad_rates.get(y, 3.25) for y in range(1, years + 1)}
 
-# 変動 GOOD (毎年−0.01%, 下限0.25%)
-good = {}
-for y in range(1, years + 1):
-    r = base_var - 0.01 * (y - 1)
-    good[y] = max(r, 0.25)
-rate_scenarios["変動 GOOD"] = good
-
-# 変動 FREE（横展開の金利入力）
+# FREE（横展開入力）
 st.markdown("### 自由入力（金利スケジュール）")
-free_df = pd.DataFrame({"年": list(range(1, years + 1)), "金利(%)": [base_var] * years}).T
+free_df = pd.DataFrame({"年": list(range(1, years + 1)), "金利(%)": [base_rate] * years}).T
 free_df.columns = [f"{i}年" for i in range(1, years + 1)]
 edited_free = st.data_editor(free_df, use_container_width=True)
 free = {}
 for idx, col in enumerate(edited_free.columns):
-    year = idx + 1
-    rate = float(edited_free.loc["金利(%)", col])
-    free[year] = rate
-rate_scenarios["変動 FREE"] = free
+    free[idx + 1] = float(edited_free.loc["金利(%)", col])
+scenarios["変動 FREE"] = free
 
 # フラット35 1P
-flat_1p = {}
+flat1 = {}
 for y in range(1, years + 1):
-    if y <= 5:
-        flat_1p[y] = flat_rate - 0.25
-    else:
-        flat_1p[y] = flat_rate
-rate_scenarios["フラット35 1P"] = flat_1p
+    flat1[y] = flat_rate - 0.25 if y <= 5 else flat_rate
+scenarios["フラット35 1P"] = flat1
 
 # フラット35 5P
-flat_5p = {}
+flat5 = {}
 for y in range(1, years + 1):
     if y <= 5:
-        flat_5p[y] = flat_rate - 1.00
+        flat5[y] = flat_rate - 1.00
     elif y <= 10:
-        flat_5p[y] = flat_rate - 0.25
+        flat5[y] = flat_rate - 0.25
     else:
-        flat_5p[y] = flat_rate
-rate_scenarios["フラット35 5P"] = flat_5p
+        flat5[y] = flat_rate
+scenarios["フラット35 5P"] = flat5
 
-# ===============================
-# 計算 & 出力
-# ===============================
-st.markdown("### 📊 比較テーブル")
-
+# -------------------------------
+# シミュレーション
+# -------------------------------
 rows = []
-for name, schedule in rate_scenarios.items():
+for name, schedule in scenarios.items():
     sim = simulate(principal, years, schedule, checkpoints)
     row = {"シナリオ": name}
     for y in checkpoints:
         if y in sim:
-            row[f"{y}年"] = f"金利{sim[y]['金利']}% / 月額{sim[y]['月額']}万 /累計{sim[y]['累計']}万"
+            row[f"{y}年"] = f"金利{sim[y]['金利']}% / 月{sim[y]['月額']}万 / 残{sim[y]['残債']}万"
         else:
             row[f"{y}年"] = "-"
     rows.append(row)
@@ -137,13 +127,13 @@ for name, schedule in rate_scenarios.items():
 df = pd.DataFrame(rows)
 st.dataframe(df, use_container_width=True)
 
-# ===============================
+# -------------------------------
 # 注釈
-# ===============================
+# -------------------------------
 st.markdown("""
 **注釈**  
 - ※1P（当初5年間 年▲0.25％引下げ → 6年目以降は基準金利）  
 - ※5P（当初5年間 年▲1.00％引下げ、6〜10年目 年▲0.25％引下げ → 11年目以降は基準金利）  
-- BADシナリオ：2025年 0.52％ → 2030年 1.35％ → 2040年 2.25％ → 2050年 2.75％ → 2060年 3.25％  
+- BADシナリオ：2025年0.52％ → 2030年1.35％ → 2040年2.25％ → 2050年2.75％ → 2060年3.25％  
 - GOODシナリオ：毎年 −0.01％（下限0.25％）
 """)
