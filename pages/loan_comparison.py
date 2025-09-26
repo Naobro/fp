@@ -17,6 +17,7 @@ def monthly_payment(balance: float, annual_rate: float, months: int) -> float:
 
 def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkpoints: list[int]):
     balance = principal * 10000
+    total_paid = 0
     results = {}
     total_months = years * 12
     monthly = 0
@@ -24,6 +25,7 @@ def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkp
 
     for m in range(1, total_months + 1):
         year = (m - 1) // 12 + 1
+        # 年初に金利更新
         if year in rate_schedule and (m - 1) % 12 == 0:
             current_rate = rate_schedule[year]
             monthly = monthly_payment(balance, current_rate, total_months - m + 1)
@@ -32,13 +34,14 @@ def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkp
         interest = balance * (current_rate / 100 / 12)
         principal_payment = monthly - interest
         balance -= principal_payment
+        total_paid += monthly
 
         # 年末に記録
         if m % 12 == 0 and year in checkpoints:
             results[year] = {
                 "金利": round(current_rate, 2),
                 "月額": round(monthly / 10000, 1),
-                "残債": round(balance / 10000, 0),
+                "累計": round(total_paid / 10000, 0),
             }
     return results
 
@@ -119,7 +122,7 @@ for name, schedule in scenarios.items():
     row = {"シナリオ": name}
     for y in checkpoints:
         if y in sim:
-            row[f"{y}年"] = f"金利{sim[y]['金利']}% / 月{sim[y]['月額']}万 / 残{sim[y]['残債']}万"
+            row[f"{y}年"] = f"金利{sim[y]['金利']}% / 月{sim[y]['月額']}万 / 累計{sim[y]['累計']}万"
         else:
             row[f"{y}年"] = "-"
     rows.append(row)
