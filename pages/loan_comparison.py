@@ -68,13 +68,18 @@ rate_scenarios = {}
 # 変動 現状維持
 rate_scenarios["変動 現状維持"] = {y: base_var for y in range(1, years + 1)}
 
-# 変動 BAD (+0.1%/年)
-bad = {}
-for y in range(1, years + 1):
-    bad[y] = base_var + 0.1 * (y - 1)
-rate_scenarios["変動 BAD"] = bad
+# 変動 BAD（指定のテーブルに従う）
+bad_rates = {
+    1: 0.52, 2: 0.686, 3: 0.852, 4: 1.018, 5: 1.184, 6: 1.35,
+    7: 1.44, 8: 1.53, 9: 1.62, 10: 1.71, 11: 1.80, 12: 1.89,
+    13: 1.98, 14: 2.07, 15: 2.16, 16: 2.25, 17: 2.30, 18: 2.35,
+    19: 2.40, 20: 2.45, 21: 2.50, 22: 2.55, 23: 2.60, 24: 2.65,
+    25: 2.70, 26: 2.75, 27: 2.80, 28: 2.85, 29: 2.90, 30: 2.95,
+    31: 3.00, 32: 3.05, 33: 3.10, 34: 3.15, 35: 3.20, 36: 3.25
+}
+rate_scenarios["変動 BAD"] = {y: bad_rates.get(y, bad_rates[max(bad_rates.keys())]) for y in range(1, years + 1)}
 
-# 変動 GOOD (−0.01%/年, 下限0.25%)
+# 変動 GOOD (毎年−0.01%, 下限0.25%)
 good = {}
 for y in range(1, years + 1):
     r = base_var - 0.01 * (y - 1)
@@ -124,7 +129,7 @@ for name, schedule in rate_scenarios.items():
     row = {"シナリオ": name}
     for y in checkpoints:
         if y in sim:
-            row[f"{y}年"] = f"金利{sim[y]['金利']}% / 月額{sim[y]['月額']}万 / 累計{sim[y]['累計']}万"
+            row[f"{y}年"] = f"金利{sim[y]['金利']}% / 月額{sim[y]['月額']}万 /累計{sim[y]['累計']}万"
         else:
             row[f"{y}年"] = "-"
     rows.append(row)
@@ -138,5 +143,7 @@ st.dataframe(df, use_container_width=True)
 st.markdown("""
 **注釈**  
 - ※1P（当初5年間 年▲0.25％引下げ → 6年目以降は基準金利）  
-- ※5P（当初5年間 年▲1.00％引下げ、6〜10年目 年▲0.25％引下げ → 11年目以降は基準金利）
+- ※5P（当初5年間 年▲1.00％引下げ、6〜10年目 年▲0.25％引下げ → 11年目以降は基準金利）  
+- BADシナリオ：2025年 0.52％ → 2030年 1.35％ → 2040年 2.25％ → 2050年 2.75％ → 2060年 3.25％  
+- GOODシナリオ：毎年 −0.01％（下限0.25％）
 """)
