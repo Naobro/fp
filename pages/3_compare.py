@@ -869,6 +869,31 @@ for i, tab in enumerate(tabs):
             p["disaster"]= st.selectbox("災害リスク（洪水・液状化・ハザードマップ）", ["充実","良い","普通","弱い"], index={"充実":0,"良い":1,"普通":2,"弱い":3}.get(p.get("disaster","普通"),2), key=f"dis{i}")
             p["park"]    = st.selectbox("公園・緑地など子育て環境", ["充実","良い","普通","弱い"], index={"充実":0,"良い":1,"普通":2,"弱い":3}.get(p.get("park","普通"),2), key=f"park{i}")
             p["noise"]   = st.selectbox("騒音（線路・幹線道路・繁華街）", ["充実","良い","普通","弱い"], index={"充実":0,"良い":1,"普通":2,"弱い":3}.get(p.get("noise","普通"),2), key=f"noi{i}")
+                    # === 内見チェックリスト ===
+        st.subheader("内見チェックリスト")
+        with st.container(border=True):
+            if "inspection" not in p:
+                p["inspection"] = {}
+            sec_cols = st.columns(3)
+            sections = {
+                "外装・外構": ["外壁", "屋根", "バルコニー", "擁壁・境界"],
+                "内装": ["床", "壁・天井", "建具", "家事動線", "収納"],
+                "水回り": ["キッチン", "浴室", "洗面", "トイレ"],
+                "設備": ["給排水管", "電気・照明", "換気・空調", "太陽光・蓄電池"],
+            }
+            for s_idx, (sec, feats) in enumerate(sections.items()):
+                with sec_cols[s_idx % 3]:
+                    with st.expander(sec):
+                        for feat in feats:
+                            k = f"ins_{i}_{sec}_{feat}"
+                            val = st.selectbox(
+                                feat,
+                                ["良好", "普通", "要補修", "不明"],
+                                index={"良好":0,"普通":1,"要補修":2,"不明":3}.get(
+                                    p["inspection"].get(sec, {}).get(feat, "不明"), 3),
+                                key=k
+                            )
+                            p["inspection"].setdefault(sec, {})[feat] = val
 
 # ========== 比較表 ==========
 st.header("⑤ 比較サマリー")
