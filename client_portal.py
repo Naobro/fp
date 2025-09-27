@@ -50,7 +50,6 @@ APP_BASE = "https://naokifp.streamlit.app"
 PAGES = {
     "ヒアリング": "/hearing",
     "住宅ローン提案": "/住宅ローン提案",
-    "条件整理": "/conditions",
     "物件比較": "/compare",
     "諸費用": "/諸費用",
 }
