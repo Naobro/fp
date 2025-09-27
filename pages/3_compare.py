@@ -360,6 +360,17 @@ def score_house_management_like(p: Dict[str,Any]) -> float:
     ]
     return sum(parts) / len(parts)
 
+# ========== 内見チェックリスト用スコア関数 ==========
+def score_inspection_block(checks: Dict[str, Any]) -> float:
+    if not checks:
+        return 0.5
+    score_map = {"良好": 1.0, "普通": 0.6, "要補修": 0.3, "不明": 0.5}
+    vals = []
+    for sec, items in checks.items():
+        for feat, state in items.items():
+            vals.append(score_map.get(state, 0.5))
+    return sum(vals) / len(vals) if vals else 0.5
+
 def to_weights(importance: Dict[str,int]) -> Dict[str,float]:
     raw = {
         "price":       imp_to_weight(importance.get("price",3)),
@@ -367,6 +378,8 @@ def to_weights(importance: Dict[str,int]) -> Dict[str,float]:
         "size_layout": imp_to_weight(importance.get("size_layout",3)),
         "spec":        imp_to_weight(importance.get("spec",3)),
         "management":  imp_to_weight(importance.get("management",3)),
+        # inspection を追加
+        "inspection":  imp_to_weight(importance.get("inspection",3)),
     }
     s = sum(raw.values()) or 1.0
     return {k: v/s for k,v in raw.items()}
@@ -878,7 +891,21 @@ for p in props:
     b_price = score_price_block(p.get("price_man",0.0), tsubo, prefs)
     b_loc   = score_location_block(p, prefs)
     b_size  = score_size_layout_block(p.get("area_m2",0.0), "", prefs)
-    fit     = to_fit_score({"price":b_price,"location":b_loc,"size_layout":b_size,"spec":b_spec,"management":b_mgmt}, to_weights(prefs.get("importance", {})))
+        # 内見チェックリスト（inspection）のスコア
+    b_insp = score_inspection_block(p.get("inspection", {}))
+
+    # 適合度スコア計算（inspection を含む）
+    fit = to_fit_score(
+        {
+            "price": b_price,
+            "location": b_loc,
+            "size_layout": b_size,
+            "spec": b_spec,
+            "management": b_mgmt,
+            "inspection": b_insp,
+        },
+        to_weights(prefs.get("importance", {}))
+    )
 
     rows.append({
         "物件名": p["name"],
@@ -889,6 +916,7 @@ for p in props:
         "駅徒歩(分)": p.get("dist_station", None),
         "通勤(分)": p.get("access_work", None),
         "坪単価(万/坪)": round(tsubo,1),
+        "内見スコア": round(b_insp*100,1),  # ★追加表示
         "適合度(0-100)": round(to_hensachi_abs(fit),1),
         "偏差値(現住=50)": round(to_hensachi_rel(fit, cur_fit),1),
     })
