@@ -8,6 +8,8 @@ import streamlit as st
 import json, secrets, string, os, io, threading
 from datetime import datetime
 from contextlib import contextmanager
+from auth import check_admin
+check_admin()
 
 # 画面設定
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
