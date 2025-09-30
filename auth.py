@@ -19,7 +19,8 @@ def get_current_month_password():
         .execute()
     )
     if res.data and len(res.data) > 0:
-        return res.data[0].get("password")
+        # strip() で余分なスペースや改行を削除
+        return res.data[0].get("password", "").strip()
     return None
 
 def check_password_input(input_pw: str) -> bool:
@@ -27,7 +28,7 @@ def check_password_input(input_pw: str) -> bool:
     current_pw = get_current_month_password()
     if current_pw is None:
         return False
-    return input_pw == current_pw
+    return input_pw.strip() == current_pw  # 入力側も strip で一致させる
 
 def check_password():
     """通常ページ用のパスワードチェック"""
@@ -72,6 +73,6 @@ def debug_info():
     )
     st.write("DEBUG - Supabase raw:", res.data)
     if res.data and len(res.data) > 0:
-        st.write("DEBUG - Supabaseから取得したpassword:", res.data[0].get("password"))
+        st.write("DEBUG - Supabaseから取得したpassword:", res.data[0].get("password", "").strip())
     else:
         st.write("DEBUG - Supabaseから取得したpassword: None")
