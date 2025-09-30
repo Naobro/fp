@@ -59,20 +59,3 @@ def check_admin():
             else:
                 st.error("管理者パスワードが違います")
         st.stop()
-
-def debug_info():
-    """デバッグ用：現在の月とパスワードを表示"""
-    month_key = date.today().strftime("%Y-%m")
-    st.write("DEBUG - month_key サーバー側:", month_key)
-    res = (
-        supabase.table("monthly_passwords")
-        .select("*")
-        .eq("month", month_key)
-        .limit(1)
-        .execute()
-    )
-    st.write("DEBUG - Supabase raw:", res.data)
-    if res.data and len(res.data) > 0:
-        st.write("DEBUG - Supabaseから取得したpassword:", res.data[0].get("password", "").strip())
-    else:
-        st.write("DEBUG - Supabaseから取得したpassword: None")
