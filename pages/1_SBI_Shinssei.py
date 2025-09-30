@@ -4,24 +4,24 @@ from pathlib import Path
 from utils.rates import get_base_rates_for_current_month, month_label  # 共通レート
 from auth import check_password
 
-# ← まずページ設定
-st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
-
-# ← その次にパスワード認証
+# =============================
+# 先にパスワードチェック
+# =============================
 check_password()
+
+# =============================
+# ページ設定
+# =============================
+st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
 # 余白・テーブル体裁
 st.markdown("""
 <style>
 .block-container {padding-top: 1.4rem; padding-bottom: 0.6rem;}
-
-/* 横切れ防止：横スクロールを許可 */
 .table-wrap { overflow-x: auto; }
-
-/* 特殊項目テーブルの基本体裁 */
 .sbi-table { 
   width: 100%; border-collapse: collapse; background: #fff;
-  table-layout: fixed; min-width: 1100px; /* 画面が狭い時はスクロール */
+  table-layout: fixed; min-width: 1100px;
 }
 .sbi-table th, .sbi-table td {
   line-height: 1.6;
@@ -29,8 +29,6 @@ st.markdown("""
   white-space: normal;
   vertical-align: top;
 }
-
-/* 今月の基準金利バナー */
 .rate-banner {
   display: flex; flex-direction: column; gap: 6px;
   border: 1px solid #e5e7eb; border-radius: 12px;
@@ -61,10 +59,10 @@ def load_bytes(p: Path) -> bytes:
 st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 
 # ===== 今月の基準金利（最上段）=====
-from pages.住宅ローン提案 import load_manual_rates  # ← Supabaseから金利を読む関数を利用
+from pages.住宅ローン提案 import load_manual_rates
 
 base_rates = get_base_rates_for_current_month()
-manual = load_manual_rates()  # ← st.session_state ではなく DB から読む
+manual = load_manual_rates()
 
 sbi_rate = manual.get("SBI新生銀行", base_rates.get("SBI新生銀行"))
 if sbi_rate is not None:
@@ -78,6 +76,7 @@ if sbi_rate is not None:
         """,
         unsafe_allow_html=True
     )
+
 # ===== 事前審査用紙 =====
 st.subheader("事前審査用紙（ダウンロード）")
 st.markdown("""
