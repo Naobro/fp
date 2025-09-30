@@ -1,18 +1,21 @@
-# pages/1_SBI_Shinssei.py
 import streamlit as st
 from pathlib import Path
-from utils.rates import get_base_rates_for_current_month, month_label  # 共通レート
+from utils.rates import get_base_rates_for_current_month, month_label
 from auth import check_password
 
-# =============================
 # ページ設定（最初に書く）
-# =============================
 st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
-# =============================
-# パスワードチェック（次に書く）
-# =============================
+# パスワード入力を促す案内（LINE登録への誘導）
+st.markdown("""
+## 🔒 このページはパスワード保護されています  
+パスワードは **LINE登録者限定で配布中**  
+👉 [こちらからLINE登録してください](https://lin.ee/NSDfqWL)
+""")
+
+# パスワード認証
 check_password()
+
 # 余白・テーブル体裁
 st.markdown("""
 <style>
