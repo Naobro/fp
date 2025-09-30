@@ -5,30 +5,32 @@ from datetime import date
 
 # Supabase クライアント
 url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_ANON_KEY"]
+key = st.secrets["SUPABASE_SERVICE_KEY"]  # ← service_role secret を使用
 supabase = create_client(url, key)
 
 def get_current_month_password():
-    """当月のパスワードを Supabase から取得"""
+    """今月のパスワードを Supabase から取得"""
     month_key = date.today().strftime("%Y-%m")
-    # テーブル monthly_passwords から取得
-    res = supabase.table("monthly_passwords").select("month,password,created_at").eq("month", month_key).limit(1).execute()
-    # デバッグ出力
-    st.write("DEBUG - month_key サーバー側:", month_key)
-    st.write("DEBUG - Supabase raw:", res.data)
+    res = (
+        supabase.table("monthly_passwords")
+        .select("password")
+        .eq("month", month_key)
+        .limit(1)
+        .execute()
+    )
     if res.data and len(res.data) > 0:
         return res.data[0].get("password")
     return None
 
 def check_password_input(input_pw: str) -> bool:
-    """入力値を Supabase に保存された当月パスワードと照合"""
+    """入力値と Supabase 上のパスワードを照合"""
     current_pw = get_current_month_password()
     if current_pw is None:
         return False
     return input_pw == current_pw
 
 def check_password():
-    """通常ページ用のログインフォーム"""
+    """通常ページ用のパスワードチェック"""
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
@@ -43,7 +45,7 @@ def check_password():
         st.stop()
 
 def check_admin():
-    """管理者ページ用のログインフォーム"""
+    """管理者ページ用のパスワードチェック"""
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
 
@@ -57,11 +59,17 @@ def check_admin():
                 st.error("管理者パスワードが違います")
         st.stop()
 
-# デバッグ用関数（必要に応じて呼び出す）
 def debug_info():
+    """デバッグ用：現在の月とパスワードを表示"""
     month_key = date.today().strftime("%Y-%m")
-    res = supabase.table("monthly_passwords").select("month,password,created_at").eq("month", month_key).limit(1).execute()
     st.write("DEBUG - month_key サーバー側:", month_key)
+    res = (
+        supabase.table("monthly_passwords")
+        .select("*")
+        .eq("month", month_key)
+        .limit(1)
+        .execute()
+    )
     st.write("DEBUG - Supabase raw:", res.data)
     if res.data and len(res.data) > 0:
         st.write("DEBUG - Supabaseから取得したpassword:", res.data[0].get("password"))
