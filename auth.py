@@ -43,3 +43,13 @@ def debug_info():
     st.write("DEBUG - month_key サーバー側:", month_key)
     pw = get_current_month_password()
     st.write("DEBUG - Supabaseから取得したpassword:", pw)
+
+def debug_info():
+    month_key = date.today().strftime("%Y-%m")
+    st.write("DEBUG - month_key サーバー側:", month_key)
+    res = supabase.table("public.monthly_passwords").select("*").eq("month", month_key).limit(1).execute()
+    st.write("DEBUG - Supabaseから返った生データ:", res.data)  # ← ここを追加
+    pw = None
+    if res.data and len(res.data) > 0:
+        pw = res.data[0]
+    st.write("DEBUG - Supabaseから取得したpassword:", pw)
