@@ -3,8 +3,6 @@ from pathlib import Path
 from utils.rates import get_base_rates_for_current_month, month_label
 from auth import check_password
 
-
-
 # =============================
 # LINE登録の案内を先に出す
 # =============================
