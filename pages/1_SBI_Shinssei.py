@@ -3,10 +3,7 @@ from pathlib import Path
 from utils.rates import get_base_rates_for_current_month, month_label
 from auth import check_password
 
-# =============================
-# ページ設定（必ず一番最初）
-# =============================
-st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
+
 
 # =============================
 # LINE登録の案内を先に出す
@@ -21,6 +18,11 @@ st.markdown("""
 # パスワード認証（必須）
 # =============================
 check_password()
+
+# =============================
+# ページ設定（必ず一番最初）
+# =============================
+st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
 # 余白・テーブル体裁
 st.markdown("""
