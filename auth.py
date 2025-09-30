@@ -10,7 +10,7 @@ supabase = create_client(url, key)
 
 def get_current_month_password():
     month_key = date.today().strftime("%Y-%m")
-    res = supabase.table("monthly_passwords").select("password").eq("month", month_key).limit(1).execute()
+    res = supabase.table("public.monthly_passwords").select("*").eq("month", month_key).limit(1).execute()
     if res.data and len(res.data) > 0:
         return res.data[0].get("password")
     return None
