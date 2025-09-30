@@ -4,9 +4,11 @@ from pathlib import Path
 from utils.rates import get_base_rates_for_current_month, month_label  # 共通レート
 from auth import check_password
 
-check_password()  # ← ログイン処理
-
+# ← まずページ設定
 st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
+
+# ← その次にパスワード認証
+check_password()
 
 # 余白・テーブル体裁
 st.markdown("""
