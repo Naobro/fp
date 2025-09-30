@@ -10,9 +10,9 @@ supabase = create_client(url, key)
 
 def get_current_month_password():
     month_key = date.today().strftime("%Y-%m")
-    res = supabase.table("public.monthly_passwords").select("*").eq("month", month_key).limit(1).execute()
+    res = supabase.table("monthly_passwords").select("*").eq("month", month_key).limit(1).execute()
     if res.data and len(res.data) > 0:
-        return res.data[0].get("password")
+        return res.data[0].get("password")  # password カラム名で取得
     return None
 
 def check_password_input(input_pw: str) -> bool:
@@ -37,18 +37,12 @@ def check_password():
                 st.error("パスワードが違います")
         st.stop()
 
-# ← ここから追記（ファイルの一番下）
+# デバッグ用
 def debug_info():
     month_key = date.today().strftime("%Y-%m")
     st.write("DEBUG - month_key サーバー側:", month_key)
-    pw = get_current_month_password()
-    st.write("DEBUG - Supabaseから取得したpassword:", pw)
-
-def debug_info():
-    month_key = date.today().strftime("%Y-%m")
-    st.write("DEBUG - month_key サーバー側:", month_key)
-    res = supabase.table("public.monthly_passwords").select("*").eq("month", month_key).limit(1).execute()
-    st.write("DEBUG - Supabaseから返った生データ:", res.data)  # ← ここを追加
+    res = supabase.table("monthly_passwords").select("*").eq("month", month_key).limit(1).execute()
+    st.write("DEBUG - Supabaseから返った生データ:", res.data)  # ← 丸ごと表示
     pw = None
     if res.data and len(res.data) > 0:
         pw = res.data[0]
