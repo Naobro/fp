@@ -36,3 +36,10 @@ def check_password():
             else:
                 st.error("パスワードが違います")
         st.stop()
+
+# ← ここから追記（ファイルの一番下）
+def debug_info():
+    month_key = date.today().strftime("%Y-%m")
+    st.write("DEBUG - month_key サーバー側:", month_key)
+    pw = get_current_month_password()
+    st.write("DEBUG - Supabaseから取得したpassword:", pw)
