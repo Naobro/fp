@@ -1,32 +1,22 @@
+# auth.py
 import streamlit as st
+from supabase import create_client
+from datetime import date
 
-def check_password():
-    """通常ページ用のパスワードチェック"""
-    if "authenticated" not in st.session_state:
-        st.session_state["authenticated"] = False
+# Supabase クライアント（読み取りは anon key でOK）
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_ANON_KEY"]
+supabase = create_client(url, key)
 
-    if not st.session_state["authenticated"]:
-        pwd = st.text_input("パスワードを入力してください", type="password")
-        if st.button("ログイン"):
-            if pwd == st.secrets["APP_PASSWORD"]:  # secrets.toml に設定
-                st.session_state["authenticated"] = True
-                st.rerun()
-            else:
-                st.error("パスワードが違います")
-        st.stop()
+def get_current_month_password():
+    month_key = date.today().strftime("%Y-%m")
+    res = supabase.table("monthly_passwords").select("password").eq("month", month_key).limit(1).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0].get("password")
+    return None
 
-
-def check_admin():
-    """管理者ページ用のパスワードチェック"""
-    if "admin_authenticated" not in st.session_state:
-        st.session_state["admin_authenticated"] = False
-
-    if not st.session_state["admin_authenticated"]:
-        pwd = st.text_input("管理者パスワードを入力してください", type="password")
-        if st.button("管理者ログイン"):
-            if pwd == st.secrets["ADMIN_PASSWORD"]:  # secrets.toml に設定
-                st.session_state["admin_authenticated"] = True
-                st.rerun()
-            else:
-                st.error("管理者パスワードが違います")
-        st.stop()
+def check_password(input_pw: str) -> bool:
+    current_pw = get_current_month_password()
+    if current_pw is None:
+        return False
+    return input_pw == current_pw
