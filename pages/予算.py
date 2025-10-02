@@ -100,15 +100,12 @@ with left:
     if property_type == "戸建て":
         land_area = st.number_input("土地面積（㎡）", 10, 500, 100)
         building_price = st.number_input("建物価格（万円）", 500, int(price), 1500)
-    st.markdown("<hr style='border: 1.5px solid #0f0; margin: 18px 0;'>", unsafe_allow_html=True)
 
     st.markdown("<h3 style='font-size:22px;'>売主区分</h3>", unsafe_allow_html=True)
     seller_type = st.radio("売主の種類", ["宅建業者・買取再販", "一般個人"], index=0)
     is_shinchiku = False
     if seller_type == "宅建業者・買取再販":
         is_shinchiku = st.checkbox("工事完了後2年以内かつ未入居（新築扱い）", value=True)
-    else:
-        is_shinchiku = False
 
     st.markdown("<h3 style='font-size:22px;'>借入条件</h3>", unsafe_allow_html=True)
     loan_years = st.number_input("借入期間（年）", 1, 50, 35)
@@ -181,7 +178,7 @@ perf = st.selectbox("住宅性能区分", [
     "長期優良住宅・低炭素住宅", "ZEH水準省エネ住宅", "省エネ基準適合住宅", "その他の住宅"])
 is_kosodate = st.checkbox("子育て・若者世帯", value=False)
 
-# --- 住宅ローン控除 判定ロジック ---
+# --- 住宅ローン控除 判定 ---
 if seller_type == "宅建業者・買取再販" and is_shinchiku:
     if perf == "長期優良住宅・低炭素住宅":
         koujo_limit = 5000 if is_kosodate else 4500
@@ -320,4 +317,5 @@ html_table = """
   <td class="red">10年</td>
 </tr>
 <tr>
-  <td
+  <td>その他の住宅</td>
+  <td>
