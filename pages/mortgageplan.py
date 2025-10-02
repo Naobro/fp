@@ -611,7 +611,7 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         cols = st.columns(len(BANKS))
         new_rates_dict = {}
 
-           for bank, col in zip(BANKS, cols):
+        for bank, col in zip(BANKS, cols):
             with col:
                 key = bank_key_map[bank]
                 init_str = "" if bank not in current_saved else f"{float(current_saved[bank]):.3f}"
@@ -626,7 +626,7 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
                 except Exception:
                     new_rates_dict[bank] = None
 
-        # ← ここと同じインデントレベルに追加
+        # フラット35 用 90%、100% の金利入力欄を追加
         col90, col100 = st.columns(2)
         with col90:
             s90 = st.text_input(
