@@ -4,25 +4,13 @@ import numpy_financial as npf
 import matplotlib.pyplot as plt
 from matplotlib import font_manager, rcParams
 
-# ===== ここで日本語フォントをセット（utils不要・このファイル内に実装）=====
+# ===== 日本語フォント設定 =====
 def set_matplotlib_japanese_font():
-    """
-    利用可能な日本語フォントを探して matplotlib に設定する。
-    ダメなら最後に DejaVu Sans にフォールバック（記号は出るが日本語は□になる可能性あり）。
-    """
     candidates = [
-        "IPAexGothic",           # Linux系で入っていることが多い
-        "IPAGothic",
-        "Noto Sans CJK JP",
-        "Noto Sans JP",
-        "Hiragino Sans",         # macOS
-        "Hiragino Kaku Gothic ProN",
-        "Yu Gothic",             # Windows
-        "Meiryo",
-        "MS Gothic",
-        "TakaoGothic",
-        "VL PGothic",
-        "DejaVu Sans",           # 最終手段（日本語×）
+        "IPAexGothic", "IPAGothic", "Noto Sans CJK JP", "Noto Sans JP",
+        "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+        "Yu Gothic", "Meiryo", "MS Gothic",
+        "TakaoGothic", "VL PGothic", "DejaVu Sans"
     ]
     found = None
     for name in candidates:
@@ -35,18 +23,19 @@ def set_matplotlib_japanese_font():
     if found is None:
         found = "DejaVu Sans"
 
-    # 日本語フォントを優先しつつ、複数候補を設定
     rcParams["font.family"] = "sans-serif"
     rcParams["font.sans-serif"] = [found] + [f for f in candidates if f != found]
-    rcParams["axes.unicode_minus"] = False  # マイナスが豆腐になるのを防止
+    rcParams["axes.unicode_minus"] = False
 
-# ✅ フォント設定（このファイル内の関数を呼ぶ）
 set_matplotlib_japanese_font()
 
-st.title("賃貸 vs 購入 住居費・資産価値シミュレーター")
+# -------------------------------
+# タイトル
+# -------------------------------
+st.markdown("<h3 style='font-size:22px;'>🏠 賃貸 vs 購入 住居費・資産価値シミュレーター</h3>", unsafe_allow_html=True)
 
 # --- 賃貸プラン入力 ---
-st.markdown("#### 年齢ごとの家賃設定（最大4区分・すべて万円単位/整数）")
+st.markdown("<h3 style='font-size:22px;'>年齢ごとの家賃設定（最大4区分・すべて万円単位/整数）</h3>", unsafe_allow_html=True)
 age_rent_list = []
 for i in range(4):
     c1, c2, c3 = st.columns([2, 2, 2])
@@ -99,10 +88,10 @@ for i in range(years):
     cum_rent.append(total)
 
 # --- 購入プラン入力 ---
-st.markdown("---\n#### 購入条件の入力")
+st.markdown("<h3 style='font-size:22px;'>購入条件の入力</h3>", unsafe_allow_html=True)
 left, right = st.columns([2, 1])
 with left:
-    st.subheader("物件条件")
+    st.markdown("<h3 style='font-size:22px;'>物件条件</h3>", unsafe_allow_html=True)
     property_type = st.radio("物件種別", ["マンション", "戸建て"])
     price = st.number_input("物件価格（万円）", 500, 30000, 5000)
     built_year = st.number_input("購入時点の築年数", 0, 100, 0)
@@ -113,22 +102,22 @@ with left:
         building_price = st.number_input("建物価格（万円）", 500, int(price), 1500)
     st.markdown("<hr style='border: 1.5px solid #0f0; margin: 18px 0;'>", unsafe_allow_html=True)
 
-    st.subheader("売主区分")
+    st.markdown("<h3 style='font-size:22px;'>売主区分</h3>", unsafe_allow_html=True)
     seller_type = st.radio("売主の種類", ["宅建業者・買取再販", "一般個人"], index=0)
     is_shinchiku = False
     if seller_type == "宅建業者・買取再販":
         is_shinchiku = st.checkbox("工事完了後2年以内かつ未入居（新築扱い）", value=True)
     else:
-        is_shinchiku = False  # 個人の場合は新築不可
+        is_shinchiku = False
 
-    st.subheader("借入条件")
+    st.markdown("<h3 style='font-size:22px;'>借入条件</h3>", unsafe_allow_html=True)
     loan_years = st.number_input("借入期間（年）", 1, 50, 35)
     loan_rate = st.number_input("金利（年%）", 0.1, 5.0, 0.59) / 100
     funds = st.number_input("自己資金（万円）", 0, int(price), 500)
     if reno:
         reno_cost = st.number_input("リノベ費用（万円・不明なら自動計算）", 0, 3000, int(area * 10))
         reno_effect = st.slider("リノベ効果の資産価値反映率（目安0.6）", 0.0, 1.0, 0.6)
-        reno_timing = st.number_input("リノベ実施タイミング（購入時=0年目、5年後=5など）", 0, years - 1, 0)
+        reno_timing = st.number_input("リノベ実施タイミング（年）", 0, years - 1, 0)
     else:
         reno_cost = 0
         reno_effect = 0
@@ -143,10 +132,10 @@ expense = int(round(price * 0.07))
 loan_amount = price + expense - funds
 st.caption(f"諸費用（7%自動計算）：{expense}万円　→　借入額：{loan_amount}万円")
 
-# --- ローン返済推移（元利均等返済・npf.pvで計算） ---
+# --- ローン返済推移 ---
 n_months = loan_years * 12
 monthly_rate = loan_rate / 12
-loan_monthly = -npf.pmt(monthly_rate, n_months, loan_amount * 10000) / 10000  # 万円
+loan_monthly = -npf.pmt(monthly_rate, n_months, loan_amount * 10000) / 10000
 loan_monthly = int(round(loan_monthly, 0))
 loan_payment = [loan_monthly * 12 if i < loan_years else 0 for i in range(years)]
 loan_cumulative = [sum(loan_payment[:i + 1]) for i in range(years)]
@@ -154,7 +143,7 @@ loan_balance = []
 for y in range(years):
     n = n_months - y * 12
     if n > 0:
-        bal = npf.pv(monthly_rate, n, -loan_monthly * 10000, 0) / 10000  # 万円
+        bal = npf.pv(monthly_rate, n, -loan_monthly * 10000, 0) / 10000
         loan_balance.append(int(round(bal)))
     else:
         loan_balance.append(0)
@@ -187,7 +176,7 @@ elif property_type == "戸建て":
         property_value.append(int(bv + lv))
 
 # --- 住宅性能・世帯区分選択 ---
-st.markdown("##### 住宅性能・世帯要件の選択")
+st.markdown("<h3 style='font-size:22px;'>住宅性能・世帯要件の選択</h3>", unsafe_allow_html=True)
 perf = st.selectbox("住宅性能区分", [
     "長期優良住宅・低炭素住宅", "ZEH水準省エネ住宅", "省エネ基準適合住宅", "その他の住宅"])
 is_kosodate = st.checkbox("子育て・若者世帯", value=False)
@@ -241,7 +230,7 @@ data = {
 df = pd.DataFrame(data)
 df = df.T.reset_index()
 df.columns = ["項目"] + [str(age) for age in ages]
-st.markdown("---\n#### 50年 賃貸vs購入 横持ち比較")
+st.markdown("<h3 style='font-size:22px;'>50年 賃貸vs購入 横持ち比較</h3>", unsafe_allow_html=True)
 st.dataframe(df, width=2500, height=520)
 
 # --- 残債 vs 評価額比較テーブル ---
@@ -258,7 +247,7 @@ def highlight_row(row):
         return ['background-color: #ffecb3'] * len(row)
     else:
         return [''] * len(row)
-st.markdown("### 資産価値とローン残債の比較テーブル")
+st.markdown("<h3 style='font-size:22px;'>資産価値とローン残債の比較テーブル</h3>", unsafe_allow_html=True)
 st.dataframe(df_compare.style.apply(highlight_row, axis=1), width=1100, height=420)
 
 if reverse_year is not None:
@@ -267,7 +256,7 @@ else:
     st.warning("※期間内で資産価値がローン残債を上回る年はありません。")
 
 # --- 残債と資産価値の推移グラフ ---
-st.markdown("### 残債と資産価値の推移グラフ")
+st.markdown("<h3 style='font-size:22px;'>残債と資産価値の推移グラフ</h3>", unsafe_allow_html=True)
 fig2, ax2 = plt.subplots(figsize=(14, 4))
 ax2.plot(ages, loan_balance, label="ローン残債", marker='o')
 ax2.plot(ages, property_value, label="資産価値", marker='o')
@@ -281,8 +270,8 @@ ax2.grid(True)
 st.pyplot(fig2)
 st.caption("※ローン残債と資産価値（物件評価額）が逆転するタイミングに注目。背景黄色行が逆転年。")
 
-# --- 住宅ローン控除 比較テーブル（完全版） ---
-st.markdown("### 【2024-2025年度版】住宅ローン控除制度 比較表")
+# --- 住宅ローン控除 比較テーブル ---
+st.markdown("<h3 style='font-size:22px;'>【2024-2025年度版】住宅ローン控除制度 比較表</h3>", unsafe_allow_html=True)
 html_table = """
 <style>
 .mytable { border-collapse: collapse; width: 100%; font-size: 1.06em;}
@@ -331,35 +320,4 @@ html_table = """
   <td class="red">10年</td>
 </tr>
 <tr>
-  <td>その他の住宅</td>
-  <td>2,000万円</td>
-  <td>2,000万円</td>
-  <td class="red">10年</td>
-</tr>
-</tbody>
-</table>
-"""
-st.markdown(html_table, unsafe_allow_html=True)
-
-# --- 控除要件・性能基準説明 ---
-st.markdown("""
-<div style='font-size:0.98em; text-align:left; margin-top:0.8em; line-height:1.7;'>
-<b>【適用要件】</b><br>
-・<b>床面積：</b>住宅の床面積が50㎡以上で、かつ床面積の2分の1以上を自己の居住用としていること<br>
-・<b>所得要件：</b>控除を受ける年分の合計所得金額が2,000万円以下であること<br>
-・<b>借入金の条件：</b>10年以上にわたり分割して返済する方法になっている住宅ローン等を利用していること<br>
-・<b>中古住宅の耐震性：</b>昭和57年1月1日以後に建築された住宅、または耐震基準に適合することが証明された住宅であること<br>
-・<b>子育て世帯・若者夫婦世帯：</b>
-[1] 年齢19歳未満の扶養親族を有する者<br>
-[2] 年齢40歳未満であって配偶者を有する者、又は年齢40歳以上であって年齢40歳未満の配偶者を有する者
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div style='font-size:0.98em; text-align:left; margin-top:0.8em; line-height:1.7;'>
-<b>【住宅性能区分の評価基準（住宅性能表示制度）】</b><br>
-・<b>省エネ基準適合住宅：</b> 断熱等性能等級4以上 & 一次エネルギー消費量等級4以上<br>
-・<b>ZEH水準省エネ住宅：</b> 断熱等性能等級5 & 一次エネルギー消費量等級6<br>
-・<b>認定長期優良住宅：</b> ZEH水準＋耐震性能、劣化対策、維持管理等、幅広い認定基準
-</div>
-""", unsafe_allow_html=True)
+  <td
