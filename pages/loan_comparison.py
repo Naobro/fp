@@ -206,15 +206,15 @@ st.markdown(
 )
 
 md_table = """
-<table style="width:100%; border-collapse: collapse; font-size:22px;" border="1">
+<table style="width:100%; border-collapse: collapse;" border="1">
 <thead>
 <tr>
-  <th style="width:20%; text-align:center;">タイプ</th>
-  <th style="width:40%; text-align:center;">メリット</th>
-  <th style="width:40%; text-align:center;">デメリット</th>
+  <th style="width:20%; text-align:center; font-size:18px;">タイプ</th>
+  <th style="width:40%; text-align:center; font-size:18px;">メリット</th>
+  <th style="width:40%; text-align:center; font-size:18px;">デメリット</th>
 </tr>
 </thead>
-<tbody>
+<tbody style="font-size:16px;">
 <tr>
   <td style="text-align:center; font-weight:bold;">変動金利</td>
   <td>
