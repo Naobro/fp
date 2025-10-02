@@ -317,53 +317,56 @@ def build_table(principal: float, years_req: int, age_now: int):
         row = []
         vals = []
         for bank in BANKS + ["フラット35"]:
-            # フラット35 用
+            # --- フラット35 の処理 ---
             if bank == "フラット35":
-                # 上限超なら None
+                # 上限オーバーなら空
                 if principal > limits.get("フラット35", 0):
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
-
                 y = cap_years(bank, years_req)
-                # フラット35 金利選定（90%／100% 入力値優先）
-                if rates.get("flat35_90") is not None and ltv <= 0.9:
-                    base = rates["flat35_90"]
-                elif rates.get("flat35_100") is not None:
-                    base = rates["flat35_100"]
-                else:
-                    base = float(rates.get("住信SBI銀行", 0)) / 100.0
 
-                # フラット35 もプラン別上乗せを適用
+                # 基本金利を決定：90%／100% 入力を優先
+                if rates.get("flat35_90") is not None and ltv <= 0.9:
+                    base = rates["flat35_90"] / 100.0
+                elif rates.get("flat35_100") is not None:
+                    base = rates["flat35_100"] / 100.0
+                else:
+                    try:
+                        base = float(rates.get("住信SBI銀行", 0)) / 100.0
+                    except:
+                        base = 0.0
+
+                # プラン別上乗せも反映
                 add = extra_rate_percent(bank, plan, age_now) / 100.0
                 m = monthly_payment(principal, base + add, y)
                 row.append({"rate": base + add, "monthly": m, "years": y})
                 vals.append((len(row) - 1, m))
+
             else:
-                # 通常銀行
+                # --- 通常の銀行処理 ---
                 if principal > limits.get(bank, 0):
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
                 if bank not in rates:
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
-                # プラン適用不能なら None
+                # プランで無効なら空白
                 if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
 
                 y = cap_years(bank, years_req)
                 try:
-                    base_percent_saved = float(rates[bank])
+                    base_percent = float(rates[bank])
                 except:
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
 
-                # SBI銀行は特別処理
                 if bank == "住信SBI銀行":
-                    eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
+                    eff_pct = sbi_effective_percent(base_percent, ltv, y)
                     base = eff_pct / 100.0
                 else:
-                    base = base_percent_saved / 100.0
+                    base = base_percent / 100.0
                     if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                         base += 0.10 / 100.0
 
@@ -372,7 +375,7 @@ def build_table(principal: float, years_req: int, age_now: int):
                 row.append({"rate": base + add, "monthly": m, "years": y})
                 vals.append((len(row) - 1, m))
 
-        # ハイライト最小支払額列
+        # 最小返済額ハイライト
         mins = set()
         if vals:
             mv = min(v for _, v in vals)
@@ -383,7 +386,7 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # ----- 最長50年行 -----
+    # --- 最長50年行 ---
     row50_local = []
     vals50 = []
     for bank in BANKS + ["フラット35"]:
@@ -393,11 +396,14 @@ def build_table(principal: float, years_req: int, age_now: int):
                 continue
             y = min(79 - age_now, 50)
             if rates.get("flat35_90") is not None and ltv <= 0.9:
-                base = rates["flat35_90"]
+                base = rates["flat35_90"] / 100.0
             elif rates.get("flat35_100") is not None:
-                base = rates["flat35_100"]
+                base = rates["flat35_100"] / 100.0
             else:
-                base = float(rates.get("住信SBI銀行", 0)) / 100.0
+                try:
+                    base = float(rates.get("住信SBI銀行", 0)) / 100.0
+                except:
+                    base = 0.0
             add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
             m = monthly_payment(principal, base + add, y)
             row50_local.append({"rate": base + add, "monthly": m, "years": y})
@@ -409,18 +415,19 @@ def build_table(principal: float, years_req: int, age_now: int):
             if bank not in rates:
                 row50_local.append({"rate": None, "monthly": None, "years": None})
                 continue
+
             y = min(79 - age_now, 50)
             try:
-                base_percent_saved = float(rates[bank])
+                base_percent = float(rates[bank])
             except:
                 row50_local.append({"rate": None, "monthly": None, "years": None})
                 continue
 
             if bank == "住信SBI銀行":
-                eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
+                eff_pct = sbi_effective_percent(base_percent, ltv, y)
                 base = eff_pct / 100.0
             else:
-                base = base_percent_saved / 100.0
+                base = base_percent / 100.0
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
 
@@ -437,6 +444,7 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
+
 
 # ===== PDF出力 =====
 def _pdf_to_bytesio(pdf) -> io.BytesIO:
