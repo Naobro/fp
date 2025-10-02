@@ -198,36 +198,50 @@ future_value = compound_investment(diff_monthly, invest_rate, invest_years)
 st.success(f"積立結果は {future_value/10000:,.1f} 万円 になります。")
 
 # -------------------------------
-# メリット・デメリット表
+# メリット・デメリット表（横並び）
 # -------------------------------
 st.markdown(
-    "<h3 style='font-size:22px;'>📊 変動固定メリット・デメリット</h3>",
+    "<h3 style='font-size:22px;'>📊 変動・固定 メリット・デメリット</h3>",
     unsafe_allow_html=True
 )
 
 md_table = """
-<table style="width:100%; border-collapse: collapse;" border="1">
-<tr><th>分類</th><th>内容</th></tr>
-<tr><td>変動金利<br>メリット</td><td>
-• 借入時点の金利が低く、月々の返済額を抑えやすい<br>
-• 将来、金利が下がれば返済負担が軽くなる可能性<br>
-• 団信の選択肢が多い
-</td></tr>
-<tr><td>変動金利 <br>デメリット</td><td>
-• 金利上昇リスクで返済額が増える可能性<br>
-• 返済額が変動し、家計設計が不安定<br>
-• 未払利息リスクあり（125%ルールの影響）
-</td></tr>
-<tr><td>固定金利<br>メリット</td><td>
-• 返済額が固定で家計設計がしやすい<br>
-• 金利上昇リスクを排除できる安心感<br>
-• 団信加入が任意、健康に不安がある人でもローンを組める可能性
-</td></tr>
-<tr><td>固定金利 <br>デメリット</td><td>
-• 初期金利が変動型より高い<br>
-• 市場金利が下落しても返済額が変わらない（機会損失）<br>
-• 借入上限8,000万円・適合証明の手間あり<br>
-</td></tr>
+<table style="width:100%; border-collapse: collapse; font-size:22px;" border="1">
+<thead>
+<tr>
+  <th style="width:20%; text-align:center;">タイプ</th>
+  <th style="width:40%; text-align:center;">メリット</th>
+  <th style="width:40%; text-align:center;">デメリット</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td style="text-align:center; font-weight:bold;">変動金利</td>
+  <td>
+    • 借入時点の金利が低く、月々の返済額を抑えやすい<br>
+    • 将来、金利が下がれば返済負担が軽くなる可能性<br>
+    • 団信の選択肢が多い
+  </td>
+  <td>
+    • 金利上昇リスクで返済額が増える可能性<br>
+    • 返済額が変動し、家計設計が不安定<br>
+    • 未払利息リスクあり（125%ルールの影響）
+  </td>
+</tr>
+<tr>
+  <td style="text-align:center; font-weight:bold;">固定金利</td>
+  <td>
+    • 返済額が固定で家計設計がしやすい<br>
+    • 金利上昇リスクを排除できる安心感<br>
+    • 団信加入が任意、健康に不安がある人でもローンを組める可能性
+  </td>
+  <td>
+    • 初期金利が変動型より高い<br>
+    • 市場金利が下落しても返済額が変わらない（機会損失）<br>
+    • 借入上限8,000万円・適合証明の手間あり
+  </td>
+</tr>
+</tbody>
 </table>
 """
 st.markdown(md_table, unsafe_allow_html=True)
