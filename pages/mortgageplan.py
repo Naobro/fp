@@ -612,26 +612,54 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
         new_rates_dict = {}
 
         for bank, col in zip(BANKS, cols):
-            with col:
-                key = bank_key_map[bank]
-                # 保存済みがあればその値を文字列で初期化、なければ空欄（0.000を入れない）
-                init_str = "" if bank not in current_saved else f"{float(current_saved[bank]):.3f}"
-                s = st.text_input(
-                    f"{bank}（年利％）",
-                    value=init_str,
-                    key=key,
-                    placeholder="未設定（例: 0.389）"
-                )
-                # 文字列→float（空欄や不正は None 扱い＝保存時に無視）
-                try:
-                    new_rates_dict[bank] = float(s) if s.strip() != "" else None
-                except Exception:
-                    new_rates_dict[bank] = None
+    with col:
+        key = bank_key_map[bank]
+        init_str = "" if bank not in current_saved else f"{float(current_saved[bank]):.3f}"
+        s = st.text_input(
+            f"{bank}（年利％）",
+            value=init_str,
+            key=key,
+            placeholder="未設定（例: 0.389）"
+        )
+        try:
+            new_rates_dict[bank] = float(s) if s.strip() != "" else None
+        except Exception:
+            new_rates_dict[bank] = None
 
-        st.markdown("")
-        if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
-            ok = save_manual_rates(new_rates_dict)
-            if ok:
-                st.success("✅ 金利を保存しました（上部の表にも反映されます）")
-            else:
-                st.info("ℹ️ 入力に変更がなかったため保存していません")
+# ↑ ここまで既存ブロック
+
+# ── ここから追加 ──
+st.markdown("")  # 区切り
+
+col90, col100 = st.columns(2)
+with col90:
+    s90 = st.text_input(
+        "フラット35（90%用 年利％）",
+        value="" if "flat35_90" not in current_saved else f"{float(current_saved['flat35_90']):.3f}",
+        key="flat35_rate_90",
+        placeholder="例: 1.234"
+    )
+    try:
+        new_rates_dict["flat35_90"] = float(s90) if s90.strip() != "" else None
+    except:
+        new_rates_dict["flat35_90"] = None
+
+with col100:
+    s100 = st.text_input(
+        "フラット35（100%用 年利％）",
+        value="" if "flat35_100" not in current_saved else f"{float(current_saved['flat35_100']):.3f}",
+        key="flat35_rate_100",
+        placeholder="例: 1.567"
+    )
+    try:
+        new_rates_dict["flat35_100"] = float(s100) if s100.strip() != "" else None
+    except:
+        new_rates_dict["flat35_rate_100"] = None
+
+st.markdown("")
+if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
+    ok = save_manual_rates(new_rates_dict)
+    if ok:
+        st.success("✅ 金利を保存しました（上部の表にも反映されます）")
+    else:
+        st.info("ℹ️ 入力に変更がなかったため保存していません")
