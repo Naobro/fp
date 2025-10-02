@@ -48,7 +48,10 @@ def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkp
 # -------------------------------
 # UI
 # -------------------------------
-st.title("🏠 住宅ローン比較（変動 vs フラット35）")
+st.markdown(
+    "<h3 style='font-size:22px;'>🏠 住宅ローン比較（変動 vs フラット35）</h3>",
+    unsafe_allow_html=True
+)
 
 col1, col2 = st.columns(2)
 with col1:
