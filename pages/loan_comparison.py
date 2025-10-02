@@ -185,6 +185,8 @@ diff_total = total_flat - total_var
 st.write(f"差額（毎月）: {diff_monthly:,.0f} 円")
 st.write(f"差額（総額）: {diff_total:,.0f} 円")
 
+st.write(f"差額を下記の利回りで運用すると: {diff_monthly:,.0f} 円")
+
 # 差額を投資に回すケース
 col3, col4 = st.columns(2)
 with col3:
