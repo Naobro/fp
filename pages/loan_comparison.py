@@ -208,7 +208,7 @@ st.markdown(
 md_table = """
 <table style="width:100%; border-collapse: collapse;" border="1">
 <tr><th>分類</th><th>内容</th></tr>
-<tr><td>変動金利<br> メリット</td><td>
+<tr><td>変動<br> メリット</td><td>
 • 借入時点の金利が低く、月々の返済額を抑えやすい<br>
 • 将来、金利が下がれば返済負担が軽くなる可能性<br>
 • 団信の選択肢が多い
