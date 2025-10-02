@@ -653,7 +653,8 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
                 placeholder="例: 1.234"
             )
             try:
-                new_rates_dict["flat35_90"] = float(s90) if s90.strip() != "" else None
+                # 入力をパーセント → 小数に変換
+                new_rates_dict["flat35_90"] = float(s90) / 100.0 if s90.strip() != "" else None
             except:
                 new_rates_dict["flat35_90"] = None
 
@@ -665,7 +666,7 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
                 placeholder="例: 1.567"
             )
             try:
-                new_rates_dict["flat35_100"] = float(s100) if s100.strip() != "" else None
+                new_rates_dict["flat35_100"] = float(s100) / 100.0 if s100.strip() != "" else None
             except:
                 new_rates_dict["flat35_100"] = None
 
