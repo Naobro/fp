@@ -198,46 +198,46 @@ future_value = compound_investment(diff_monthly, invest_rate, invest_years)
 st.success(f"積立結果は {future_value/10000:,.1f} 万円 になります。")
 
 # -------------------------------
-# メリット・デメリット表（縦並び）
+# メリット・デメリット表（縦に分ける版）
 # -------------------------------
 st.markdown(
-    "<h3 style='font-size:22px;'>📊 変動・固定 メリット・デメリット</h3>",
+    "<h3 style='font-size:20px;'>📊 変動・固定 メリット・デメリット</h3>",
     unsafe_allow_html=True
 )
 
 md_table = """
-<div style="font-size:16px; line-height:1.8;">
+<div style="font-size:15px; line-height:1.8;">
 
-<h4 style="margin-bottom:4px;">変動金利</h4>
+<h4>変動金利</h4>
 
 <b>メリット</b><br>
 ・借入時点の金利が低く、月々の返済額を抑えやすい<br>
 ・将来、金利が下がれば返済負担が軽くなる可能性<br>
 ・団信の選択肢が多い
 
-<br><br>
+<br>
 
 <b>デメリット</b><br>
 ・金利上昇リスクで返済額が増える可能性<br>
 ・返済額が変動し、家計設計が不安定<br>
 ・未払利息リスクあり（125%ルールの影響）
 
-<br><br><hr><br>
+<br><br>
 
-<h4 style="margin-bottom:4px;">固定金利</h4>
+<h4>固定金利</h4>
 
 <b>メリット</b><br>
 ・返済額が固定で家計設計がしやすい<br>
 ・金利上昇リスクを排除できる安心感<br>
 ・団信加入が任意、健康に不安がある人でもローンを組める可能性
 
-<br><br>
+<br>
 
 <b>デメリット</b><br>
 ・初期金利が変動型より高い<br>
 ・市場金利が下落しても返済額が変わらない（機会損失）<br>
 ・借入上限8,000万円
-・物件により利用出来ない　適合証明必要
+・物件により利用不可　適合証明必要
 
 </div>
 """
