@@ -141,7 +141,7 @@ def to_hensachi_rel(score: float, cur: float) -> float:
     return 50.0 + (score - cur)
 
 # ---------------- UI 開始 ----------------
-st.title("🏠 物件比較｜点数＋コメント入力 × 偏差値（現住=50基準・フル版）")
+st.title("🏠 物件比較｜")
 
 client_id = _get_client_id_from_query()
 colA, colB = st.columns([2,1])
