@@ -214,13 +214,16 @@ if saved:
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    principal = st.number_input("借入額 (万円)", min_value=500, max_value=100000, value=5000, key="inp_principal") * 10000
+    property_price_input = st.number_input("物件価格 (万円)", min_value=500, max_value=200000, value=5000, key="inp_property") * 10000
 with col2:
     self_fund = st.number_input("自己資金 (万円)", min_value=0, max_value=100000, value=200, key="inp_self_fund") * 10000
 with col3:
     annual_income = st.number_input("年収 (万円)", min_value=100, max_value=10000, value=1000, key="inp_income") * 10000
 with col4:
     age = st.number_input("年齢", min_value=18, max_value=80, value=35, key="inp_age")
+
+# 借入額は「物件価格 − 自己資金」で自動計算
+principal = property_price_input - self_fund
 
 max_year = max(1, 79 - int(age))
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(35, max_year), key="inp_years")
@@ -349,26 +352,25 @@ def build_table(principal: float, years_req: int, age_now: int):
             vals.append((len(row) - 1, m))
 
                 # フラット35は「一般団信のみ」計算、それ以外は空欄
-        if plan == "一般団信":
-            if principal > 8000:
+                if plan == "一般団信":
+            if principal > 8000 * 10000:  # 借入額が8000万円を超えると空欄
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
-                # 入力された物件価格と自己資金を使って借入比率を判定
-                property_price = property_price_input   # ← Streamlitで入力させる
-                borrowing_ratio = principal / property_price
+                # 借入比率で金利を判定
+                borrowing_ratio = principal / property_price_input
 
                 y_flat = cap_years("フラット35", years_req)
-                try:
-                    base_flat = float(rates.get("flat35", 1.89)) / 100.0
-                except:
-                    base_flat = 1.89 / 100.0
+                if borrowing_ratio <= 0.90 and "flat35_90" in rates:
+                    base_flat = float(rates["flat35_90"])
+                elif "flat35_100" in rates:
+                    base_flat = float(rates["flat35_100"])
+                else:
+                    base_flat = 1.89  # デフォルト
 
-                # 借入比率が90%以下なら基準金利の90%
-                if borrowing_ratio <= 0.90:
-                    base_flat *= 0.90
-
+                base_flat = base_flat / 100.0  # % → 実数
                 add_flat = 0.0
                 m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
+
                 row.append({"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat})
                 vals.append((len(row) - 1, m_flat))
         else:
