@@ -316,7 +316,7 @@ def build_table(principal: float, years_req: int, age_now: int):
     for plan in PLANS:
         row = []
         vals = []
-        # 既存銀行列処理
+        # 各銀行の列処理
         for bank in BANKS:
             if principal > limits.get(bank, 0):
                 row.append({"rate": None, "monthly": None, "years": None})
@@ -348,25 +348,29 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
 
-        # フラット35 の列を “一般団信 のみ” 値出す、それ以外空欄
+        # フラット35は「一般団信のみ」、借入8,000万以下なら判定して計算
         if plan == "一般団信":
-            if principal > limits.get("フラット35", 0):
+            if principal > 8000:
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
+                # 諸費用7%を考慮
+                property_price = principal / 0.93
+                borrowing_ratio = principal / property_price
                 y_flat = cap_years("フラット35", years_req)
                 try:
                     base_flat = float(rates.get("flat35", 1.89)) / 100.0
                 except:
                     base_flat = 1.89 / 100.0
-                add_flat = extra_rate_percent("フラット35", plan, age_now) / 100.0
+                if borrowing_ratio <= 0.90:
+                    base_flat *= 0.90
+                add_flat = 0.0
                 m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
                 row.append({"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat})
                 vals.append((len(row) - 1, m_flat))
         else:
-            # 他プランは空欄セル
             row.append({"rate": None, "monthly": None, "years": None})
 
-        # 強調のための最小返済額列判定
+        # 最小返済額のハイライト判定
         mins = set()
         if vals:
             mv = min(v for _, v in vals)
@@ -377,11 +381,15 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # 最長 50 年行処理（銀行 + フラット35 列を含む）
+    # ===== 最長50年行の処理 =====
     row50_local = []
     vals50 = []
     for bank in BANKS:
-        if principal > limits.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
+        # 三菱UFJ銀行・新生銀行は常に空欄
+        if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
+            row50_local.append({"rate": None, "monthly": None, "years": None})
+            continue
+        if principal > limits.get(bank, 0):
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
         if bank not in rates:
@@ -408,19 +416,8 @@ def build_table(principal: float, years_req: int, age_now: int):
         row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
         vals50.append((len(row50_local) - 1, m50))
 
-    # フラット35 の 50年列（値を出す、空欄はなし）
-    if principal > limits.get("フラット35", 0):
-        row50_local.append({"rate": None, "monthly": None, "years": None})
-    else:
-        y50_flat = min(79 - age_now, 50)
-        try:
-            base_flat50 = float(rates.get("flat35", 1.89)) / 100.0
-        except:
-            base_flat50 = 1.89 / 100.0
-        add_flat50 = extra_rate_percent("フラット35", "一般団信", age_now) / 100.0
-        m_flat50 = monthly_payment(principal, base_flat50 + add_flat50, y50_flat)
-        row50_local.append({"rate": base_flat50 + add_flat50, "monthly": m_flat50, "years": y50_flat})
-        vals50.append((len(row50_local) - 1, m_flat50))
+    # フラット35 の50年欄は常に空欄
+    row50_local.append({"rate": None, "monthly": None, "years": None})
 
     mins50 = set()
     if vals50:
@@ -430,66 +427,6 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
-
-
-# ===== HTML 描画部 =====
-table_rows, highlights, row50, mins50 = build_table(principal, years, age)
-
-def td_cell(d: dict, is_min: bool, wcss: str) -> str:
-    r, m, y = d["rate"], d["monthly"], d["years"]
-    base = "text-align:center;vertical-align:middle;"
-    bg = "background-color:#FFF8C8;" if is_min else ""
-    if r is None:
-        return f"<td style='{wcss}{base}'></td>"
-    return (
-        f"<td style='{wcss}height:68px;{base}{bg}'>"
-        f"<div style='font-size:22px;font-weight:bold;color:#1B232A'>{r*100:.3f}%</div>"
-        f"<div style='font-size:22px;font-weight:bold;color:#226BB3'>¥{m:,.0f}</div>"
-        f"<div style='font-size:14px;color:#666;'>({y}年返済)</div>"
-        f"</td>"
-    )
-
-plan_w = "min-width:220px;max-width:220px;width:220px;"
-bank_w = "min-width:180px;max-width:180px;width:180px;"
-html = """
-<style>
-.loan-table, .loan-table th, .loan-table td {border:1.2px solid #aaa; border-collapse: collapse;}
-.loan-table th, .loan-table td {padding: 13px;}
-.loan-table {background-color:#fff; width:100%; table-layout:fixed;}
-.loan-table th {background-color:#F2F6FA; font-size:18px;}
-.loan-table td {font-size:18px;}
-</style>
-<table class="loan-table">
-<thead><tr>
-"""
-html += f"<th style='{plan_w}text-align:center;font-size:18px;'>プラン</th>"
-for b in BANKS + ["フラット35"]:
-    label = b
-    if b == "フラット35":
-        label = "フラット35※1人上限8,000万円"
-    html += f"<th style='{bank_w}text-align:center;font-size:18px'>{label}</th>"
-html += "</tr></thead><tbody>"
-
-for i, plan in enumerate(PLANS):
-    html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:18px;'>{plan}</td>"
-    for col_idx in range(len(BANKS) + 1):
-        cell = table_rows[i][col_idx]
-        html += td_cell(cell, (col_idx in highlights[i] and cell["monthly"] is not None), bank_w)
-    if plan == "一般団信":
-        html += "<tr>"
-        html += f"<td style='{plan_w}text-align:center;font-weight:bold;font-size:17px;background-color:#F9F6EF;'>最長50年</td>"
-        for col_idx in range(len(BANKS) + 1):
-            c50 = row50[col_idx]
-            html += td_cell(c50, (col_idx in mins50 and c50["monthly"] is not None), bank_w)
-        html += "</tr>"
-
-html += "<tr>"
-html += f"<td style='{plan_w}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
-for b in BANKS + ["フラット35"]:
-    html += f"<td style='{bank_w}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(SPECIAL_NOTES.get(b, []))}</td>"
-html += "</tr></tbody></table>"
-
-st.markdown(html, unsafe_allow_html=True)
 
 # ===== PDF出力 =====
 def _pdf_to_bytesio(pdf) -> io.BytesIO:
