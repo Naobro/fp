@@ -317,8 +317,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("🎬 富裕層の考え方")
-st.video("https://raw.githubusercontent.com/Naobro/fp/main/assets/huyu.MP4")
 
 st.markdown(
     """
