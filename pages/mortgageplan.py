@@ -313,104 +313,77 @@ def build_table(principal: float, years_req: int, age_now: int):
     table_rows_local = []
     highlights_local = []
 
-    # PLANS に "フラット35" を追加してループ
-    plans_extended = PLANS + ["フラット35"]
-    for plan in plans_extended:
+    for plan in PLANS:  # プラン行はそのまま
         row = []
         vals = []
-        for bank in BANKS:
-            # フラット35プランでは銀行自身の判断を外せない処理などを加えるならここで特別処理可能
-            if principal > limits.get(bank, 0):
-                row.append({"rate": None, "monthly": None, "years": None})
-                continue
-            if bank not in rates:
-                row.append({"rate": None, "monthly": None, "years": None})
-                continue
-            # 既存のプラン制約
-            if plan not in ["一般団信", "フラット35"] and extra_rate_percent(bank, plan, age_now) == 0.0:
-                row.append({"rate": None, "monthly": None, "years": None})
-                continue
-
-            y = cap_years(bank, years_req)
-            try:
-                base_percent_saved = float(rates[bank])
-            except Exception:
-                row.append({"rate": None, "monthly": None, "years": None})
-                continue
-
-            if bank == "住信SBI銀行":
-                eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
-                base = eff_pct / 100.0
-            else:
+        for bank in BANKS + ["フラット35"]:  # BANKS に加えて “フラット35” 列を扱う
+            if bank == "フラット35":
+                # フラット35 列用処理（例：固定 or 特別な金利ロジック）
+                if principal > limits.get("フラット35", 0):
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
+                y = cap_years(bank, years_req)
+                # 例：仮に住信SBI の金利を使うケース
+                try:
+                    base_percent_saved = float(rates.get("住信SBI銀行", 0))
+                except:
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
                 base = base_percent_saved / 100.0
-                if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
-                    base += 0.10 / 100.0
-
-            # フラット35の場合は add = 0（団信上乗せなし想定）など特別処理
-            if plan == "フラット35":
                 add = 0.0
+                m = monthly_payment(principal, base + add, y)
+                row.append({"rate": base + add, "monthly": m, "years": y})
+                vals.append((len(row) - 1, m))
             else:
+                # 元の銀行列向け処理
+                if principal > limits.get(bank, 0):
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
+                if bank not in rates:
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
+                if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
+
+                y = cap_years(bank, years_req)
+                try:
+                    base_percent_saved = float(rates[bank])
+                except:
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
+
+                if bank == "住信SBI銀行":
+                    eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
+                    base = eff_pct / 100.0
+                else:
+                    base = base_percent_saved / 100.0
+                    if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
+                        base += 0.10 / 100.0
+
                 add = extra_rate_percent(bank, plan, age_now) / 100.0
+                m = monthly_payment(principal, base + add, y)
+                row.append({"rate": base + add, "monthly": m, "years": y})
+                vals.append((len(row) - 1, m))
 
-            m = monthly_payment(principal, base + add, y)
-            row.append({"rate": base + add, "monthly": m, "years": y})
-            vals.append((len(row) - 1, m))
-
+        # 最小支払額ハイライト算出
         mins = set()
         if vals:
             mv = min(v for _, v in vals)
             for idx, v in vals:
                 if abs(v - mv) < 0.5:
                     mins.add(idx)
-
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # 最長50年行（一般団信＋フラット35対応行も追加するなら similarly extend）
-    row50_local = []
-    vals50 = []
-    for bank in BANKS:
-        if principal > limits.get(bank, 0) or bank in ["SBI新生銀行", "三菱UFJ銀行"]:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
-        if bank not in rates:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
+    # 最長50年処理は必要なら同様に “フラット35” を列に加える
 
-        y = min(79 - age_now, 50)
-        try:
-            base_percent_saved = float(rates[bank])
-        except Exception:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
+    return table_rows_local, highlights_local
 
-        if bank == "住信SBI銀行":
-            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
-            base = eff_pct / 100.0
-        else:
-            base = base_percent_saved / 100.0
-            if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
-                base += 0.10 / 100.0
+# 呼び出し側
+table_rows, highlights = build_table(principal, int(years), int(age))
 
-        add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
-        m = monthly_payment(principal, base + add, y)
-        row50_local.append({"rate": base + add, "monthly": m, "years": y})
-        vals50.append((len(row50_local) - 1, m))
-
-    mins50 = set()
-    if vals50:
-        mv = min(v for _, v in vals50)
-        for idx, v in vals50:
-            if abs(v - mv) < 0.5:
-                mins50.add(idx)
-
-    return table_rows_local, highlights_local, row50_local, mins50
-
-# 呼び出し側も PLANS を使っていたループを plans_extended に変更する必要あり
-
-table_rows, highlights, row50, mins50 = build_table(principal, int(years), int(age))
-
-# ===== HTMLテーブル（画面表示） =====
+# ===== HTML テーブル描画 =====
 def td_cell(d: dict, is_min: bool, wcss: str) -> str:
     r, m, y = d["rate"], d["monthly"], d["years"]
     base = "text-align:center;vertical-align:middle;"
@@ -439,7 +412,7 @@ html = """
 <thead><tr>
 """
 html += f"<th style='{plan_w}text-align:center;font-size:18px;'>プラン</th>"
-for b in BANKS:
+for b in BANKS + ["フラット35"]:
     label = b
     if b == "フラット35":
         label = "フラット35※1人上限8,000万円"
@@ -447,26 +420,24 @@ for b in BANKS:
 
 html += "</tr></thead><tbody>"
 
-# plans_extended を使して行出力
-plans_extended = PLANS + ["フラット35"]
-for i, plan in enumerate(plans_extended):
+for i, plan in enumerate(PLANS):
     html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:18px;'>{plan}</td>"
-    for col_idx, _ in enumerate(BANKS):
-        # table_rows の行数が plans_extended に対応している
+    for col_idx, _ in enumerate(BANKS + ["フラット35"]):
         cell = table_rows[i][col_idx]
         html += td_cell(cell, (col_idx in highlights[i] and cell["monthly"] is not None), bank_w)
     if plan == "一般団信":
         html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:17px;background-color:#F9F6EF;'>最長50年</td>"
-        for col_idx, _ in enumerate(BANKS):
-            cell = row50[col_idx]
-            html += td_cell(cell, (col_idx in mins50 and cell["monthly"] is not None), bank_w)
+        for col_idx, _ in enumerate(BANKS + ["フラット35"]):
+            # row50 にもフラット35 を加えたデータが必要
+            html += td_cell({"rate": None, "monthly": None, "years": None}, False, bank_w)
         html += "</tr>"
 
 html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
-for bank in BANKS:
-    html += f"<td style='{bank_w}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(SPECIAL_NOTES[bank])}</td>"
+for bank in BANKS + ["フラット35"]:
+    html += f"<td style='{bank_w}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(SPECIAL_NOTES.get(bank, []))}</td>"
 html += "</tr></tbody></table>"
 st.markdown(html, unsafe_allow_html=True)
+
 
 
 # ===== PDFヘルパ =====
