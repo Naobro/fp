@@ -348,20 +348,25 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
 
-        # フラット35は「一般団信のみ」計算、それ以外は空欄
+                # フラット35は「一般団信のみ」計算、それ以外は空欄
         if plan == "一般団信":
             if principal > 8000:
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
-                property_price = principal / 0.93  # 物件価格
+                # 入力された物件価格と自己資金を使って借入比率を判定
+                property_price = property_price_input   # ← Streamlitで入力させる
                 borrowing_ratio = principal / property_price
+
                 y_flat = cap_years("フラット35", years_req)
                 try:
                     base_flat = float(rates.get("flat35", 1.89)) / 100.0
                 except:
                     base_flat = 1.89 / 100.0
+
+                # 借入比率が90%以下なら基準金利の90%
                 if borrowing_ratio <= 0.90:
                     base_flat *= 0.90
+
                 add_flat = 0.0
                 m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
                 row.append({"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat})
