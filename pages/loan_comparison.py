@@ -49,7 +49,7 @@ def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkp
 # UI
 # -------------------------------
 st.markdown(
-    "<h3 style='font-size:22px;'>🏠 住宅ローン比較（変動 vs フラット35）</h3>",
+    "<h3 style='font-size:22px;'>🏠 住宅ローン比較<br>（変動 vs フラット35）</h3>",
     unsafe_allow_html=True
 )
 
