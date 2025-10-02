@@ -182,7 +182,7 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int)
     return int(raw // 100000 * 100000)
 
 # ===== UI：基本入力 =====
-st.title("住宅ローン 提案シミュレーター")
+st.markdown("<h3 style='font-size:22px;'>住宅ローン 提案シミュレーター</h3>", unsafe_allow_html=True)
 # --- DBから過去保存データを読み込み ---
 def load_saved_mortgage(client_id: str):
     try:
