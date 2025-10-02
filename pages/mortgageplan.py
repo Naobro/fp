@@ -313,29 +313,29 @@ def build_table(principal: float, years_req: int, age_now: int):
     table_rows_local = []
     highlights_local = []
 
-    for plan in PLANS:  # プラン行はそのまま
+    for plan in PLANS:
         row = []
         vals = []
-        for bank in BANKS + ["フラット35"]:  # BANKS に加えて “フラット35” 列を扱う
+        for bank in BANKS + ["フラット35"]:
+            # フラット35 用特例処理
             if bank == "フラット35":
-                # フラット35 列用処理（例：固定 or 特別な金利ロジック）
                 if principal > limits.get("フラット35", 0):
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
                 y = cap_years(bank, years_req)
-                # 例：仮に住信SBI の金利を使うケース
-                try:
-                    base_percent_saved = float(rates.get("住信SBI銀行", 0))
-                except:
-                    row.append({"rate": None, "monthly": None, "years": None})
-                    continue
-                base = base_percent_saved / 100.0
+                # フラット35 の金利：90%／100% 用入力を優先
+                base = None
+                if rates.get("flat35_90") is not None and ltv <= 0.9:
+                    base = rates["flat35_90"]
+                elif rates.get("flat35_100") is not None:
+                    base = rates["flat35_100"]
+                else:
+                    base = float(rates.get("住信SBI銀行", 0)) / 100.0
                 add = 0.0
                 m = monthly_payment(principal, base + add, y)
                 row.append({"rate": base + add, "monthly": m, "years": y})
                 vals.append((len(row) - 1, m))
             else:
-                # 元の銀行列向け処理
                 if principal > limits.get(bank, 0):
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
@@ -366,22 +366,75 @@ def build_table(principal: float, years_req: int, age_now: int):
                 row.append({"rate": base + add, "monthly": m, "years": y})
                 vals.append((len(row) - 1, m))
 
-        # 最小支払額ハイライト算出
         mins = set()
         if vals:
             mv = min(v for _, v in vals)
             for idx, v in vals:
                 if abs(v - mv) < 0.5:
                     mins.add(idx)
+
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # 最長50年処理は必要なら同様に “フラット35” を列に加える
+    # 最長50年行：BANKS + フラット35 を含めて
+    row50_local = []
+    vals50 = []
+    for bank in BANKS + ["フラット35"]:
+        if bank == "フラット35":
+            if principal > limits.get("フラット35", 0):
+                row50_local.append({"rate": None, "monthly": None, "years": None})
+                continue
+            y = min(79 - age_now, 50)
+            # 金利選定同様
+            base = None
+            if rates.get("flat35_90") is not None and ltv <= 0.9:
+                base = rates["flat35_90"]
+            elif rates.get("flat35_100") is not None:
+                base = rates["flat35_100"]
+            else:
+                base = float(rates.get("住信SBI銀行", 0)) / 100.0
+            add = 0.0
+            m = monthly_payment(principal, base + add, y)
+            row50_local.append({"rate": base + add, "monthly": m, "years": y})
+            vals50.append((len(row50_local) - 1, m))
+        else:
+            if principal > limits.get(bank, 0):
+                row50_local.append({"rate": None, "monthly": None, "years": None})
+                continue
+            if bank not in rates:
+                row50_local.append({"rate": None, "monthly": None, "years": None})
+                continue
+            y = min(79 - age_now, 50)
+            try:
+                base_percent_saved = float(rates[bank])
+            except:
+                row50_local.append({"rate": None, "monthly": None, "years": None})
+                continue
 
-    return table_rows_local, highlights_local
+            if bank == "住信SBI銀行":
+                eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
+                base = eff_pct / 100.0
+            else:
+                base = base_percent_saved / 100.0
+                if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
+                    base += 0.10 / 100.0
 
-# 呼び出し側
-table_rows, highlights = build_table(principal, int(years), int(age))
+            add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
+            m = monthly_payment(principal, base + add, y)
+            row50_local.append({"rate": base + add, "monthly": m, "years": y})
+            vals50.append((len(row50_local) - 1, m))
+
+    mins50 = set()
+    if vals50:
+        mv = min(v for _, v in vals50)
+        for idx, v in vals50:
+            if abs(v - mv) < 0.5:
+                mins50.add(idx)
+
+    return table_rows_local, highlights_local, row50_local, mins50
+
+# 呼び出し
+table_rows, highlights, row50, mins50 = build_table(principal, int(years), int(age))
 
 # ===== HTML テーブル描画 =====
 def td_cell(d: dict, is_min: bool, wcss: str) -> str:
@@ -422,14 +475,14 @@ html += "</tr></thead><tbody>"
 
 for i, plan in enumerate(PLANS):
     html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:18px;'>{plan}</td>"
-    for col_idx, _ in enumerate(BANKS + ["フラット35"]):
+    for col_idx in range(len(BANKS) + 1):
         cell = table_rows[i][col_idx]
         html += td_cell(cell, (col_idx in highlights[i] and cell["monthly"] is not None), bank_w)
     if plan == "一般団信":
         html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:17px;background-color:#F9F6EF;'>最長50年</td>"
-        for col_idx, _ in enumerate(BANKS + ["フラット35"]):
-            # row50 にもフラット35 を加えたデータが必要
-            html += td_cell({"rate": None, "monthly": None, "years": None}, False, bank_w)
+        for col_idx in range(len(BANKS) + 1):
+            cell50 = row50[col_idx]
+            html += td_cell(cell50, (col_idx in mins50 and cell50["monthly"] is not None), bank_w)
         html += "</tr>"
 
 html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
@@ -438,9 +491,7 @@ for bank in BANKS + ["フラット35"]:
 html += "</tr></tbody></table>"
 st.markdown(html, unsafe_allow_html=True)
 
-
-
-# ===== PDFヘルパ =====
+# ===== PDF出力 =====
 def _pdf_to_bytesio(pdf) -> io.BytesIO:
     pdf_bytes = pdf.output(dest="S")
     if isinstance(pdf_bytes, memoryview):
@@ -451,21 +502,12 @@ def _pdf_to_bytesio(pdf) -> io.BytesIO:
     out.seek(0)
     return out
 
-# ===== PDF出力（罫線を先描画→テキスト流し込みでズレ防止） =====
 def create_pdf() -> io.BytesIO:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
-
     resolved = _resolve_font_path()
     if not resolved:
-        searched = [
-            "NotoSansJP-Regular.ttf",
-            "fonts/NotoSansJP-Regular.ttf",
-            "./NotoSansJP-Regular.ttf",
-            "./fonts/NotoSansJP-Regular.ttf",
-        ]
-        raise FileNotFoundError("PDF用フォントが見つかりません：\n - " + "\n - ".join(searched))
-
+        raise FileNotFoundError("PDF用フォントが見つかりません")
     pdf.add_font("NotoSansJP", "", resolved, uni=True)
     pdf.set_font("NotoSansJP", size=14)
 
@@ -475,15 +517,13 @@ def create_pdf() -> io.BytesIO:
     pdf.cell(0, 8, txt=f"■ 借入金額：¥{principal:,.0f}", ln=1, align="C")
     pdf.ln(2)
 
-    # 列幅・高さ
     plan_w_mm = 45
     bank_w_mm = 40
-    line_h = 5.4                 # 本体セルの1行高
-    cell_h = line_h * 3          # 本体セルは3行固定（% / 月額 / (年)）
+    line_h = 5.4
+    cell_h = line_h * 3
     x_left = 10
     y_top = pdf.get_y()
 
-    # ヘッダ行
     pdf.set_font("NotoSansJP", size=10)
     pdf.set_fill_color(242, 246, 250)
     pdf.rect(x_left, y_top, plan_w_mm, 10, style="F")
@@ -492,7 +532,7 @@ def create_pdf() -> io.BytesIO:
     pdf.multi_cell(plan_w_mm, 10, "プラン", align="C", border=0)
 
     x = x_left + plan_w_mm
-    for b in BANKS:
+    for b in BANKS + ["フラット35"]:
         pdf.rect(x, y_top, bank_w_mm, 10, style="F")
         pdf.rect(x, y_top, bank_w_mm, 10)
         pdf.set_xy(x, y_top)
@@ -502,8 +542,7 @@ def create_pdf() -> io.BytesIO:
         pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
         x += bank_w_mm
 
-
-    y_cursor = y_top + 10  # ヘッダの下から本体
+    y_cursor = y_top + 10
 
     def _cell_text(d: dict):
         if d["rate"] is None:
@@ -511,15 +550,13 @@ def create_pdf() -> io.BytesIO:
         return [f"{d['rate']*100:.3f}%", f"¥{d['monthly']:,.0f}", f"({d['years']}年)"]
 
     def _draw_row(label: str, cells: list[dict], y: float, fill_rgb: tuple | None = None, label_fill: tuple | None = None):
-        # 見出しセル
         if label_fill:
             pdf.set_fill_color(*label_fill)
             pdf.rect(x_left, y, plan_w_mm, cell_h, style="F")
         pdf.rect(x_left, y, plan_w_mm, cell_h)
-        pdf.set_xy(x_left, y + (cell_h - line_h) / 2)  # 真ん中行に寄せ
+        pdf.set_xy(x_left, y + (cell_h - line_h) / 2)
         pdf.multi_cell(plan_w_mm, line_h, label, align="C", border=0)
 
-        # 銀行セル：枠線→テキスト
         x = x_left + plan_w_mm
         if fill_rgb:
             pdf.set_fill_color(*fill_rgb)
@@ -532,11 +569,10 @@ def create_pdf() -> io.BytesIO:
             pdf.multi_cell(bank_w_mm, line_h, t1, align="C", border=0)
             pdf.set_xy(x, y + line_h)
             pdf.multi_cell(bank_w_mm, line_h, t2, align="C", border=0)
-            pdf.set_xy(x, y + line_h * 2)
+            pdf.set_xy(x, y + 2 * line_h)
             pdf.multi_cell(bank_w_mm, line_h, t3, align="C", border=0)
             x += bank_w_mm
 
-    # 本体6行＋「最長50年」行
     pdf.set_font("NotoSansJP", size=10)
     for i, plan in enumerate(PLANS):
         _draw_row(plan, table_rows[i], y_cursor)
@@ -545,50 +581,31 @@ def create_pdf() -> io.BytesIO:
             _draw_row("最長50年", row50, y_cursor, fill_rgb=(249, 246, 239), label_fill=(249, 246, 239))
             y_cursor += cell_h
 
-    # 特記事項行（内容に合わせて高さを自動調整）
+    # 特記事項
     pdf.set_font("NotoSansJP", size=9)
-    notes_line_h = 5.2      # 1行の高さ（必要なら 4.8〜5.2 で微調整）
-    pad_v = 1.5             # 上下の余白
-    max_lines = max(len(SPECIAL_NOTES[b]) for b in BANKS)
+    notes_line_h = 5.2
+    pad_v = 1.5
+    max_lines = max(len(SPECIAL_NOTES.get(b, [])) for b in BANKS + ["フラット35"])
     notes_h = max_lines * notes_line_h + pad_v * 2
-    y_notes = y_cursor + 2  # 本体テーブルとの間に少し余白
+    y_notes = y_cursor + 2
 
-    # 見出しセル
     pdf.set_fill_color(252, 249, 240)
     pdf.rect(x_left, y_notes, plan_w_mm, notes_h, style="F")
     pdf.rect(x_left, y_notes, plan_w_mm, notes_h)
     pdf.set_xy(x_left, y_notes + (notes_h - notes_line_h) / 2)
     pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
 
-    # 各銀行セル（全列を最大行数の高さで統一）
     x = x_left + plan_w_mm
-    for b in BANKS:
-        txt = "\n".join(SPECIAL_NOTES[b])   # 行ごと改行
-        pdf.rect(x, y_notes, bank_w_mm, notes_h)        # 先に枠線
-        pdf.set_xy(x + 1, y_notes + pad_v)              # 少し内側に文字
+    for b in BANKS + ["フラット35"]:
+        txt = "\n".join(SPECIAL_NOTES.get(b, []))
+        pdf.rect(x, y_notes, bank_w_mm, notes_h)
+        pdf.set_xy(x + 1, y_notes + pad_v)
         pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)
         x += bank_w_mm
 
-    # 次要素のためのカーソル整理
     pdf.set_xy(x_left, y_notes + notes_h + 2)
-
     return _pdf_to_bytesio(pdf)
 
-# ===== ダウンロードUI =====
-if st.button("📄 PDFを作成", key="btn_make_pdf"):
-    try:
-        pdf_buf = create_pdf()
-        st.download_button(
-            "📥 PDFをダウンロード",
-            data=pdf_buf,
-            file_name="住宅ローン提案書.pdf",
-            mime="application/pdf",
-            key="btn_dl_pdf",
-        )
-    except FileNotFoundError as e:
-        st.error(str(e))
-    except Exception as e:
-        st.error(f"PDFの作成でエラー：{e}")
 
 # ===== 金利修正（パスワード一致で表示） =====
 st.markdown("---")
