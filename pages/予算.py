@@ -319,3 +319,35 @@ html_table = """
 <tr>
   <td>その他の住宅</td>
   <td>
+  <tr>
+  <td>その他の住宅</td>
+  <td>2,000万円</td>
+  <td>2,000万円</td>
+  <td class="red">10年</td>
+</tr>
+</tbody>
+</table>
+"""
+st.markdown(html_table, unsafe_allow_html=True)
+
+# --- 控除要件・性能基準説明 ---
+st.markdown("<h3 style='font-size:22px;'>住宅ローン控除の適用要件</h3>", unsafe_allow_html=True)
+st.markdown("""
+<div style='font-size:0.98em; text-align:left; line-height:1.7;'>
+<b>【適用要件】</b><br>
+・<b>床面積：</b>50㎡以上で、かつ床面積の2分の1以上を居住用とすること<br>
+・<b>所得要件：</b>合計所得金額が2,000万円以下<br>
+・<b>借入条件：</b>10年以上のローンであること<br>
+・<b>中古住宅の耐震性：</b>昭和57年1月1日以降に建築、または耐震基準適合が証明されていること<br>
+・<b>子育て世帯・若者夫婦世帯：</b>扶養親族19歳未満あり、または夫婦のいずれかが40歳未満
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("<h3 style='font-size:22px;'>住宅性能区分の評価基準</h3>", unsafe_allow_html=True)
+st.markdown("""
+<div style='font-size:0.98em; text-align:left; line-height:1.7;'>
+・<b>省エネ基準適合住宅：</b> 断熱等性能等級4以上 & 一次エネルギー消費量等級4以上<br>
+・<b>ZEH水準省エネ住宅：</b> 断熱等性能等級5 & 一次エネルギー消費量等級6<br>
+・<b>認定長期優良住宅：</b> 耐震・劣化対策・維持管理等、幅広い基準を満たす住宅
+</div>
+""", unsafe_allow_html=True)
