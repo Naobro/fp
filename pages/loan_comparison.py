@@ -198,7 +198,7 @@ future_value = compound_investment(diff_monthly, invest_rate, invest_years)
 st.success(f"積立結果は {future_value/10000:,.1f} 万円 になります。")
 
 # -------------------------------
-# メリット・デメリット表（横並び）
+# メリット・デメリット表（縦区切り）
 # -------------------------------
 st.markdown(
     "<h3 style='font-size:22px;'>📊 変動・固定 メリット・デメリット</h3>",
@@ -210,18 +210,20 @@ md_table = """
 <thead>
 <tr>
   <th style="width:20%; text-align:center; font-size:18px;">タイプ</th>
-  <th style="width:40%; text-align:center; font-size:18px;">メリット</th>
-  <th style="width:40%; text-align:center; font-size:18px;">デメリット</th>
+  <th style="width:80%; text-align:center; font-size:18px;">内容</th>
 </tr>
 </thead>
 <tbody style="font-size:16px;">
 <tr>
-  <td style="text-align:center; font-weight:bold;">変動金利</td>
+  <td style="text-align:center; font-weight:bold; background:#F2F6FA;">変動金利 メリット</td>
   <td>
     • 借入時点の金利が低く、月々の返済額を抑えやすい<br>
     • 将来、金利が下がれば返済負担が軽くなる可能性<br>
     • 団信の選択肢が多い
   </td>
+</tr>
+<tr>
+  <td style="text-align:center; font-weight:bold; background:#FFF8F0;">変動金利 デメリット</td>
   <td>
     • 金利上昇リスクで返済額が増える可能性<br>
     • 返済額が変動し、家計設計が不安定<br>
@@ -229,12 +231,15 @@ md_table = """
   </td>
 </tr>
 <tr>
-  <td style="text-align:center; font-weight:bold;">固定金利</td>
+  <td style="text-align:center; font-weight:bold; background:#F2F6FA;">固定金利 メリット</td>
   <td>
     • 返済額が固定で家計設計がしやすい<br>
     • 金利上昇リスクを排除できる安心感<br>
     • 団信加入が任意、健康に不安がある人でもローンを組める可能性
   </td>
+</tr>
+<tr>
+  <td style="text-align:center; font-weight:bold; background:#FFF8F0;">固定金利 デメリット</td>
   <td>
     • 初期金利が変動型より高い<br>
     • 市場金利が下落しても返済額が変わらない（機会損失）<br>
