@@ -302,7 +302,7 @@ st.markdown("<div style='font-size:13px;color:#666;margin-top:6px;'>※フラッ
 
 
 
-# ===== 返済額テーブル計算 =====
+# ===== 返済額テーブル計算 + 描画付き =====
 def build_table(principal: float, years_req: int, age_now: int):
     def cap_years(bank_name: str, req: int) -> int:
         y = min(79 - age_now, req)
@@ -318,13 +318,11 @@ def build_table(principal: float, years_req: int, age_now: int):
         vals = []
         for bank in BANKS + ["フラット35"]:
             if bank == "フラット35":
-                # フラット35 用の特例処理
                 if principal > limits.get("フラット35", 0):
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
                 y = cap_years(bank, years_req)
 
-                # 金利決定（90%／100% 入力優先、なければ SBI 銀行の金利を代用）
                 if rates.get("flat35_90") is not None and ltv <= 0.9:
                     base = rates["flat35_90"] / 100.0
                 elif rates.get("flat35_100") is not None:
@@ -335,14 +333,11 @@ def build_table(principal: float, years_req: int, age_now: int):
                     except:
                         base = 0.0
 
-                # プラン別上乗せを反映
                 add = extra_rate_percent(bank, plan, age_now) / 100.0
                 m = monthly_payment(principal, base + add, y)
                 row.append({"rate": base + add, "monthly": m, "years": y})
                 vals.append((len(row) - 1, m))
-
             else:
-                # 通常の銀行処理
                 if principal > limits.get(bank, 0):
                     row.append({"rate": None, "monthly": None, "years": None})
                     continue
@@ -373,7 +368,7 @@ def build_table(principal: float, years_req: int, age_now: int):
                 row.append({"rate": base + add, "monthly": m, "years": y})
                 vals.append((len(row) - 1, m))
 
-        # 最小支払額ハイライト
+        # 強調ロジック：最小返済額
         mins = set()
         if vals:
             mv = min(v for _, v in vals)
@@ -413,7 +408,6 @@ def build_table(principal: float, years_req: int, age_now: int):
             if bank not in rates:
                 row50_local.append({"rate": None, "monthly": None, "years": None})
                 continue
-
             y = min(79 - age_now, 50)
             try:
                 base_percent = float(rates[bank])
@@ -442,6 +436,68 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
+
+
+# ===== 描画部 =====
+table_rows, highlights, row50, mins50 = build_table(principal, years, age)
+
+def td_cell(d: dict, is_min: bool, wcss: str) -> str:
+    r, m, y = d["rate"], d["monthly"], d["years"]
+    base = "text-align:center;vertical-align:middle;"
+    bg = "background-color:#FFF8C8;" if is_min else ""
+    if r is None:
+        return f"<td style='{wcss}{base}'></td>"
+    return (
+        f"<td style='{wcss}height:68px;{base}{bg}'>"
+        f"<div style='font-size:22px;font-weight:bold;color:#1B232A'>{(r*100):.3f}%</div>"
+        f"<div style='font-size:22px;font-weight:bold;color:#226BB3'>¥{m:,.0f}</div>"
+        f"<div style='font-size:14px;color:#666;'>({y}年返済)</div>"
+        f"</td>"
+    )
+
+plan_w = "min-width:220px;max-width:220px;width:220px;"
+bank_w = "min-width:180px;max-width:180px;width:180px;"
+html = (
+    "<style>"
+    ".loan-table, .loan-table th, .loan-table td {border:1.2px solid #aaa; border-collapse: collapse;}"
+    ".loan-table th, .loan-table td {padding: 13px;}"
+    ".loan-table {background-color:#fff; width:100%; table-layout:fixed;}"
+    ".loan-table th {background-color:#F2F6FA; font-size:18px;}"
+    ".loan-table td {font-size:18px;}"
+    "</style>"
+    "<table class='loan-table'><thead><tr>"
+)
+html += f"<th style='{plan_w}text-align:center;font-size:18px;'>プラン</th>"
+for b in BANKS + ["フラット35"]:
+    label = b
+    if b == "フラット35":
+        label = "フラット35※1人上限8,000万円"
+    html += f"<th style='{bank_w}text-align:center;font-size:18px'>{label}</th>"
+html += "</tr></thead><tbody>"
+
+for i, plan in enumerate(PLANS):
+    html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:18px;'>{plan}</td>"
+    for col_idx in range(len(BANKS) + 1):
+        cell = table_rows[i][col_idx]
+        html += td_cell(cell, (col_idx in highlights[i] and cell["monthly"] is not None), bank_w)
+    if plan == "一般団信":
+        html += "<tr>"
+        html += f"<td style='{plan_w}text-align:center;font-weight:bold;font-size:17px;background-color:#F9F6EF;'>最長50年</td>"
+        for col_idx in range(len(BANKS) + 1):
+            c50 = row50[col_idx]
+            html += td_cell(c50, (col_idx in mins50 and c50["monthly"] is not None), bank_w)
+        html += "</tr>"
+
+html += "<tr>"
+html += f"<td style='{plan_w}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
+for b in BANKS + ["フラット35"]:
+    html += f"<td style='{bank_w}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(SPECIAL_NOTES.get(b, []))}</td>"
+html += "</tr>"
+
+html += "</tbody></table>"
+
+st.markdown(html, unsafe_allow_html=True)
+
 
 # ===== PDF出力 =====
 def _pdf_to_bytesio(pdf) -> io.BytesIO:
