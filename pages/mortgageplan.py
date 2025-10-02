@@ -505,14 +505,14 @@ def create_pdf() -> io.BytesIO:
 
     x = x_left + plan_w_mm
     for b in BANKS:
-    pdf.rect(x, y_top, bank_w_mm, 10, style="F")
-    pdf.rect(x, y_top, bank_w_mm, 10)
-    pdf.set_xy(x, y_top)
-    header_label = b
-    if b == "フラット35":
-        header_label = "フラット35\n※1人上限8,000万"
-    pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
-    x += bank_w_mm
+        pdf.rect(x, y_top, bank_w_mm, 10, style="F")
+        pdf.rect(x, y_top, bank_w_mm, 10)
+        pdf.set_xy(x, y_top)
+        header_label = b
+        if b == "フラット35":
+            header_label = "フラット35\n※1人上限8,000万"
+        pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
+        x += bank_w_mm
 
 
     y_cursor = y_top + 10  # ヘッダの下から本体
