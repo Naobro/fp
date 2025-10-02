@@ -46,6 +46,18 @@ def simulate(principal: int, years: int, rate_schedule: dict[int, float], checkp
     return results
 
 # -------------------------------
+# 複利運用シミュレーション
+# -------------------------------
+def compound_investment(monthly: float, annual_rate: float, years: int) -> float:
+    r = (annual_rate / 100) / 12
+    months = years * 12
+    if months <= 0:
+        return 0.0
+    if abs(r) < 1e-12:
+        return monthly * months
+    return monthly * (((1 + r) ** months - 1) / r)
+
+# -------------------------------
 # UI
 # -------------------------------
 st.markdown(
@@ -117,7 +129,7 @@ for y in range(1, years + 1):
 scenarios["フラット35 5P"] = flat5
 
 # -------------------------------
-# シミュレーション
+# シミュレーション結果表示
 # -------------------------------
 rows = []
 for name, schedule in scenarios.items():
@@ -132,6 +144,61 @@ for name, schedule in scenarios.items():
 
 df = pd.DataFrame(rows)
 st.dataframe(df, use_container_width=True)
+
+# -------------------------------
+# 差額投資シミュレーション
+# -------------------------------
+monthly_var = monthly_payment(principal * 10000, base_rate, years * 12)
+monthly_flat = monthly_payment(principal * 10000, flat_rate, years * 12)
+
+st.markdown("### 📈 差額投資シミュレーション")
+st.write(f"変動金利返済額（月）: {monthly_var:,.0f} 円")
+st.write(f"固定金利返済額（月）: {monthly_flat:,.0f} 円")
+
+diff = monthly_flat - monthly_var
+st.write(f"差額: {diff:,.0f} 円 を積立投資に回すと…")
+
+col3, col4 = st.columns(2)
+with col3:
+    invest_rate = st.number_input("想定利回り（年率）", value=4.0, step=0.1)
+with col4:
+    invest_years = st.number_input("運用期間（年）", value=years, step=1)
+
+future_value = compound_investment(diff, invest_rate, invest_years)
+st.success(f"積立結果は {future_value/10000:,.1f} 万円 になります。")
+
+# -------------------------------
+# メリット・デメリット表
+# -------------------------------
+st.markdown("### 📊 金利タイプ別 メリット・デメリット")
+
+md_table = """
+<table style="width:100%; border-collapse: collapse;" border="1">
+<tr><th>分類</th><th>内容</th></tr>
+<tr><td>変動金利 メリット</td><td>
+• 借入時点の金利が低く、月々の返済額を抑えやすい<br>
+• 将来、金利が下がれば返済負担が軽くなる可能性<br>
+• 団信・特約の選択肢が多い（がん団信など）
+</td></tr>
+<tr><td>変動金利 デメリット</td><td>
+• 金利上昇リスクで返済額が増える可能性<br>
+• 返済額が変動し、家計設計が不安定<br>
+• 未払利息リスクあり（125%ルールの影響）
+</td></tr>
+<tr><td>固定金利 メリット</td><td>
+• 返済額が固定で家計設計がしやすい<br>
+• 金利上昇リスクを排除できる安心感<br>
+• 団信加入が任意、健康に不安がある人でもローンを組める可能性
+</td></tr>
+<tr><td>固定金利 デメリット</td><td>
+• 初期金利が変動型より高い<br>
+• 市場金利が下落しても返済額が変わらない（機会損失）<br>
+• 借入上限8,000万円・適合証明の手間あり<br>
+• がん団信の条件が厳しい
+</td></tr>
+</table>
+"""
+st.markdown(md_table, unsafe_allow_html=True)
 
 # -------------------------------
 # 注釈
