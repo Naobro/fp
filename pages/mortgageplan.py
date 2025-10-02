@@ -313,17 +313,21 @@ def build_table(principal: float, years_req: int, age_now: int):
     table_rows_local = []
     highlights_local = []
 
-    for plan in PLANS:
+    # PLANS に "フラット35" を追加してループ
+    plans_extended = PLANS + ["フラット35"]
+    for plan in plans_extended:
         row = []
         vals = []
         for bank in BANKS:
+            # フラット35プランでは銀行自身の判断を外せない処理などを加えるならここで特別処理可能
             if principal > limits.get(bank, 0):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
             if bank not in rates:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
-            if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
+            # 既存のプラン制約
+            if plan not in ["一般団信", "フラット35"] and extra_rate_percent(bank, plan, age_now) == 0.0:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
@@ -342,7 +346,12 @@ def build_table(principal: float, years_req: int, age_now: int):
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
 
-            add = extra_rate_percent(bank, plan, age_now) / 100.0
+            # フラット35の場合は add = 0（団信上乗せなし想定）など特別処理
+            if plan == "フラット35":
+                add = 0.0
+            else:
+                add = extra_rate_percent(bank, plan, age_now) / 100.0
+
             m = monthly_payment(principal, base + add, y)
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
@@ -357,7 +366,7 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # 最長50年行
+    # 最長50年行（一般団信＋フラット35対応行も追加するなら similarly extend）
     row50_local = []
     vals50 = []
     for bank in BANKS:
@@ -396,6 +405,8 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
+
+# 呼び出し側も PLANS を使っていたループを plans_extended に変更する必要あり
 
 table_rows, highlights, row50, mins50 = build_table(principal, int(years), int(age))
 
@@ -436,9 +447,12 @@ for b in BANKS:
 
 html += "</tr></thead><tbody>"
 
-for i, plan in enumerate(PLANS):
+# plans_extended を使して行出力
+plans_extended = PLANS + ["フラット35"]
+for i, plan in enumerate(plans_extended):
     html += f"<tr><td style='{plan_w}text-align:center;font-weight:bold;font-size:18px;'>{plan}</td>"
     for col_idx, _ in enumerate(BANKS):
+        # table_rows の行数が plans_extended に対応している
         cell = table_rows[i][col_idx]
         html += td_cell(cell, (col_idx in highlights[i] and cell["monthly"] is not None), bank_w)
     if plan == "一般団信":
@@ -453,6 +467,7 @@ for bank in BANKS:
     html += f"<td style='{bank_w}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(SPECIAL_NOTES[bank])}</td>"
 html += "</tr></tbody></table>"
 st.markdown(html, unsafe_allow_html=True)
+
 
 # ===== PDFヘルパ =====
 def _pdf_to_bytesio(pdf) -> io.BytesIO:
