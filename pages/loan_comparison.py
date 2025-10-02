@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="住宅ローン比較", page_icon="🏠", layout="wide")
+st.set_page_config(page_title="住宅ローン比較", page_icon="🏦", layout="wide")
 
 # -------------------------------
 # 返済額計算（元利均等）
@@ -61,7 +61,7 @@ def compound_investment(monthly: float, annual_rate: float, years: int) -> float
 # UI
 # -------------------------------
 st.markdown(
-    "<h3 style='font-size:22px;'>🏠 住宅ローン比較<br>（変動 vs フラット35）</h3>",
+    "<h3 style='font-size:22px;'>🏠 住宅ローン比較<br>（変動金利 vs 固定金利：フラット35）</h3>",
     unsafe_allow_html=True
 )
 
@@ -102,7 +102,10 @@ bad_rates = {
 scenarios["変動 BAD"] = {y: bad_rates.get(y, 3.25) for y in range(1, years + 1)}
 
 # FREE（横展開入力）
-st.markdown("### 金利　自由入力")
+st.markdown(
+    "<h3 style='font-size:22px;'>📊 金利　自由入力</h3>",
+    unsafe_allow_html=True
+)
 free_df = pd.DataFrame({"年": list(range(1, years + 1)), "金利(%)": [base_rate] * years}).T
 free_df.columns = [f"{i}年" for i in range(1, years + 1)]
 edited_free = st.data_editor(free_df, use_container_width=True)
@@ -159,13 +162,17 @@ st.markdown("""
 # -------------------------------
 # 差額投資シミュレーション
 # -------------------------------
+st.markdown(
+    "<h3 style='font-size:22px;'>📈 差額投資シミュレーション</h3>",
+    unsafe_allow_html=True
+)
+
 monthly_var = monthly_payment(principal * 10000, base_rate, years * 12)
 monthly_flat = monthly_payment(principal * 10000, flat_rate, years * 12)
 
 total_var = monthly_var * years * 12
 total_flat = monthly_flat * years * 12
 
-st.markdown("### 📈 差額投資シミュレーション")
 st.write(f"変動金利返済額（月）: {monthly_var:,.0f} 円")
 st.write(f"固定金利返済額（月）: {monthly_flat:,.0f} 円")
 st.write(f"変動金利返済総額: {total_var:,.0f} 円")
@@ -191,7 +198,10 @@ st.success(f"積立結果は {future_value/10000:,.1f} 万円 になります。
 # -------------------------------
 # メリット・デメリット表
 # -------------------------------
-st.markdown("### 📊 金利タイプ別 メリット・デメリット")
+st.markdown(
+    "<h3 style='font-size:22px;'>📊 金利タイプ別 メリット・デメリット</h3>",
+    unsafe_allow_html=True
+)
 
 md_table = """
 <table style="width:100%; border-collapse: collapse;" border="1">
