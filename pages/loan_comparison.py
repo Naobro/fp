@@ -90,7 +90,7 @@ bad_rates = {
 scenarios["変動 BAD"] = {y: bad_rates.get(y, 3.25) for y in range(1, years + 1)}
 
 # FREE（横展開入力）
-st.markdown("### 自由入力（金利スケジュール）")
+st.markdown("### 金利　自由入力")
 free_df = pd.DataFrame({"年": list(range(1, years + 1)), "金利(%)": [base_rate] * years}).T
 free_df.columns = [f"{i}年" for i in range(1, years + 1)]
 edited_free = st.data_editor(free_df, use_container_width=True)
