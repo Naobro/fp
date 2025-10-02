@@ -298,6 +298,8 @@ for bank, val in rows_limit_html:
     tbl += f"<tr><td align='center'>{bank}</td><td align='right'>{val}</td></tr>"
 tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
+st.markdown("<div style='font-size:13px;color:#666;margin-top:6px;'>※フラット35※1人上限8,000万円</div>", unsafe_allow_html=True)
+
 
 
 # ===== 返済額テーブル計算 =====
