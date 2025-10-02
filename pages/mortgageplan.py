@@ -351,7 +351,7 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
 
-                  # フラット35は「一般団信のみ」計算、それ以外は空欄
+                # フラット35は「一般団信のみ」計算、それ以外は空欄
         if plan == "一般団信":
             if principal > 8000 * 10000:  # 借入額が8000万円を超えると空欄
                 row.append({"rate": None, "monthly": None, "years": None})
@@ -361,13 +361,12 @@ def build_table(principal: float, years_req: int, age_now: int):
 
                 y_flat = cap_years("フラット35", years_req)
                 if borrowing_ratio <= 0.90 and "flat35_90" in rates:
-                    base_flat = float(rates["flat35_90"])
+                    base_flat = float(rates["flat35_90"])  # ← ここで小数（例: 0.015）が入っている
                 elif "flat35_100" in rates:
                     base_flat = float(rates["flat35_100"])
                 else:
-                    base_flat = 1.89  # デフォルト
+                    base_flat = 0.0189  # デフォルト（1.89%）
 
-                base_flat = base_flat / 100.0  # % → 実数
                 add_flat = 0.0
                 m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
 
@@ -379,7 +378,6 @@ def build_table(principal: float, years_req: int, age_now: int):
                 vals.append((len(row) - 1, m_flat))
         else:
             row.append({"rate": None, "monthly": None, "years": None})
-
         # 最小返済額の強調
         mins = set()
         if vals:
