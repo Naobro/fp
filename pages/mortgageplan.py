@@ -427,7 +427,6 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
-
 # ===== PDF出力 =====
 def _pdf_to_bytesio(pdf) -> io.BytesIO:
     pdf_bytes = pdf.output(dest="S")
