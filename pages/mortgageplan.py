@@ -351,8 +351,8 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((len(row) - 1, m))
 
-                # フラット35は「一般団信のみ」計算、それ以外は空欄
-                if plan == "一般団信":
+                  # フラット35は「一般団信のみ」計算、それ以外は空欄
+        if plan == "一般団信":
             if principal > 8000 * 10000:  # 借入額が8000万円を超えると空欄
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
@@ -371,7 +371,11 @@ def build_table(principal: float, years_req: int, age_now: int):
                 add_flat = 0.0
                 m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
 
-                row.append({"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat})
+                row.append({
+                    "rate": base_flat + add_flat,
+                    "monthly": m_flat,
+                    "years": y_flat
+                })
                 vals.append((len(row) - 1, m_flat))
         else:
             row.append({"rate": None, "monthly": None, "years": None})
