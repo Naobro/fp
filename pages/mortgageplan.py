@@ -270,9 +270,19 @@ banks_exam = {
     "PayPay銀行":  {"審査金利": 0.03,   "返済比率": 0.40},
     "じぶん銀行":  {"審査金利": 0.0257, "返済比率": 0.35},
     "住信SBI銀行": {"審査金利": 0.0325, "返済比率": 0.35},
+    "フラット35":    {"審査金利": 0.035,  "返済比率": None},  # 返済比率は年収で設定
 }
 limits = {}
 rows_limit_html = []
+
+# フラット35 の返済比率を年収に応じて設定
+for bank, info in banks_exam.items():
+    if bank == "フラット35":
+        if annual_income < 4_000_000:
+            info["返済比率"] = 0.30
+        else:
+            info["返済比率"] = 0.35
+
 for bank, info in banks_exam.items():
     lim = borrowing_limit(annual_income, info["審査金利"], info["返済比率"], int(age))
     limits[bank] = lim
@@ -288,6 +298,7 @@ for bank, val in rows_limit_html:
     tbl += f"<tr><td align='center'>{bank}</td><td align='right'>{val}</td></tr>"
 tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
+
 
 # ===== 返済額テーブル計算 =====
 def build_table(principal: float, years_req: int, age_now: int):
