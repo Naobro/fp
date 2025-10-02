@@ -146,25 +146,46 @@ df = pd.DataFrame(rows)
 st.dataframe(df, use_container_width=True)
 
 # -------------------------------
+# 注釈（テーブルの補足）
+# -------------------------------
+st.markdown("""
+**注釈**  
+- ※1P（当初5年間 年▲0.25％引下げ → 6年目以降は基準金利）  
+- ※5P（当初5年間 年▲1.00％引下げ、6〜10年目 年▲0.25％引下げ → 11年目以降は基準金利）  
+- BADシナリオ：2025年0.52％ → 2030年1.35％ → 2040年2.25％ → 2050年2.75％ → 2060年3.25％  
+- GOODシナリオ：毎年 −0.01％（下限0.25％）
+""")
+
+# -------------------------------
 # 差額投資シミュレーション
 # -------------------------------
 monthly_var = monthly_payment(principal * 10000, base_rate, years * 12)
 monthly_flat = monthly_payment(principal * 10000, flat_rate, years * 12)
 
+total_var = monthly_var * years * 12
+total_flat = monthly_flat * years * 12
+
 st.markdown("### 📈 差額投資シミュレーション")
 st.write(f"変動金利返済額（月）: {monthly_var:,.0f} 円")
 st.write(f"固定金利返済額（月）: {monthly_flat:,.0f} 円")
+st.write(f"変動金利返済総額: {total_var:,.0f} 円")
+st.write(f"固定金利返済総額: {total_flat:,.0f} 円")
 
-diff = monthly_flat - monthly_var
-st.write(f"差額: {diff:,.0f} 円 を積立投資に回すと…")
+# 差額（毎月と総額）
+diff_monthly = monthly_flat - monthly_var
+diff_total = total_flat - total_var
 
+st.write(f"差額（毎月）: {diff_monthly:,.0f} 円")
+st.write(f"差額（総額）: {diff_total:,.0f} 円")
+
+# 差額を投資に回すケース
 col3, col4 = st.columns(2)
 with col3:
     invest_rate = st.number_input("想定利回り（年率）", value=4.0, step=0.1)
 with col4:
     invest_years = st.number_input("運用期間（年）", value=years, step=1)
 
-future_value = compound_investment(diff, invest_rate, invest_years)
+future_value = compound_investment(diff_monthly, invest_rate, invest_years)
 st.success(f"積立結果は {future_value/10000:,.1f} 万円 になります。")
 
 # -------------------------------
@@ -199,14 +220,3 @@ md_table = """
 </table>
 """
 st.markdown(md_table, unsafe_allow_html=True)
-
-# -------------------------------
-# 注釈
-# -------------------------------
-st.markdown("""
-**注釈**  
-- ※1P（当初5年間 年▲0.25％引下げ → 6年目以降は基準金利）  
-- ※5P（当初5年間 年▲1.00％引下げ、6〜10年目 年▲0.25％引下げ → 11年目以降は基準金利）  
-- BADシナリオ：2025年0.52％ → 2030年1.35％ → 2040年2.25％ → 2050年2.75％ → 2060年3.25％  
-- GOODシナリオ：毎年 −0.01％（下限0.25％）
-""")
