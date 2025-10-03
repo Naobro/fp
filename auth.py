@@ -51,7 +51,7 @@ def get_or_create_current_password():
             new_pw = generate_password()
             supabase.table("monthly_passwords").update(
                 {"month": month_key, "password": new_pw}
-            ).eq("id", record["id"]).execute()
+            ).eq("month", record["month"]).execute()
             notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
             return new_pw
     else:
