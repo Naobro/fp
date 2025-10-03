@@ -4,17 +4,16 @@ from flask import Flask, request, jsonify
 from supabase import create_client
 from datetime import date
 import random, string
+from threading import Thread
 
 # --------------------------
 # Supabase 接続
 # --------------------------
-import os
-from supabase import create_client
-
 supabase = create_client(
     "https://pyopdfzwpwpoeqgvaaew.supabase.co",
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5b3BkZnp3cHdwb2VxZ3ZhYWV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjM1Njg4MCwiZXhwIjoyMDcxOTMyODgwfQ.8_0HTmF62eBNP4fc9UKAtTWvWVz9KO-bvlS6xed0xPc"
 )
+
 # --------------------------
 # LINE 設定
 # --------------------------
@@ -56,15 +55,17 @@ def webhook():
     body = request.json
     print("Webhook body:", body)
 
-    events = body.get("events", [])
-    for event in events:
-        if event.get("type") == "follow":  # 新規友だち追加時
-            user_id = event["source"]["userId"]
-            pw = get_or_create_current_password()
+    # タイムアウト防止のため即レスポンスを返す
+    def handle_event(events):
+        for event in events:
+            if event.get("type") == "follow":  # 新規友だち追加時
+                user_id = event["source"]["userId"]
+                pw = get_or_create_current_password()
+                message = f"③ ログインパスワード\n👉 今月のパスワードは {pw}"
+                notify_line(user_id, message)
 
-            # 送るのはパスワードだけ
-            message = f"③ ログインパスワード\n👉 今月のパスワードは {pw}"
-            notify_line(user_id, message)
+    events = body.get("events", [])
+    Thread(target=handle_event, args=(events,)).start()
 
     return jsonify({"status": "ok"})
 
