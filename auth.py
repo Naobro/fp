@@ -1,23 +1,24 @@
-# auth.py
+import os
 import streamlit as st
-import datetime
-import hashlib
-import random, string, requests
 from supabase import create_client
 from datetime import date
+import random, string, requests
 
 # --------------------------
 # Supabase クライアント
 # --------------------------
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_SERVICE_KEY"]
+url = os.environ.get("SUPABASE_URL", st.secrets.get("SUPABASE_URL"))
+key = os.environ.get("SUPABASE_SERVICE_KEY", st.secrets.get("SUPABASE_SERVICE_KEY"))
 supabase = create_client(url, key)
 
 # --------------------------
 # LINE設定
 # --------------------------
-LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
-LINE_USER_IDS = [st.secrets.get("LINE_USER_ID", "")]  # 環境に応じて追加可能
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", st.secrets.get("LINE_CHANNEL_ACCESS_TOKEN"))
+LINE_USER_ID = os.environ.get("LINE_USER_ID", st.secrets.get("LINE_USER_ID"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", st.secrets.get("ADMIN_PASSWORD"))
+
+LINE_USER_IDS = [LINE_USER_ID]
 
 def notify_line(user_id: str, message: str):
     url = "https://api.line.me/v2/bot/message/push"
@@ -27,8 +28,7 @@ def notify_line(user_id: str, message: str):
 
 def notify_all_members(message: str):
     for uid in LINE_USER_IDS:
-        if uid:  # 空でなければ送信
-            notify_line(uid, message)
+        notify_line(uid, message)
 
 # --------------------------
 # パスワード管理
@@ -64,7 +64,7 @@ def get_or_create_current_password():
         return new_pw
 
 # --------------------------
-# 認証処理（通常ユーザー）
+# 認証処理
 # --------------------------
 def check_password_input(input_pw: str) -> bool:
     current_pw = get_or_create_current_password()
@@ -84,9 +84,6 @@ def check_password():
                 st.error("パスワードが違います")
         st.stop()
 
-# --------------------------
-# 認証処理（管理者用）
-# --------------------------
 def check_admin():
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
@@ -94,7 +91,7 @@ def check_admin():
     if not st.session_state["admin_authenticated"]:
         pwd = st.text_input("管理者パスワードを入力してください", type="password")
         if st.button("管理者ログイン"):
-            if pwd == st.secrets["ADMIN_PASSWORD"]:
+            if pwd == ADMIN_PASSWORD:
                 st.session_state["admin_authenticated"] = True
                 st.rerun()
             else:
@@ -102,7 +99,7 @@ def check_admin():
         st.stop()
 
 # --------------------------
-# テスト実行（ローカル or Actions）
+# テスト実行（Actions用）
 # --------------------------
 if __name__ == "__main__":
     pw = get_or_create_current_password()
