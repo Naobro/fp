@@ -43,6 +43,7 @@ def get_or_create_current_password():
         if record["month"] == month_key:
             return record["password"].strip()
         else:
+            # 月が変わったら新規生成
             new_pw = generate_password()
             supabase.table("monthly_passwords").update(
                 {"month": month_key, "password": new_pw}
@@ -50,8 +51,11 @@ def get_or_create_current_password():
             notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
             return new_pw
     else:
+        # 初回登録
         new_pw = generate_password()
-        supabase.table("monthly_passwords").insert({"month": month_key, "password": new_pw}).execute()
+        supabase.table("monthly_passwords").insert(
+            {"month": month_key, "password": new_pw}
+        ).execute()
         notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
         return new_pw
 
@@ -89,3 +93,10 @@ def check_admin():
             else:
                 st.error("管理者パスワードが違います")
         st.stop()
+
+# --------------------------
+# テスト実行（ターミナル用）
+# --------------------------
+if __name__ == "__main__":
+    pw = get_or_create_current_password()
+    print("✅ 今月のパスワード:", pw)
