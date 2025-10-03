@@ -17,7 +17,6 @@ supabase = create_client(url, key)
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", st.secrets.get("LINE_CHANNEL_ACCESS_TOKEN"))
 LINE_USER_ID = os.environ.get("LINE_USER_ID", st.secrets.get("LINE_USER_ID"))
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", st.secrets.get("ADMIN_PASSWORD"))
-
 LINE_USER_IDS = [LINE_USER_ID]
 
 def notify_line(user_id: str, message: str):
@@ -40,26 +39,29 @@ def generate_password(length: int = 10) -> str:
 def get_or_create_current_password():
     """今月のパスワードを取得。なければ生成→Supabase保存→LINE通知"""
     month_key = date.today().strftime("%Y-%m")
-    res = supabase.table("monthly_passwords").select("month, password").limit(1).execute()
-
+    
+    # 今月のレコードを検索
+    res = supabase.table("monthly_passwords").select("month, password").eq("month", month_key).execute()
+    
     if res.data and len(res.data) > 0:
-        record = res.data[0]
-        if record["month"] == month_key:
-            return record["password"].strip()
-        else:
-            # 月が変わったら新規生成
-            new_pw = generate_password()
-            supabase.table("monthly_passwords").update(
-                {"month": month_key, "password": new_pw}
-            ).eq("month", record["month"]).execute()
-            notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
-            return new_pw
+        # 今月のパスワードが既に存在
+        return res.data[0]["password"].strip()
     else:
-        # 初回登録
+        # 今月のパスワードが存在しない場合、新規生成
         new_pw = generate_password()
+        
+        # 古いレコードを全て削除（オプション: 履歴を残したい場合はこの行を削除）
+        old_records = supabase.table("monthly_passwords").select("month").neq("month", month_key).execute()
+        if old_records.data:
+            for old_record in old_records.data:
+                supabase.table("monthly_passwords").delete().eq("month", old_record["month"]).execute()
+        
+        # 新しいパスワードを挿入
         supabase.table("monthly_passwords").insert(
             {"month": month_key, "password": new_pw}
         ).execute()
+        
+        # LINE通知
         notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
         return new_pw
 
@@ -73,7 +75,7 @@ def check_password_input(input_pw: str) -> bool:
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
-
+    
     if not st.session_state["authenticated"]:
         pwd = st.text_input("パスワードを入力してください", type="password")
         if st.button("ログイン"):
@@ -87,7 +89,7 @@ def check_password():
 def check_admin():
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
-
+    
     if not st.session_state["admin_authenticated"]:
         pwd = st.text_input("管理者パスワードを入力してください", type="password")
         if st.button("管理者ログイン"):
@@ -99,7 +101,7 @@ def check_admin():
         st.stop()
 
 # --------------------------
-# テスト実行（Actions用）
+# テスト実行(Actions用)
 # --------------------------
 if __name__ == "__main__":
     pw = get_or_create_current_password()
