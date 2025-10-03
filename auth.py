@@ -1,20 +1,23 @@
+# auth.py
+
 import streamlit as st
 from supabase import create_client
 from datetime import date
 import random, string, requests
+import os
 
 # --------------------------
 # Supabase クライアント
 # --------------------------
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_SERVICE_KEY"]
+url = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
+key = st.secrets.get("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_SERVICE_KEY"))
 supabase = create_client(url, key)
 
 # --------------------------
 # LINE設定
 # --------------------------
-LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
-LINE_USER_IDS = ["U7259acbe9a828eabbd75822a8cabdd8c"]  # 今は自分だけテスト
+LINE_CHANNEL_ACCESS_TOKEN = st.secrets.get("LINE_CHANNEL_ACCESS_TOKEN", os.environ.get("LINE_CHANNEL_ACCESS_TOKEN"))
+LINE_USER_IDS = [os.environ.get("LINE_USER_ID", "U7259acbe9a828eabbd75822a8cabdd8c")]
 
 def notify_line(user_id: str, message: str):
     url = "https://api.line.me/v2/bot/message/push"
@@ -24,17 +27,16 @@ def notify_line(user_id: str, message: str):
 
 def notify_all_members(message: str):
     for uid in LINE_USER_IDS:
-        notify_line(uid, message)
+        if uid:
+            notify_line(uid, message)
 
 # --------------------------
 # パスワード管理
 # --------------------------
 def generate_password(length: int = 10) -> str:
-    """ランダム英数字パスワード生成"""
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def get_or_create_current_password():
-    """今月のパスワードを取得。なければ生成→Supabase保存→LINE通知"""
     month_key = date.today().strftime("%Y-%m")
     res = supabase.table("monthly_passwords").select("id, month, password").limit(1).execute()
 
@@ -43,7 +45,6 @@ def get_or_create_current_password():
         if record["month"] == month_key:
             return record["password"].strip()
         else:
-            # 月が変わったら新規生成
             new_pw = generate_password()
             supabase.table("monthly_passwords").update(
                 {"month": month_key, "password": new_pw}
@@ -51,7 +52,6 @@ def get_or_create_current_password():
             notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
             return new_pw
     else:
-        # 初回登録
         new_pw = generate_password()
         supabase.table("monthly_passwords").insert(
             {"month": month_key, "password": new_pw}
@@ -87,7 +87,7 @@ def check_admin():
     if not st.session_state["admin_authenticated"]:
         pwd = st.text_input("管理者パスワードを入力してください", type="password")
         if st.button("管理者ログイン"):
-            if pwd == st.secrets["ADMIN_PASSWORD"]:
+            if pwd == st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD")):
                 st.session_state["admin_authenticated"] = True
                 st.rerun()
             else:
@@ -95,7 +95,7 @@ def check_admin():
         st.stop()
 
 # --------------------------
-# テスト実行（ターミナル用）
+# テスト実行（GitHub Actions / ローカル用）
 # --------------------------
 if __name__ == "__main__":
     pw = get_or_create_current_password()
