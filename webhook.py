@@ -8,10 +8,13 @@ import random, string
 # --------------------------
 # Supabase 接続
 # --------------------------
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+import os
+from supabase import create_client
 
+supabase = create_client(
+    "https://pyopdfzwpwpoeqgvaaew.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5b3BkZnp3cHdwb2VxZ3ZhYWV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjM1Njg4MCwiZXhwIjoyMDcxOTMyODgwfQ.8_0HTmF62eBNP4fc9UKAtTWvWVz9KO-bvlS6xed0xPc"
+)
 # --------------------------
 # LINE 設定
 # --------------------------
