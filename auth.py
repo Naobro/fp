@@ -23,7 +23,12 @@ def notify_line(user_id: str, message: str):
     url = "https://api.line.me/v2/bot/message/push"
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
     payload = {"to": user_id, "messages": [{"type": "text", "text": message}]}
-    return requests.post(url, headers=headers, json=payload)
+    res = requests.post(url, headers=headers, json=payload)
+
+    # ★ GitHub Actions のログで送信結果を確認できるように
+    print("LINE notify response:", res.status_code, res.text)
+
+    return res
 
 def notify_all_members(message: str):
     for uid in LINE_USER_IDS:
@@ -50,7 +55,7 @@ def get_or_create_current_password():
         # 今月のパスワードが存在しない場合、新規生成
         new_pw = generate_password()
         
-        # 古いレコードを全て削除（オプション: 履歴を残したい場合はこの行を削除）
+        # 古いレコードを削除
         old_records = supabase.table("monthly_passwords").select("month").neq("month", month_key).execute()
         if old_records.data:
             for old_record in old_records.data:
