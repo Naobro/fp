@@ -40,7 +40,7 @@ def generate_password(length: int = 10) -> str:
 def get_or_create_current_password():
     """今月のパスワードを取得。なければ生成→Supabase保存→LINE通知"""
     month_key = date.today().strftime("%Y-%m")
-    res = supabase.table("monthly_passwords").select("id, month, password").limit(1).execute()
+    res = supabase.table("monthly_passwords").select("month, password").limit(1).execute()
 
     if res.data and len(res.data) > 0:
         record = res.data[0]
