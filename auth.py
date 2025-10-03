@@ -111,6 +111,7 @@ def check_admin():
 if __name__ == "__main__":
     pw = get_or_create_current_password()
     print("✅ 今月のパスワード:", pw)
-
-    # 追加：LINE通知が必ず走るように
-    notify_all_members(f"🔑 今月のパスワードは: {pw}")
+    print("DEBUG: LINE_USER_ID =", LINE_USER_ID)
+    print("DEBUG: LINE_CHANNEL_ACCESS_TOKEN =", LINE_CHANNEL_ACCESS_TOKEN[:10] + "...")
+    resp = notify_line(LINE_USER_ID, f"テスト送信: {pw}")
+    print("DEBUG: LINE notify response:", resp.status_code, resp.text)
