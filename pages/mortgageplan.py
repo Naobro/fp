@@ -21,6 +21,9 @@ from auth import login_ui
 # ===== 画面設定 =====
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
 authenticated = login_ui()
+if not authenticated:
+    st.warning("🔑 このシミュレーターを利用するにはLINE登録とログインが必要です。")
+    st.stop()
 
 
 # ===== フォント探索 =====
