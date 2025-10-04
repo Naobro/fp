@@ -61,7 +61,7 @@ def webhook():
             if event.get("type") == "follow":  # 新規友だち追加時
                 user_id = event["source"]["userId"]
                 pw = get_or_create_current_password()
-                message = f"③ ログインパスワード\n👉 今月のパスワードは {pw}"
+                message = f"ログインパスワード\n👉 今月のパスワードは {pw}"
                 notify_line(user_id, message)
 
     events = body.get("events", [])
