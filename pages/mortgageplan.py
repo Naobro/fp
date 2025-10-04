@@ -15,9 +15,13 @@ from pathlib import Path
 import streamlit as st
 from fpdf import FPDF
 from client_portal import db_insert_record, now_iso
+from auth import login_ui
+
 
 # ===== 画面設定 =====
 st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
+authenticated = login_ui()
+
 
 # ===== フォント探索 =====
 def _resolve_font_path() -> str | None:
