@@ -66,7 +66,7 @@ def load_bytes(p: Path) -> bytes:
 st.title("SBI新生銀行｜住宅ローン 商品説明 & 事前審査")
 
 # ===== 今月の基準金利（最上段）=====
-from pages.住宅ローン提案 import load_manual_rates
+from pages.mortgageplan import load_manual_rates
 
 base_rates = get_base_rates_for_current_month()
 manual = load_manual_rates()
