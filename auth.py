@@ -93,17 +93,28 @@ def login_ui():
 # 管理者専用ログイン
 # --------------------------
 def check_admin():
+    import streamlit as st
+    import os
+
+    # Render環境変数から取得（ADMIN_PASSWORD = naoki2480）
+    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
 
     if not st.session_state["admin_authenticated"]:
         st.markdown("### 👑 管理者ログイン")
         pwd = st.text_input("管理者パスワードを入力してください", type="password", key="admin_pw")
-        if st.button("管理者ログイン"):
-            if pwd == ADMIN_PASSWORD:
+        if st.button("ログイン"):
+            if pwd == ADMIN_PASSWORD and pwd != "":
                 st.session_state["admin_authenticated"] = True
-                st.success("管理者ログイン成功！")
+                st.success("ログイン成功！")
                 st.rerun()
             else:
-                st.error("管理者パスワードが違います")
-    return st.session_state["admin_authenticated"]
+                st.error("パスワードが違います")
+
+        # 認証されていない場合は処理を停止してページを非表示にする
+        st.stop()
+
+    # 認証成功時のみ以降の処理を実行
+    return True
