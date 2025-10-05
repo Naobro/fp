@@ -36,7 +36,7 @@ def load_bytes(p: Path) -> bytes:
 st.title("三菱UFJ銀行｜住宅ローン")
 
 # ===== 今月の基準金利（最上段）=====
-from pages.住宅ローン提案 import load_manual_rates  # 共通の金利読込を利用
+from pages.mortgageplan import load_manual_rates  # 共通の金利読込を利用
 
 rates = load_manual_rates()
 base = get_base_rates_for_current_month()
