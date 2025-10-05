@@ -1,21 +1,7 @@
 import streamlit as st
 from pathlib import Path
 from utils.rates import get_base_rates_for_current_month, month_label
-from auth import check_password
 
-# =============================
-# LINE登録の案内を先に出す
-# =============================
-st.markdown("""
-## 🔒   
-パスワードは **LINE登録者限定で毎月　配布中**  
-👉 [こちらからLINE登録してください](https://lin.ee/NSDfqWL)
-""")
-
-# =============================
-# パスワード認証（必須）
-# =============================
-check_password()
 # =============================
 # ページ設定（必ず一番最初）
 # =============================
