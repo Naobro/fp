@@ -2,7 +2,7 @@
 import streamlit as st
 from pathlib import Path
 from utils.rates import month_label, get_base_rates_for_current_month
-from pages.住宅ローン提案 import load_manual_rates
+from pages.mortgageplan import load_manual_rates
 
 st.set_page_config(page_title="じぶん銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
