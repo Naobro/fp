@@ -190,6 +190,27 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int)
 
 # ===== UI：基本入力 =====
 st.markdown("<h3 style='font-size:22px;'>住宅ローン 提案シミュレーター</h3>", unsafe_allow_html=True)
+# ===== 変動・固定 比較ページリンク =====
+st.markdown(
+    """
+    <div style='margin-top:10px; margin-bottom:25px;'>
+        <a href='https://naokifp.streamlit.app/loan_comparison'
+           target='_blank'
+           style='display:inline-block;
+                  font-size:20px;
+                  font-weight:bold;
+                  color:#1A73E8;
+                  text-decoration:none;
+                  border:2px solid #1A73E8;
+                  border-radius:8px;
+                  padding:10px 18px;
+                  background-color:#F7FBFF;'>
+           🔍 変動金利・固定金利の比較はこちら
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 # --- DBから過去保存データを読み込み ---
 def load_saved_mortgage(client_id: str):
     try:
