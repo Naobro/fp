@@ -305,7 +305,16 @@ st.markdown(
 )
 tbl = "<table class='blimit'><thead><tr><th style='width:250px;text-align:center'>銀行名</th><th style='width:230px;text-align:center'>借入上限額</th></tr></thead><tbody>"
 for bank, val in rows_limit_html:
-    tbl += f"<tr><td align='center'>{bank}</td><td align='right'>{val}</td></tr>"
+    # 銀行リンクマップを追加してリンク化
+url_map = {
+    "SBI新生銀行": "https://naokifp.streamlit.app/SBI_Shinssei",
+    "三菱UFJ銀行": "https://naokifp.streamlit.app/MUFG",
+    "PayPay銀行": "https://naokifp.streamlit.app/PayPay",
+    "じぶん銀行": "https://naokifp.streamlit.app/Jibun",
+    "住信SBI銀行": "https://naokifp.streamlit.app/SumishinSBI",
+}
+url = url_map.get(bank, "#")
+tbl += f"<tr><td align='center'><a href='{url}' target='_blank' style='color:#226BB3;text-decoration:none;font-weight:bold;'>{bank}</a></td><td align='right'>{val}</td></tr>"
 tbl += "</tbody></table>"
 st.markdown(tbl, unsafe_allow_html=True)
 st.markdown("<div style='font-size:13px;color:#666;margin-top:6px;'>※フラット35※1人上限8,000万円</div>", unsafe_allow_html=True)
