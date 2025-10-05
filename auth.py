@@ -96,8 +96,9 @@ def check_admin():
     import streamlit as st
     import os
 
-    # Render環境変数から取得（ADMIN_PASSWORD = naoki2480）
-    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+    # ✅ Streamlit Cloud / Render 両対応
+    # secrets または 環境変数から取得、どちらも無ければ "naoki2480" を使用
+    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", st.secrets.get("ADMIN_PASSWORD", "naoki2480"))
 
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
@@ -105,6 +106,7 @@ def check_admin():
     if not st.session_state["admin_authenticated"]:
         st.markdown("### 👑 管理者ログイン")
         pwd = st.text_input("管理者パスワードを入力してください", type="password", key="admin_pw")
+
         if st.button("ログイン"):
             if pwd == ADMIN_PASSWORD and pwd != "":
                 st.session_state["admin_authenticated"] = True
@@ -113,8 +115,8 @@ def check_admin():
             else:
                 st.error("パスワードが違います")
 
-        # 認証されていない場合は処理を停止してページを非表示にする
+        # 未ログイン時はここで停止（管理画面を見せない）
         st.stop()
 
-    # 認証成功時のみ以降の処理を実行
+    # ログイン済みの場合のみ処理を継続
     return True
