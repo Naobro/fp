@@ -49,7 +49,7 @@ def get_links(client_id: str) -> list[Dict[str, str]]:
 APP_BASE = "https://naokifp.streamlit.app"
 PAGES = {
     "ヒアリング": "/hearing",
-    "住宅ローン提案": "/住宅ローン提案",
+    "住宅ローン提案": "/mortgageplan",
     "物件比較": "/compare",
     "諸費用": "/諸費用",
 }
