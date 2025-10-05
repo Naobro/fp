@@ -43,7 +43,7 @@ def load_bytes(p: Path) -> bytes:
 st.title("PayPay銀行｜住宅ローン")
 
 # ===== 今月の基準金利（最上段）=====
-from pages.住宅ローン提案 import load_manual_rates
+from pages.mortgageplan import load_manual_rates
 from utils.rates import get_base_rates_for_current_month
 
 rates = load_manual_rates()
