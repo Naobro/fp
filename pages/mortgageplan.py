@@ -190,6 +190,22 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int)
 
 # ===== UI：基本入力 =====
 st.markdown("<h3 style='font-size:22px;'>住宅ローン 提案シミュレーター</h3>", unsafe_allow_html=True)
+# ===== 提携金利 見出し =====
+st.markdown(
+    """
+    <div style='margin-top:8px; margin-bottom:10px;'>
+        <div style='font-size:21px; font-weight:bold; color:#2B3A67;'>
+            💡 TERASSなら、新生銀行・PayPay銀行・auじぶん銀行 提携金利 —
+            <span style='color:#1A73E8;'>公式HPと比べてください</span>
+        </div>
+        <div style='font-size:19px; font-weight:bold; color:#444; margin-top:4px;'>
+            他社や個人で申込するよりお得な金利・条件
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 # ===== 変動・固定 比較ページリンク =====
 st.markdown(
     """
