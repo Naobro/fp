@@ -290,3 +290,10 @@ if st.button("💾 諸費用データを保存"):
         st.success("保存しました ✅")
     except Exception as e:
         st.error(f"保存エラー: {e}")
+# ===== PDFダウンロードボタン =====
+st.download_button(
+    label="📄 PDFをダウンロード",
+    data=pdf_bytes,
+    file_name=f"諸費用明細_{st.session_state.get('customer_name','未設定')}.pdf",
+    mime="application/pdf"
+)
