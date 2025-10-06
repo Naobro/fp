@@ -94,74 +94,109 @@ def gh_raw(path: str) -> str:
     raise FileNotFoundError(f"画像/動画が見つかりません: {path}")
 
 # ============================================
-# 6) ヒーロー（スマホ最適化CSS追加＋フォント修正）
+# 6) ヒーロー（スマホ最適化＋改行＋順番が大事）
 # ============================================
 st.markdown("""
 <style>
-/* 全体フォント最適化 */
+/* ===============================
+   全体フォント最適化
+================================*/
 html, body, [class*="st-"] {
     font-size: 16px !important;
     line-height: 1.6;
 }
-
-/* 見出しのサイズ */
 h1, .stMarkdown h1 { font-size: 1.8rem !important; }
 h2, .stMarkdown h2 { font-size: 1.4rem !important; }
 h3, .stMarkdown h3 { font-size: 1.2rem !important; }
 
-/* スマホ(768px以下)調整 */
+/* ===============================
+   スマホ(768px以下)時
+================================*/
 @media screen and (max-width: 768px) {
-    html, body, [class*="st-"] { font-size: 14px !important; }
-    h1, .stMarkdown h1 { font-size: 1.4rem !important; }
-    h2, .stMarkdown h2 { font-size: 1.2rem !important; }
-    h3, .stMarkdown h3 { font-size: 1.1rem !important; }
+    html, body, [class*="st-"] {
+        font-size: 13px !important;
+        line-height: 1.5;
+    }
+    h1, .stMarkdown h1 { font-size: 1.3rem !important; }
+    h2, .stMarkdown h2 { font-size: 1.1rem !important; }
+    h3, .stMarkdown h3 { font-size: 1.0rem !important; }
     table { font-size: 12px !important; }
-    img, iframe, video { max-width: 100% !important; height: auto !important; }
 
-    /* “不安の解消 × ライフプラン予算 × 条件整理”をスマホで小さく */
-    span[style*="font-size:20px"] { font-size: 14px !important; }
+    /* 青文字3行をスマホ時に小さく */
+    .hero-blue {
+        font-size: 13px !important;
+        line-height: 1.5 !important;
+        display: block;
+        text-align: center;
+    }
+
+    /* ロードマップボックスを少し小さく */
+    .roadmap-box {
+        font-size: 16px !important;
+        line-height: 1.5 !important;
+    }
 }
 
-/* テーブル横スクロール */
+/* ===============================
+   テーブル・リンク・ボタン
+================================*/
 table {
     width: 100%;
     overflow-x: auto;
     display: block;
 }
-
-/* リンク・ボタン */
 a, button, .stButton button {
-    font-size: 0.95rem !important;
+    font-size: 0.9rem !important;
     white-space: normal !important;
     word-break: break-word !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
+# ===== ヒーロー画像 =====
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png?raw=1"
 st.image(top_img, use_container_width=True)
+
+# ===== タイトル・サブタイトル =====
 st.title("不動産エージェント NAOKI")
-
 st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
-st.markdown(
-    '<span style="color:blue; font-weight:bold; font-size:20px;">不安の解消 × ライフプラン予算 × 条件整理</span>',
-    unsafe_allow_html=True,
-)
 
-st.header("理想の住まい探し 成功ロードマップ　順番が大事")
+# ===== 青文字を3行に改行して整列 =====
 st.markdown(
     """
-    <div style="
+    <div class="hero-blue" style="color:blue; font-weight:bold; font-size:18px; text-align:center;">
+        ① 不安の解消<br>
+        ② ライフプランニングに適した予算<br>
+        ③ 条件整理
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ===== ロードマップ：順番が大事＋失敗例＋成功パターン =====
+st.header("理想の住まい探し　成功ロードマップ")
+
+st.markdown(
+    """
+    <div class="roadmap-box" style="
         background-color:#f0f8ff;
         color:#000080;
-        font-size:20px;
+        font-size:18px;
         font-weight:bold;
         padding:12px;
         border-radius:8px;
         border: 2px solid #000080;
-        text-align:center;
+        text-align:left;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
         ">
-        ①不安の解消 ➡️ ②ライフプランニング ➡️ ③予算確定 ➡️ ④条件整理 ➡️ ⑤内見
+        🔹 順番が大事<br><br>
+        ❌ 条件整理から始めて理想と現実のGAPに迷う<br>
+        ❌ 事前審査を後回しにして理想の物件を他の方に購入される<br>
+        ❌ ライフプランニングをせず理想の物件に出会っても決断できない<br><br>
+        ✅ 成功の流れ：<br>
+        ① 不安の解消 → ② ライフプラン → ③ 予算確定 → ④ 条件整理 → ⑤ 内見
     </div>
     """,
     unsafe_allow_html=True
