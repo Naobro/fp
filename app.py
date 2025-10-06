@@ -94,8 +94,134 @@ def gh_raw(path: str) -> str:
     raise FileNotFoundError(f"画像/動画が見つかりません: {path}")
 
 # ============================================
-# 6) ヒーロー（スマホ最適化＋改行＋順番が大事）
+# 6) ヒーロー（スマホ対応＋順番が大事＋アドバイス入り）
 # ============================================
+st.markdown("""
+<style>
+/* ===============================
+   全体フォント最適化
+================================*/
+html, body, [class*="st-"] {
+    font-size: 16px !important;
+    line-height: 1.6;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+}
+h1, .stMarkdown h1 { font-size: 1.8rem !important; }
+h2, .stMarkdown h2 { font-size: 1.4rem !important; }
+h3, .stMarkdown h3 { font-size: 1.2rem !important; }
+
+/* ===============================
+   スマホ時（768px以下）
+================================*/
+@media screen and (max-width: 768px) {
+    html, body, [class*="st-"] {
+        font-size: 13px !important;
+        line-height: 1.5;
+    }
+    h1, .stMarkdown h1 { font-size: 1.3rem !important; }
+    h2, .stMarkdown h2 { font-size: 1.1rem !important; }
+    h3, .stMarkdown h3 { font-size: 1.0rem !important; }
+
+    .hero-blue { font-size: 15px !important; text-align:left !important; }
+    .roadmap-box { font-size: 16px !important; line-height:1.5 !important; }
+}
+
+/* テーブル・ボタン */
+table { width: 100%; overflow-x: auto; display: block; }
+a, button, .stButton button {
+    font-size: 0.9rem !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ===== 画像・タイトル =====
+top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png?raw=1"
+st.image(top_img, use_container_width=True)
+st.title("不動産エージェント NAOKI")
+
+# ===== キャッチコピー =====
+st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
+
+# ===== 青文字（左揃え・大きめ） =====
+st.markdown(
+    """
+    <div class="hero-blue" style="
+        color:blue;
+        font-weight:bold;
+        font-size:22px;
+        text-align:left;
+        line-height:1.8;
+        margin-left:4px;
+        ">
+        ① 不安の解消<br>
+        ② ライフプランニングに適した予算<br>
+        ③ 条件整理
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ===== 順番が大事・失敗例 =====
+st.markdown(
+    """
+    🔹 <b>順番が大事</b><br><br>
+    ❌ 条件整理から始めて理想と現実のGAPに迷う<br>
+    ❌ 事前審査を後回しにして理想の物件を他の方に購入される<br>
+    ❌ ライフプランニングをせず理想の物件に出会っても決断できない
+    """,
+    unsafe_allow_html=True
+)
+
+# ===== 成功のロードマップ =====
+st.markdown(
+    """
+    <div class="roadmap-box" style="
+        background-color:#f0f8ff;
+        color:#000080;
+        font-size:18px;
+        font-weight:bold;
+        padding:14px;
+        border-radius:10px;
+        border:2px solid #000080;
+        text-align:center;
+        word-wrap:break-word !important;
+        overflow-wrap:break-word !important;
+        white-space:normal !important;
+        margin-top:12px;
+        ">
+        ✅ <b>成功のロードマップ</b><br><br>
+        ① 不安の解消 → ② ライフプラン → ③ 予算確定 → ④ 条件整理 → ⑤ 内見
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ===== ワンポイントアドバイス（テキスト） =====
+st.markdown(
+    """
+    💬 **ワンポイントアドバイス**  
+    **不動産購入・売却の目的を明確化する**  
+
+    なぜ、不動産を購入するのか？  
+    ・資産性　──　家賃がもったいないから  
+    ・立地　──　職場・実家などへのアクセス  
+    ・居住性　──　広さ・住環境を改善したい  
+
+    私が提供するのは、その目的を叶えるための**手段**です。  
+    お客様の理想を実現する**住まいの提案**を行い、  
+    複雑な不動産取引をスムーズに進める**サポーター**です。  
+
+    あくまで主役はお客様。  
+    ご家族がこれからの人生で多くの時間を過ごす、  
+    「理想の場所」を一緒に見つけるお手伝いをします。
+    """,
+    unsafe_allow_html=True
+)
+
+st.header("一番重要な事は良い物件と出会った時に即決できる様に、条件整理・資金準備をしておく事")
 st.markdown("""
 <style>
 /* ===============================
