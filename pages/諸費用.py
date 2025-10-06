@@ -193,41 +193,62 @@ need=int(deposit+stamp_fee+brokerage/2)
 
 # ============ PDF ============
 def build_pdf():
-    pdf=FPDF(unit="mm",format="A4");_register_jp_fonts(pdf)
-    pdf.add_page();pdf.set_font("IPAexGothic","B",12)
+    pdf = FPDF(unit="mm", format="A4")
+    _register_jp_fonts(pdf)
+    pdf.add_page()
+    pdf.set_font("IPAexGothic", "B", 12)
     if st.session_state["customer_name"]:
-        pdf.cell(0,8,f"{st.session_state['customer_name']} 様",ln=1)
-    pdf.set_font("IPAexGothic","",11)
-    pdf.cell(0,7,f"物件名：{st.session_state['property_name']}",ln=1)
-    pdf.cell(0,7,f"物件価格：{fmt_jpy(property_price)}",ln=1)
-    pdf.cell(0,7,f"手付金：{fmt_jpy(deposit)}",ln=1)
+        pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
+    pdf.set_font("IPAexGothic", "", 11)
+    pdf.cell(0, 7, f"物件名：{st.session_state['property_name']}", ln=1)
+    pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
+    pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}", ln=1)
     pdf.ln(2)
-    headers=["項目","金額","時期","説明"];w=[46,34,33,77]
-    pdf.set_font("IPAexGothic","B",10);pdf.set_fill_color(220,230,250)
-    for h,ww in zip(headers,w): pdf.cell(ww,7,h,1,0,"C",1)
+
+    headers = ["項目", "金額", "時期", "説明"]
+    w = [46, 34, 33, 77]
+    pdf.set_font("IPAexGothic", "B", 10)
+    pdf.set_fill_color(220, 230, 250)
+    for h, ww in zip(headers, w):
+        pdf.cell(ww, 7, h, 1, 0, "C", 1)
     pdf.ln(7)
-    pdf.set_font("IPAexGothic","",10)
+
+    pdf.set_font("IPAexGothic", "", 10)
     for r in cost_rows:
-        if "◆" in r[0]: pdf.set_font("IPAexGothic","B",10);pdf.cell(sum(w),7,r[0],1,1);pdf.set_font("IPAexGothic","",10)
+        if "◆" in r[0]:
+            pdf.set_font("IPAexGothic", "B", 10)
+            pdf.cell(sum(w), 7, r[0], 1, 1)
+            pdf.set_font("IPAexGothic", "", 10)
         else:
-            pdf.cell(w[0],7,r[0],1,0);pdf.cell(w[1],7,r[1],1,0,"R");pdf.cell(w[2],7,r[2],1,0,"C");pdf.cell(w[3],7,r[3],1,1)
+            pdf.cell(w[0], 7, r[0], 1, 0)
+            pdf.cell(w[1], 7, r[1], 1, 0, "R")
+            pdf.cell(w[2], 7, r[2], 1, 0, "C")
+            pdf.cell(w[3], 7, r[3], 1, 1)
     pdf.ln(3)
-    pdf.set_font("IPAexGothic","B",11)
-    pdf.cell(0,8,f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}",ln=1)
-    pdf.cell(0,8,f"契約時必要資金：{fmt_jpy(need)}",ln=1)
+
+    pdf.set_font("IPAexGothic", "B", 11)
+    pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}", ln=1)
+    pdf.cell(0, 8, f"契約時必要資金：{fmt_jpy(need)}", ln=1)
     pdf.ln(3)
-    pdf.cell(0,7,"（支払例）",ln=1)
-    pdf.set_font("IPAexGothic","",10)
-    rows=[
-        ["①自己資金0",loan_full,m_full],
-        ["②諸費用のみ",loan_only,m_only],
-        [f"③A 金利{rateA:.2f}%/{yearA}年",loanA,mA],
-        [f"④B 金利{rateB:.2f}%/{yearB}年",loanB,mB]
+
+    pdf.cell(0, 7, "（支払例）", ln=1)
+    pdf.set_font("IPAexGothic", "", 10)
+    rows = [
+        ["①自己資金0", loan_full, m_full],
+        ["②諸費用のみ", loan_only, m_only],
+        [f"③A 金利{rateA:.2f}%/{yearA}年", loanA, mA],
+        [f"④B 金利{rateB:.2f}%/{yearB}年", loanB, mB],
     ]
     for r in rows:
-        pdf.cell(80,7,r[0],1);pdf.cell(50,7,fmt_jpy(r[1]),1,0,"R");pdf.cell(60,7,fmt_jpy(r[2]),1,1,"R")
-    return pdf.output(dest="S").encode("latin-1")
+        pdf.cell(80, 7, r[0], 1)
+        pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
+        pdf.cell(60, 7, fmt_jpy(r[2]), 1, 1, "R")
 
+    # --- 戻り値の型を自動判定 ---
+    out = pdf.output(dest="S")
+    if isinstance(out, str):
+        return out.encode("latin-1")
+    return bytes(out)
 pdf_bytes=build_pdf()
 
 if st.button("💾 諸費用データを保存"):
