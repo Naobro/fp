@@ -178,7 +178,7 @@ with colA1:
     loanA_man = st.number_input("借入金額（万円：③）", value=int(price_man), step=10)
     loanA = int(loanA_man) * 10_000
 with colA2:
-    rateA = st.number_input("金利（③）", value=base_rate, step=0.01, format="%.2f")
+    rateA = st.number_input("金利（③）", value=base_rate, step=0.001, format="%.3f")
 with colA3:
     yearA = st.number_input("年数（③）", value=35, step=1)
 
@@ -189,15 +189,15 @@ with colB1:
     loanB_man = st.number_input("借入金額（万円：④）", value=int(price_man), step=10)
     loanB = int(loanB_man) * 10_000
 with colB2:
-    rateB = st.number_input("金利（④）", value=base_rate, step=0.01, format="%.2f")
+    rateB = st.number_input("金利（④）", value=base_rate, step=0.001, format="%.3f")
 with colB3:
     yearB = st.number_input("年数（④）", value=35, step=1)
 
-m_full=monthly_payment(loan_full,base_years,base_rate)
-m_only=monthly_payment(loan_only,base_years,base_rate)
-mA=monthly_payment(loanA,yearA,rateA)
-mB=monthly_payment(loanB,yearB,rateB)
-need=int(deposit+stamp_fee+brokerage/2)
+m_full = monthly_payment(loan_full, base_years, base_rate)
+m_only = monthly_payment(loan_only, base_years, base_rate)
+mA = monthly_payment(loanA, yearA, rateA)
+mB = monthly_payment(loanB, yearB, rateB)
+need = int(deposit + stamp_fee + brokerage / 2)
 
 # ============ PDF ============
 def build_pdf():
@@ -244,38 +244,47 @@ def build_pdf():
     rows = [
         ["①自己資金0", loan_full, m_full],
         ["②諸費用のみ", loan_only, m_only],
-        [f"③A 金利{rateA:.2f}%/{yearA}年", loanA, mA],
-        [f"④B 金利{rateB:.2f}%/{yearB}年", loanB, mB],
+        [f"③A 金利{rateA:.3f}%/{yearA}年", loanA, mA],
+        [f"④B 金利{rateB:.3f}%/{yearB}年", loanB, mB],
     ]
     for r in rows:
         pdf.cell(80, 7, r[0], 1)
         pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
         pdf.cell(60, 7, fmt_jpy(r[2]), 1, 1, "R")
 
-    # --- 戻り値の型を自動判定 ---
     out = pdf.output(dest="S")
-    if isinstance(out, str):
-        return out.encode("latin-1")
-    return bytes(out)
-pdf_bytes=build_pdf()
+    return out.encode("latin-1") if isinstance(out, str) else bytes(out)
+
+pdf_bytes = build_pdf()
 
 if st.button("💾 諸費用データを保存"):
-    payload={
-        "customer_name":st.session_state["customer_name"],
-        "property_name":st.session_state["property_name"],
-        "property_price":property_price,
-        "deposit":deposit,
-        "total_expenses":total_expenses,
-        "total":total,
-        "monthly_full":m_full,
-        "monthly_only":m_only,
-        "monthly_A":mA,
-        "monthly_B":mB,
-        "saved_at":now_iso(),
+    payload = {
+        "customer_name": st.session_state["customer_name"],
+        "property_name": st.session_state["property_name"],
+        "property_price": int(property_price),
+        "deposit": int(deposit),
+        "total_expenses": int(total_expenses),
+        "total": int(total),
+        "monthly_full": int(m_full),
+        "monthly_only": int(m_only),
+        "monthly_A": int(mA),
+        "monthly_B": int(mB),
+        "rateA": float(rateA),
+        "rateB": float(rateB),
+        "saved_at": now_iso(),
     }
-    SB.table("fees_detail").upsert({**payload,"client_id":client_id},on_conflict="client_id").execute()
-    st.success("保存しました ✅")
+    try:
+        SB.table("fees_detail").upsert(
+            {**payload, "client_id": client_id},
+            on_conflict="client_id"
+        ).execute()
+        st.success("保存しました ✅")
+    except Exception as e:
+        st.error(f"保存エラー: {e}")
 
-st.download_button("📄 資金計画書.pdf ダウンロード", data=pdf_bytes,
-                   file_name=f"{st.session_state['property_name']}　諸費用明細.pdf",
-                   mime="application/pdf")
+st.download_button(
+    "📄 資金計画書.pdf ダウンロード",
+    data=pdf_bytes,
+    file_name=f"{st.session_state['property_name']}　諸費用明細.pdf",
+    mime="application/pdf",
+)
