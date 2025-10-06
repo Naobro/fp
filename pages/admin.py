@@ -26,77 +26,58 @@ def share_url_for(cid: str) -> str:
     return f"{base}?client={cid}"
 
 # ===============================
-# Key/Value ストア（JSONファイル）
+# Supabaseストア（永続化対応版）
 # ===============================
+from client_portal import get_sb
+SB = get_sb()
+
+TABLE_NAME = "client_profiles"
+
 class KVStore:
-    """
-    シンプルなKey/Valueストア
-    - ファイル：kv_clients.json
-    - 形式：{"clients": { "<client_id>": { ...保存データ... }, ... }}
-    - 競合対策：スレッドロック
-    """
-    def __init__(self, path: str = "kv_clients.json"):
-        self.path = path
-        self._lock = threading.RLock()
-        # 初期化
-        if not os.path.exists(self.path):
-            self._write({"clients": {}})
+    def __init__(self):
+        self.sb = SB
 
-    def _read(self) -> dict:
-        with self._lock:
-            try:
-                with open(self.path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                return {"clients": {}}
-
-    def _write(self, data: dict) -> None:
-        with self._lock:
-            tmp_path = self.path + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, self.path)
-
-    # ------- Public API -------
     def get(self, key: str) -> dict | None:
-        data = self._read()
-        return data.get("clients", {}).get(key)
+        if not self.sb:
+            return None
+        res = self.sb.table(TABLE_NAME).select("*").eq("client_id", key).execute()
+        return res.data[0] if res.data else None
 
     def set(self, key: str, value: dict) -> None:
-        data = self._read()
-        if "clients" not in data:
-            data["clients"] = {}
-        data["clients"][key] = value
-        self._write(data)
+        if not self.sb:
+            return
+        value["client_id"] = key
+        self.sb.table(TABLE_NAME).upsert(value, on_conflict="client_id").execute()
 
     def delete(self, key: str) -> bool:
-        data = self._read()
-        if key in data.get("clients", {}):
-            del data["clients"][key]
-            self._write(data)
-            return True
-        return False
+        if not self.sb:
+            return False
+        self.sb.table(TABLE_NAME).delete().eq("client_id", key).execute()
+        return True
 
     def all(self) -> dict:
-        data = self._read()
-        return data.get("clients", {})
+        if not self.sb:
+            return {}
+        res = self.sb.table(TABLE_NAME).select("*").execute()
+        out = {}
+        for row in res.data:
+            out[row["client_id"]] = row
+        return out
 
     def count(self) -> int:
         return len(self.all())
 
     def snapshot_bytes(self) -> bytes:
-        """現在の全データをJSONバイト列で返す（ダウンロード用）"""
+        import json, io
         buf = io.StringIO()
         json.dump({"clients": self.all()}, buf, ensure_ascii=False, indent=2)
         return buf.getvalue().encode("utf-8")
 
-# KV初期化（アプリ起動時1回）
 @st.cache_resource(show_spinner=False)
 def get_kv() -> KVStore:
-    return KVStore(path=st.secrets.get("KV_PATH", "kv_clients.json"))
+    return KVStore()
 
 KV = get_kv()
-
 # -------------------------------
 # 共通ユーティリティ
 # -------------------------------
