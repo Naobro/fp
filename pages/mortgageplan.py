@@ -210,7 +210,7 @@ st.markdown(
 st.markdown(
     """
     <div style='margin-top:10px; margin-bottom:25px;'>
-        <a href='https://naokifp.streamlit.app/loan_comparison'
+        <a href='/loan_comparison'
            target='_blank'
            style='display:inline-block;
                   font-size:20px;
