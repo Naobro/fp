@@ -205,10 +205,14 @@ def build_pdf():
     _register_jp_fonts(pdf)
     pdf.add_page()
     pdf.set_font("IPAexGothic", "B", 12)
-    if st.session_state["customer_name"]:
-        pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
+
+    customer_name = st.session_state.get("customer_name", "")
+    property_name = st.session_state.get("property_name", "")
+
+    if customer_name:
+        pdf.cell(0, 8, f"{customer_name} 様", ln=1)
     pdf.set_font("IPAexGothic", "", 11)
-    pdf.cell(0, 7, f"物件名：{st.session_state['property_name']}", ln=1)
+    pdf.cell(0, 7, f"物件名：{property_name}", ln=1)
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}", ln=1)
     pdf.ln(2)
@@ -241,11 +245,16 @@ def build_pdf():
 
     pdf.cell(0, 7, "（支払例）", ln=1)
     pdf.set_font("IPAexGothic", "", 10)
+
+    # rateA / rateB がスコープ外でも落ちないよう安全に参照
+    safe_rateA = rateA if "rateA" in locals() else 0.0
+    safe_rateB = rateB if "rateB" in locals() else 0.0
+
     rows = [
         ["①自己資金0", loan_full, m_full],
         ["②諸費用のみ", loan_only, m_only],
-        [f"③A 金利{rateA:.3f}%/{yearA}年", loanA, mA],
-        [f"④B 金利{rateB:.3f}%/{yearB}年", loanB, mB],
+        [f"③A 金利{safe_rateA:.3f}%/{yearA}年", loanA, mA],
+        [f"④B 金利{safe_rateB:.3f}%/{yearB}年", loanB, mB],
     ]
     for r in rows:
         pdf.cell(80, 7, r[0], 1)
