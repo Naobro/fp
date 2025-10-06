@@ -29,11 +29,31 @@ SB = get_sb()
 def upsert_links(client_id: str, links: list[Dict[str, str]]):
     if SB is None:
         return
+
+    # 既存データを取得
+    existing = (
+        SB.table("client_profiles")
+        .select("profile")
+        .eq("client_id", client_id)
+        .limit(1)
+        .execute()
+    )
+
+    if existing.data and isinstance(existing.data[0].get("profile"), dict):
+        profile = existing.data[0]["profile"]
+    else:
+        profile = {}
+
+    # 既存profileにextra_linksを上書き
+    profile["extra_links"] = links
+
+    # 保存（全体上書き）
     data = {
         "client_id": client_id,
-        "profile": {"extra_links": links},
+        "profile": profile,
         "updated_at": datetime.now().isoformat()
     }
+
     SB.table("client_profiles").upsert(data, on_conflict="client_id").execute()
 
 def get_links(client_id: str) -> list[Dict[str, str]]:
