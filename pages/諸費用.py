@@ -116,17 +116,19 @@ price_man = st.number_input("物件価格（万円）", min_value=100, max_value
 property_price = price_man*10_000
 deposit = number_input_commas("手付金（円）", round_deposit(property_price))
 kanri_month = number_input_commas("管理費・修繕積立（月額）", 18_000)
-base_rate = st.number_input("基準金利（年%）", min_value=0.0, max_value=5.0, value=0.78, step=0.01)
+# 基準金利入力（小数第3位まで）
+base_rate = st.number_input("基準金利（年%）", min_value=0.0, max_value=5.0, value=0.780, step=0.001, format="%.3f")
 base_years = 35
 
-colr1,colr2 = st.columns(2)
+colr1, colr2 = st.columns(2)
 with colr1:
-    mode = st.radio("登記費用の計算方法", ["固定額","物件価格比例（%）"], index=0, horizontal=True)
-if mode=="固定額":
+    mode = st.radio("登記費用の計算方法", ["固定額", "物件価格比例（%）"], index=0, horizontal=True)
+if mode == "固定額":
     regist_fee = number_input_commas("登記費用（円）", 400_000)
 else:
-    with colr2: rate = st.number_input("登記費用（%）", min_value=0.0, max_value=3.0, value=0.5)
-    regist_fee = int(property_price*(rate/100))
+    with colr2:
+        rate = st.number_input("登記費用（%）", min_value=0.0, max_value=3.0, value=0.500, step=0.001, format="%.3f")
+    regist_fee = int(property_price * (rate / 100))
 
 tax_rate=0.10
 brokerage = int((property_price*0.03+60_000)*(1+tax_rate))
