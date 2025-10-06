@@ -173,94 +173,96 @@ need_contract = deposit + stamp_fee + brokerage_contract
 need_settle = property_price - deposit + regist_fee + tax_clear + brokerage_settlement
 
 # ============ PDF ============
+# ============ PDF ============
 def build_pdf():
     pdf = FPDF(unit="mm", format="A4")
-    _register_fonts(pdf)
-    pdf.add_page()
-    pdf.set_font("IPAexGothic", "B", 13)
-    pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
-    # （中略：内容はすべて同じでOK）
-    # 最後の return だけ変更する↓↓↓
-
-    out = pdf.output(dest="S")
-    # fpdf2が返す型に応じて自動変換（latin-1固定禁止）
-    if isinstance(out, str):
-        return out.encode("utf-8", errors="ignore")
-    return bytes(out)
-    pdf = FPDF(unit="mm", format="A4")
-    _register_fonts(pdf)
+    _register_jp_fonts(pdf)
     pdf.add_page()
 
-    pdf.set_font("IPAexGothic", "B", 13)
-    pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
+    # タイトル部
+    pdf.set_font("IPAexGothic", "B", 12)
+    if st.session_state["customer_name"]:
+        pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
     pdf.set_font("IPAexGothic", "", 11)
     pdf.cell(0, 7, f"物件名：{st.session_state['property_name']}", ln=1)
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
+    pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}", ln=1)
+    pdf.cell(0, 7, f"諸費用合計：{fmt_jpy(total_expenses)}", ln=1)
+    pdf.cell(0, 7, f"契約時必要資金：{fmt_jpy(need)}", ln=1)
     pdf.ln(3)
 
-    headers = ["項目", "金額", "支払時期", "説明"]
+    # 明細表
+    headers = ["項目", "金額", "時期", "説明"]
     w = [46, 34, 33, 77]
     pdf.set_font("IPAexGothic", "B", 10)
     pdf.set_fill_color(220, 230, 250)
-    for i, h in enumerate(headers):
-        pdf.cell(w[i], 7, h, 1, 0, "C", 1)
+    for h, ww in zip(headers, w):
+        pdf.cell(ww, 7, h, 1, 0, "C", 1)
     pdf.ln(7)
 
-    def row(title, amount, when, note, bold=False):
-        pdf.set_font("IPAexGothic", "B" if bold else "", 10)
-        pdf.cell(w[0], 7, title, 1)
-        pdf.cell(w[1], 7, fmt_jpy(amount), 1, 0, "R")
-        pdf.cell(w[2], 7, when, 1, 0, "C")
-        pdf.cell(w[3], 7, note, 1, 1, "L")
-
-    # ---- 本文 ----
-    pdf.set_font("IPAexGothic", "B", 10)
-    pdf.cell(sum(w), 7, "◆ 登記費用・税金・精算金等", 1, 1)
-    row("契約書 印紙代", stamp_fee, "契約時", "電子契約で削減可")
-    row("登記費用", regist_fee, "決済時", "司法書士報酬＋登録免許税")
-    row("精算金", tax_clear, "決済時", "固定資産税・管理費日割")
-    row("表示登記", display_fee, "決済時", "新築戸建の場合")
-
-    pdf.cell(sum(w), 7, "◆ 金融機関・火災保険", 1, 1)
-    row("銀行事務手数料", loan_fee, "決済時", "借入金額×2.2%")
-    row("火災保険", fire_fee, "決済時", "5年分概算")
-    row("適合証明書", tekigo_fee, "相談", "フラット35の場合必要")
-
-    pdf.cell(sum(w), 7, "◆ 仲介会社（TERASS）", 1, 1)
-    row("仲介手数料（合計）", brokerage_total, "契約時/決済時", "3%＋6万＋税")
-    row("仲介手数料（契約時）", brokerage_contract, "契約時", "")
-    row("仲介手数料（決済時）", brokerage_settlement, "決済時", "")
-
-    if option_fee or move_fee:
-        pdf.cell(sum(w), 7, "◆ 追加工事・引越し", 1, 1)
-        if option_fee: row("リフォーム費用", option_fee, "決済時", "任意工事")
-        if move_fee: row("引越し費用", move_fee, "入居時", "距離による")
-
-    pdf.ln(3)
-    pdf.set_font("IPAexGothic", "B", 11)
-    pdf.cell(0, 8, f"契約時必要資金：{fmt_jpy(need_contract)}", ln=1)
-    pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(need_settle)}", ln=1)
-    pdf.ln(3)
-
-    rows = [
-        ["①自己資金0（物件＋諸費用）", loan_full, m_full],
-        [f"③パターンA　金利{rateA:.3f}%／{yearA}年", loanA, mA],
-        [f"④パターンB　金利{rateB:.3f}%／{yearB}年", loanB, mB],
-    ]
-    pdf.set_font("IPAexGothic", "B", 10)
-    pdf.cell(80, 7, "借入パターン", 1)
-    pdf.cell(50, 7, "借入金額", 1)
-    pdf.cell(60, 7, "月々返済額", 1, 1)
     pdf.set_font("IPAexGothic", "", 10)
+    for r in cost_rows:
+        if "◆" in r[0]:
+            pdf.set_font("IPAexGothic", "B", 10)
+            pdf.cell(sum(w), 7, r[0], 1, 1)
+            pdf.set_font("IPAexGothic", "", 10)
+        else:
+            pdf.cell(w[0], 7, r[0], 1, 0)
+            pdf.cell(w[1], 7, r[1], 1, 0, "R")
+            pdf.cell(w[2], 7, r[2], 1, 0, "C")
+            pdf.cell(w[3], 7, r[3], 1, 1)
+    pdf.ln(3)
+
+    # 支払例表
+    pdf.set_font("IPAexGothic", "B", 11)
+    pdf.cell(0, 7, "（支払例）", ln=1)
+    pdf.set_font("IPAexGothic", "", 10)
+    rows = [
+        ["①自己資金0", property_price + total_expenses, m_full],
+        ["②諸費用のみ", property_price, m_only],
+        [f"③A 金利{rateA:.3f}%／{yearA}年", loanA, mA],
+        [f"④B 金利{rateB:.3f}%／{yearB}年", loanB, mB],
+    ]
     for r in rows:
         pdf.cell(80, 7, r[0], 1)
         pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
         pdf.cell(60, 7, fmt_jpy(r[2]), 1, 1, "R")
 
-    return pdf.output(dest="S").encode("latin-1")
+    # 出力（文字コード安全処理）
+    out = pdf.output(dest="S")
+    if isinstance(out, str):
+        return out.encode("utf-8", errors="ignore")
+    return bytes(out)
 
+
+# ======== PDF生成・保存・DL ========
 pdf_bytes = build_pdf()
 
+if st.button("💾 諸費用データを保存"):
+    payload = {
+        "customer_name": st.session_state["customer_name"],
+        "property_name": st.session_state["property_name"],
+        "property_price": property_price,
+        "deposit": deposit,
+        "total_expenses": total_expenses,
+        "total": total,
+        "monthly_full": m_full,
+        "monthly_only": m_only,
+        "monthly_A": mA,
+        "monthly_B": mB,
+        "rateA": rateA,
+        "rateB": rateB,
+        "saved_at": now_iso(),
+    }
+    SB.table("fees_detail").upsert({**payload, "client_id": client_id}, on_conflict="client_id").execute()
+    st.success("保存しました ✅")
+
+st.download_button(
+    "📄 資金計画書.pdf ダウンロード",
+    data=pdf_bytes,
+    file_name=f"{st.session_state['property_name']}　諸費用明細.pdf",
+    mime="application/pdf",
+)
 # ============ 出力・保存 ============
 if st.button("💾 諸費用データを保存"):
     payload = {
