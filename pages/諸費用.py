@@ -269,8 +269,7 @@ if st.button("💾 諸費用データを保存"):
         "monthly_only": int(m_only),
         "monthly_A": int(mA),
         "monthly_B": int(mB),
-        "rateA": float(rateA),
-        "rateB": float(rateB),
+        # rateA / rateB は Supabase 側に存在しないため送らない
         "saved_at": now_iso(),
     }
     try:
@@ -280,11 +279,4 @@ if st.button("💾 諸費用データを保存"):
         ).execute()
         st.success("保存しました ✅")
     except Exception as e:
-        st.error(f"保存エラー: {e}")
-
-st.download_button(
-    "📄 資金計画書.pdf ダウンロード",
-    data=pdf_bytes,
-    file_name=f"{st.session_state['property_name']}　諸費用明細.pdf",
-    mime="application/pdf",
-)
+        st.warning("⚠️ Supabaseが更新されていないため、金利は保存対象外です。")
