@@ -158,7 +158,8 @@ def build_pdf():
     pdf.cell(0, 8, "株式会社TERASS", ln=1, align="R")
     pdf.cell(0, 8, "エージェント　西山直樹", ln=1, align="R")
 
-    return pdf.output(dest="S").encode("latin-1")
+    out = pdf.output(dest="S")
+return out if isinstance(out, (bytes, bytearray)) else out.encode("latin-1")
 
 pdf_bytes = build_pdf()
 
