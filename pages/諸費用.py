@@ -171,21 +171,27 @@ total=property_price+total_expenses
 loan_full=property_price+total_expenses
 loan_only=property_price
 
+# ③ 入力A（手動）
 st.markdown("#### ③ 入力A（手動）")
-colA1,colA2,colA3=st.columns(3)
+colA1, colA2, colA3 = st.columns(3)
 with colA1:
-    loanA_man=st.number_input("借入金額（万円：③）", value=int(price_man), step=10)
-    loanA=int(loanA_man)*10_000
-with colA2: rateA=st.number_input("金利（③）",value=base_rate,step=0.01)
-with colA3: yearA=st.number_input("年数（③）",value=35,step=1)
+    loanA_man = st.number_input("借入金額（万円：③）", value=int(price_man), step=10)
+    loanA = int(loanA_man) * 10_000
+with colA2:
+    rateA = st.number_input("金利（③）", value=base_rate, step=0.01, format="%.2f")
+with colA3:
+    yearA = st.number_input("年数（③）", value=35, step=1)
 
+# ④ 入力B（手動）
 st.markdown("#### ④ 入力B（手動）")
-colB1,colB2,colB3=st.columns(3)
+colB1, colB2, colB3 = st.columns(3)
 with colB1:
-    loanB_man=st.number_input("借入金額（万円：④）", value=int(price_man), step=10)
-    loanB=int(loanB_man)*10_000
-with colB2: rateB=st.number_input("金利（④）",value=base_rate,step=0.01)
-with colB3: yearB=st.number_input("年数（④）",value=35,step=1)
+    loanB_man = st.number_input("借入金額（万円：④）", value=int(price_man), step=10)
+    loanB = int(loanB_man) * 10_000
+with colB2:
+    rateB = st.number_input("金利（④）", value=base_rate, step=0.01, format="%.2f")
+with colB3:
+    yearB = st.number_input("年数（④）", value=35, step=1)
 
 m_full=monthly_payment(loan_full,base_years,base_rate)
 m_only=monthly_payment(loan_only,base_years,base_rate)
