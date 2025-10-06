@@ -1,5 +1,8 @@
 # pages/loan_comparison.py
 import streamlit as st
+st.set_page_config(page_title="変動・固定金利比較", layout="wide", initial_sidebar_state="collapsed")
+st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
+import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="住宅ローン比較", page_icon="🏦", layout="wide")
