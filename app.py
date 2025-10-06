@@ -94,8 +94,47 @@ def gh_raw(path: str) -> str:
     raise FileNotFoundError(f"画像/動画が見つかりません: {path}")
 
 # ============================================
-# 6) ヒーロー
+# 6) ヒーロー（スマホ最適化CSS追加）
 # ============================================
+st.markdown("""
+<style>
+/* 全体のフォントサイズ調整 */
+html, body, [class*="st-"] {
+    font-size: 16px !important;
+    line-height: 1.6;
+}
+
+/* 見出し */
+h1, .stMarkdown h1 { font-size: 1.8rem !important; }
+h2, .stMarkdown h2 { font-size: 1.4rem !important; }
+h3, .stMarkdown h3 { font-size: 1.2rem !important; }
+
+/* スマホ（768px以下）の時 */
+@media screen and (max-width: 768px) {
+    html, body, [class*="st-"] { font-size: 14px !important; }
+    h1, .stMarkdown h1 { font-size: 1.4rem !important; }
+    h2, .stMarkdown h2 { font-size: 1.2rem !important; }
+    h3, .stMarkdown h3 { font-size: 1.1rem !important; }
+    table { font-size: 12px !important; }
+    img, iframe, video { max-width: 100% !important; height: auto !important; }
+}
+
+/* テーブル横スクロール */
+table {
+    width: 100%;
+    overflow-x: auto;
+    display: block;
+}
+
+/* ボタンやリンク */
+a, button, .stButton button {
+    font-size: 0.95rem !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png?raw=1"
 st.image(top_img, use_container_width=True)
 
