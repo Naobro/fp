@@ -279,57 +279,7 @@ a, button, .stButton button {
 </style>
 """, unsafe_allow_html=True)
 
-# ===== ヒーロー画像 =====
-top_img = "https://github.com/Naobro/fp/blob/main/assets/top.png?raw=1"
-st.image(top_img, use_container_width=True)
 
-# ===== タイトル・サブタイトル =====
-st.title("不動産エージェント NAOKI")
-st.markdown("### 家を買う前に絶対に考えるべき「たった3つのこと」")
-
-# ===== 青文字を3行に改行して整列 =====
-st.markdown(
-    """
-    <div class="hero-blue" style="color:blue; font-weight:bold; font-size:18px; text-align:center;">
-        ① 不安の解消<br>
-        ② ライフプランニングに適した予算<br>
-        ③ 条件整理
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-# ===== ロードマップ：順番が大事＋失敗例＋成功パターン =====
-st.header("理想の住まい探し　成功ロードマップ")
-
-st.markdown(
-    """
-    <div class="roadmap-box" style="
-        background-color:#f0f8ff;
-        color:#000080;
-        font-size:18px;
-        font-weight:bold;
-        padding:12px;
-        border-radius:8px;
-        border: 2px solid #000080;
-        text-align:left;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        white-space: normal !important;
-        ">
-        🔹 順番が大事<br><br>
-        ❌ 条件整理から始めて理想と現実のGAPに迷う<br>
-        ❌ 事前審査を後回しにして理想の物件を他の方に購入される<br>
-        ❌ ライフプランニングをせず理想の物件に出会っても決断できない<br><br>
-        ✅ 成功の流れ：<br>
-        ① 不安の解消 → ② ライフプラン → ③ 予算確定 → ④ 条件整理 → ⑤ 内見
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-st.header("一番重要な事は良い物件と出会った時に即決できる様に、条件整理・資金準備をしておく事")
-
-st.divider()
 st.subheader("不動産購入の流れ")
 st.markdown("[相談から引き渡しまで](https://naobro.github.io/fp/pages/flow_compressed.pdf)")
 st.markdown("[注文住宅　土地](https://naobro.github.io/fp/pages/tochi.pdf)")
