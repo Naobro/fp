@@ -233,6 +233,52 @@ def build_pdf():
     if isinstance(out, str):
         return out.encode("utf-8", errors="ignore")
     return bytes(out)
+# ============ フォント登録関数（PDF生成前に必須） ============
+from fpdf import FPDF
+import requests, io, zipfile, tempfile
+from pathlib import Path
+
+def _pick_font_dir() -> Path:
+    for d in [
+        Path.cwd() / "fonts_runtime",
+        Path(tempfile.gettempdir()) / "fonts_runtime",
+        Path.home() / ".cache" / "fonts_runtime",
+    ]:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            (d / ".wtest").write_text("ok", encoding="utf-8")
+            (d / ".wtest").unlink()
+            return d
+        except Exception:
+            continue
+    return Path(tempfile.mkdtemp(prefix="fonts_runtime_"))
+
+FONT_DIR = _pick_font_dir()
+IPAEX_G_ZIP = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexg00401.zip"
+IPAEX_M_ZIP = "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexm00401.zip"
+FONT_GOTHIC_PATH = FONT_DIR / "IPAexGothic.ttf"
+FONT_MINCHO_PATH = FONT_DIR / "IPAexMincho.ttf"
+
+def _download_and_extract_ttf(zip_url: str, member_suffix: str, save_path: Path):
+    resp = requests.get(zip_url, timeout=30)
+    resp.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        ttf_members = [n for n in zf.namelist() if n.lower().endswith(member_suffix)]
+        with zf.open(ttf_members[0]) as src, open(save_path, "wb") as dst:
+            dst.write(src.read())
+
+def _ensure_fonts():
+    if not FONT_GOTHIC_PATH.exists():
+        _download_and_extract_ttf(IPAEX_G_ZIP, "ipaexg.ttf", FONT_GOTHIC_PATH)
+    if not FONT_MINCHO_PATH.exists():
+        _download_and_extract_ttf(IPAEX_M_ZIP, "ipaexm.ttf", FONT_MINCHO_PATH)
+
+def _register_jp_fonts(pdf: FPDF):
+    _ensure_fonts()
+    pdf.add_font("IPAexGothic", "", str(FONT_GOTHIC_PATH), uni=True)
+    pdf.add_font("IPAexGothic", "B", str(FONT_GOTHIC_PATH), uni=True)
+    pdf.add_font("IPAexMincho", "", str(FONT_MINCHO_PATH), uni=True)
+    pdf.add_font("IPAexMincho", "B", str(FONT_MINCHO_PATH), uni=True)
 
 
 # ======== PDF生成・保存・DL ========
