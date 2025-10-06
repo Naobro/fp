@@ -278,7 +278,8 @@ if st.button("💾 諸費用データを保存"):
         "monthly_only": int(m_only),
         "monthly_A": int(mA),
         "monthly_B": int(mB),
-        # rateA / rateB は Supabase 側に存在しないため送らない
+        "rateA": float(rateA),
+        "rateB": float(rateB),
         "saved_at": now_iso(),
     }
     try:
@@ -288,4 +289,4 @@ if st.button("💾 諸費用データを保存"):
         ).execute()
         st.success("保存しました ✅")
     except Exception as e:
-        st.warning("⚠️ Supabaseが更新されていないため、金利は保存対象外です。")
+        st.error(f"保存エラー: {e}")
