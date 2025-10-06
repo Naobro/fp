@@ -177,6 +177,19 @@ def build_pdf():
     pdf = FPDF(unit="mm", format="A4")
     _register_fonts(pdf)
     pdf.add_page()
+    pdf.set_font("IPAexGothic", "B", 13)
+    pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
+    # （中略：内容はすべて同じでOK）
+    # 最後の return だけ変更する↓↓↓
+
+    out = pdf.output(dest="S")
+    # fpdf2が返す型に応じて自動変換（latin-1固定禁止）
+    if isinstance(out, str):
+        return out.encode("utf-8", errors="ignore")
+    return bytes(out)
+    pdf = FPDF(unit="mm", format="A4")
+    _register_fonts(pdf)
+    pdf.add_page()
 
     pdf.set_font("IPAexGothic", "B", 13)
     pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
