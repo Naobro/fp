@@ -345,17 +345,7 @@ def build_pdf():
         pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
         pdf.cell(60, 7, fmt_jpy(r[2]), 1, 1, "R")
 
-    # ===== フッター =====
-    pdf.ln(8)
-    pdf.set_font("IPAexGothic", "", 10)
-    pdf.multi_cell(0, 6,
-        "西山 直樹 / Naoki Nishiyama\n"
-        "TERASS, Inc.\n"
-        "〒105-0001 東京都港区虎ノ門二丁目2番1号 住友不動産虎ノ門タワー13階\n"
-        "TEL: 090-4399-2480 / FAX: 03-6369-3864\n"
-        "Email: naoki.nishiyama@terass.com\n"
-        "LINE：naokiwm"
-    )
+   
 
     out = pdf.output(dest="S")
     return out.encode("latin-1") if isinstance(out, str) else bytes(out)
