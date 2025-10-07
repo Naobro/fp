@@ -166,30 +166,26 @@ save_to_state("brokerage_total", brokerage_total)
 
 # 登記・銀行・火災・精算・印紙税
 
-# --- 自己資金（手付金以外の追加分も入力可能に） ---
-additional_self = number_input_commas(
-    "追加自己資金（円）",
-    st.session_state.get("additional_self", 0)
+# --- 借入金額を入力（万円単位） ---
+loan_amount_man = st.number_input(
+    "借入金額（万円）",
+    min_value=0,
+    max_value=200_000,
+    value=st.session_state.get("loan_amount_man", int(price_man)),
+    step=10
 )
-save_to_state("additional_self", additional_self)
+save_to_state("loan_amount_man", loan_amount_man)
+loan_amount = loan_amount_man * 10_000  # 円換算
 
-# --- 借入金額を自動計算（物件価格＋諸費用 − 手付金 − 追加自己資金） ---
-# ※ loan_fee算出や月々支払いの基礎になる
-loan_base = int(property_price - deposit - additional_self)
-if loan_base < 0:
-    loan_base = 0
-
-st.markdown(f"**📊 借入予定金額：{loan_base:,} 円（概算）**")
-
-# --- 銀行事務手数料を借入金額×2.2%で自動計算 ---
+# --- 銀行事務手数料（円）＝借入金額 × 2.2% ---
 loan_fee = number_input_commas(
     "銀行事務手数料（円）",
-    st.session_state.get("loan_fee", int(loan_base * 0.022))
+    st.session_state.get("loan_fee", int(loan_amount * 0.022))
 )
 save_to_state("loan_fee", loan_fee)
-save_to_state("loan_base", loan_base)
+save_to_state("loan_amount", loan_amount)
 
-# --- その他費用 ---
+# --- 登記・火災・精算などその他項目 ---
 regist_fee = number_input_commas("登記費用（円）",
                                  st.session_state.get("regist_fee", 400_000))
 fire_fee = number_input_commas("火災保険料（円）",
@@ -213,8 +209,6 @@ save_to_state("display_fee", display_fee)
 save_to_state("tekigo_fee", tekigo_fee)
 save_to_state("reform_fee", reform_fee)
 save_to_state("move_fee", move_fee)
-save_to_state("loan_fee", loan_fee)
-save_to_state("additional_self", additional_self)
 # 金利条件
 base_rate = st.number_input("基準金利（年%）", value=0.780, step=0.001, format="%.3f")
 base_years = 35
