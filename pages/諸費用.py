@@ -459,12 +459,15 @@ if st.button("💾 諸費用データを保存"):
         payload = {
             "customer_name": st.session_state["customer_name"],
             "property_name": st.session_state["property_name"],
+            "price_man": price_man,
             "property_price": property_price,
             "deposit": deposit,
             "stamp_fee": stamp_fee,
             "regist_fee": regist_fee,
             "tax_clear": tax_clear,
             "display_fee": display_fee,
+            "loan_amount_man": loan_amount_man,
+            "loan_amount": loan_amount,
             "loan_fee": loan_fee,
             "fire_fee": fire_fee,
             "tekigo_fee": tekigo_fee,
@@ -487,16 +490,16 @@ if st.button("💾 諸費用データを保存"):
         }
 
         # Supabaseへ保存
-        result = SB.table("fees_detail").upsert(
+        SB.table("fees_detail").upsert(
             {**payload, "client_id": client_id},
             on_conflict="client_id"
         ).execute()
 
         st.success("保存しました ✅")
-        st.json(result.data)  # ← 成功時も内容を確認できるように表示
 
     except Exception as e:
         st.error(f"保存中にエラー発生: {e}")
+    
 # --- ダウンロード ---
 st.download_button(
     "📄 資金計画書.pdf ダウンロード",
