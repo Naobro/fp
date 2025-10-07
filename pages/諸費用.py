@@ -254,18 +254,33 @@ def _register_jp_fonts(pdf: FPDF):
 # --- 仲介手数料（契約時／決済時）自動割振り ---
 brokerage_total = int((property_price * 0.03 + 60000) * 1.1)
 
-# 条件分岐
-if brokerage_total >= 2_200_000:
-    brokerage_contract = 1_100_000
-elif brokerage_total >= 1_100_000:
-    brokerage_contract = 550_000
+# --- 契約時入力欄（ユーザーが上書きできる） ---
+brokerage_contract = st.number_input(
+    "仲介手数料（契約時・円）",
+    min_value=0,
+    max_value=brokerage_total,
+    value=0 if "brokerage_contract" not in st.session_state else st.session_state["brokerage_contract"],
+    step=10_000,
+)
+
+# --- ロジック：自動割振り or 手動指定対応 ---
+if brokerage_contract == 0:
+    # 全額を決済時にまわす
+    brokerage_settlement = brokerage_total
 else:
-    brokerage_contract = 330_000
+    # 自動割振り
+    if brokerage_total >= 2_200_000:
+        default_contract = 1_100_000
+    elif brokerage_total >= 1_100_000:
+        default_contract = 550_000
+    else:
+        default_contract = 330_000
+    # ユーザーが0以外を入力した場合はそのまま採用
+    brokerage_contract = brokerage_contract or default_contract
+    brokerage_settlement = brokerage_total - brokerage_contract
 
-brokerage_settlement = brokerage_total - brokerage_contract
-
-# 表示欄（確認用）
-st.markdown("#### 仲介手数料（自動割振り）")
+# --- 表示確認用 ---
+st.markdown("#### 仲介手数料（自動割振り・調整後）")
 col_b1, col_b2, col_b3 = st.columns(3)
 with col_b1:
     st.number_input("仲介手数料（合計・円）", value=brokerage_total, step=10_000, disabled=True)
@@ -273,8 +288,18 @@ with col_b2:
     st.number_input("契約時（円）", value=brokerage_contract, step=10_000, disabled=True)
 with col_b3:
     st.number_input("決済時（円）", value=brokerage_settlement, step=10_000, disabled=True)
-# --- 契約時・決済時必要資金 ---
+# --- 契約時・決済時必要資金（仲介手数料の入力値反映版） ---
+# 契約時必要資金：手付金 + 印紙代 + 契約時仲介手数料
 contract_funds = int(deposit + stamp_fee + brokerage_contract)
+
+# 決済時必要資金：
+#   残代金 + 登記費用 + 精算金 + 決済時仲介手数料
+settlement_funds = int(
+    (property_price - deposit)
+    + regist_fee
+    + tax_clear
+    + brokerage_settlement
+)
 # --- 諸費用合計と総合計 ---
 total_expenses = int(
     regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
