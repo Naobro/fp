@@ -135,6 +135,12 @@ brokerage_settlement = brokerage_total - brokerage_contract
 # 登記・火災・銀行
 regist_fee = number_input_commas("登記費用（円）", 400_000)
 loan_fee = number_input_commas("銀行事務手数料（円）", int(property_price * 0.022))
+# --- 金消契約 印紙税（電子契約なら0円に） ---
+use_e_contract = st.checkbox("電子契約（印紙代 0円）", value=False)
+if use_e_contract:
+    kinko_stamp = 0
+else:
+    kinko_stamp = number_input_commas("金消契約 印紙税（円）", 0)
 fire_fee = number_input_commas("火災保険料（円）", 200_000)
 tax_clear = number_input_commas("精算金（円）", 100_000)
 display_fee = number_input_commas("表示登記（円）", 100_000 if (prop_type == "戸建て" and is_new) else 0)
