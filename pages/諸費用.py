@@ -306,7 +306,7 @@ total_expenses = int(
     tekigo_fee + brokerage_total + move_fee + reform_fee + stamp_fee
 )
 total = property_price + total_expenses
-settlement_funds = int((property_price - deposit) + tax_clear + regist_fee + brokerage_settlement)
+
 
 def build_pdf():
     pdf = FPDF(unit="mm", format="A4")
