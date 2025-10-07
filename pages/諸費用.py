@@ -122,9 +122,17 @@ property_price = price_man * 10_000
 deposit = number_input_commas("手付金（円）", round_deposit(property_price))
 kanri_month = number_input_commas("管理費・修繕積立（月額）", 18_000)
 
-# 電子契約
-elec_contract = st.checkbox("電子契約（印紙代 0円）", value=False)
-stamp_fee = 0 if elec_contract else calc_stamp_tax(property_price)
+# 契約書印紙税（物件価格に応じ自動計算＋電子契約で0円）
+col_e1, col_e2 = st.columns([1, 2])
+with col_e1:
+    elec_contract = st.checkbox("電子契約（印紙代 0円）", value=False)
+with col_e2:
+    if elec_contract:
+        stamp_fee = 0
+        st.markdown("✅ 電子契約を選択中：印紙代は不要です。")
+    else:
+        stamp_fee = calc_stamp_tax(property_price)
+        st.markdown(f"📄 自動計算：物件価格に応じて印紙代 **{stamp_fee:,} 円** を適用。")
 
 # 仲介手数料
 st.markdown("#### 仲介手数料")
