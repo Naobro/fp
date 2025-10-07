@@ -175,6 +175,7 @@ loanB = loanB_man * 10_000
 # 計算
 loan_full = property_price + regist_fee + fire_fee + loan_fee + brokerage_total
 m_full = monthly_payment(loan_full, base_years, base_rate)
+m_only = monthly_payment(property_price, base_years, base_rate)
 mA = monthly_payment(loanA, yearA, rateA)
 mB = monthly_payment(loanB, yearB, rateB)
 
@@ -415,31 +416,6 @@ if st.button("💾 諸費用データを保存"):
     st.success("保存しました ✅")
 
 # --- ダウンロード ---
-st.download_button(
-    "📄 資金計画書.pdf ダウンロード",
-    data=pdf_bytes,
-    file_name=f"{st.session_state['property_name']}　諸費用明細.pdf",
-    mime="application/pdf",
-)
-# ============ 出力・保存 ============
-if st.button("💾 諸費用データを保存"):
-    payload = {
-        "customer_name": st.session_state["customer_name"],
-        "property_name": st.session_state["property_name"],
-        "property_price": property_price,
-        "deposit": deposit,
-        "total_expenses": regist_fee + fire_fee + loan_fee + brokerage_total + tax_clear + stamp_fee,
-        "total": property_price + regist_fee + fire_fee + loan_fee + brokerage_total,
-        "monthly_full": m_full,
-        "monthly_A": mA,
-        "monthly_B": mB,
-        "rateA": rateA,
-        "rateB": rateB,
-        "saved_at": now_iso(),
-    }
-    SB.table("fees_detail").upsert({**payload, "client_id": client_id}, on_conflict="client_id").execute()
-    st.success("保存しました ✅")
-
 st.download_button(
     "📄 資金計画書.pdf ダウンロード",
     data=pdf_bytes,
