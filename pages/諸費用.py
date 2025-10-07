@@ -146,6 +146,9 @@ else:
 fire_fee = number_input_commas("火災保険料（円）", 200_000)
 tax_clear = number_input_commas("精算金（円）", 100_000)
 display_fee = number_input_commas("表示登記（円）", 100_000 if (prop_type == "戸建て" and is_new) else 0)
+# --- 追加リフォーム費用・引越し費用 ---
+reform_fee = number_input_commas("追加リフォーム費用（円）", 0)
+move_fee = number_input_commas("引越し費用（円）", 120_000)
 tekigo_fee = number_input_commas("適合証明書（円）", 55_000 if use_flat35 else 0)
 # リフォーム・引越し
 option_fee = number_input_commas("リフォーム費用（円）", 0)
