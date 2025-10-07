@@ -165,10 +165,33 @@ brokerage_total = int((property_price * 0.03 + 60_000) * 1.1)
 save_to_state("brokerage_total", brokerage_total)
 
 # 登記・銀行・火災・精算・印紙税
+
+# --- 自己資金（手付金以外の追加分も入力可能に） ---
+additional_self = number_input_commas(
+    "追加自己資金（円）",
+    st.session_state.get("additional_self", 0)
+)
+save_to_state("additional_self", additional_self)
+
+# --- 借入金額を自動計算（物件価格＋諸費用 − 手付金 − 追加自己資金） ---
+# ※ loan_fee算出や月々支払いの基礎になる
+loan_base = int(property_price - deposit - additional_self)
+if loan_base < 0:
+    loan_base = 0
+
+st.markdown(f"**📊 借入予定金額：{loan_base:,} 円（概算）**")
+
+# --- 銀行事務手数料を借入金額×2.2%で自動計算 ---
+loan_fee = number_input_commas(
+    "銀行事務手数料（円）",
+    st.session_state.get("loan_fee", int(loan_base * 0.022))
+)
+save_to_state("loan_fee", loan_fee)
+save_to_state("loan_base", loan_base)
+
+# --- その他費用 ---
 regist_fee = number_input_commas("登記費用（円）",
                                  st.session_state.get("regist_fee", 400_000))
-loan_fee = number_input_commas("銀行事務手数料（円）",
-                               st.session_state.get("loan_fee", int(property_price * 0.022)))
 fire_fee = number_input_commas("火災保険料（円）",
                                st.session_state.get("fire_fee", 200_000))
 tax_clear = number_input_commas("精算金（円）",
@@ -182,28 +205,16 @@ reform_fee = number_input_commas("追加リフォーム費用（円）",
 move_fee = number_input_commas("引越し費用（円）",
                                st.session_state.get("move_fee", 120_000))
 
-# --- 金消契約 印紙税（電子契約なら0円に） ---
-use_e_contract = st.checkbox("金消契約も電子契約（印紙代0円）",
-                             value=st.session_state.get("use_e_contract", False),
-                             key="e_contract_stamp")
-if use_e_contract:
-    kinko_stamp = 0
-else:
-    kinko_stamp = number_input_commas("金消契約 印紙税（円）",
-                                      st.session_state.get("kinko_stamp", 0))
-
 # --- 状態保存 ---
 save_to_state("regist_fee", regist_fee)
-save_to_state("loan_fee", loan_fee)
 save_to_state("fire_fee", fire_fee)
 save_to_state("tax_clear", tax_clear)
 save_to_state("display_fee", display_fee)
 save_to_state("tekigo_fee", tekigo_fee)
 save_to_state("reform_fee", reform_fee)
 save_to_state("move_fee", move_fee)
-save_to_state("use_e_contract", use_e_contract)
-save_to_state("kinko_stamp", kinko_stamp)
-
+save_to_state("loan_fee", loan_fee)
+save_to_state("additional_self", additional_self)
 # 金利条件
 base_rate = st.number_input("基準金利（年%）", value=0.780, step=0.001, format="%.3f")
 base_years = 35
