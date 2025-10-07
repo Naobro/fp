@@ -264,62 +264,65 @@ def build_pdf():
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%前後／契約時振込・物件価格に充当）", ln=1)
     pdf.ln(3)
 
-    # ===== テーブル共通設定 =====
-    w = [60, 30, 30, 70]
+    # ===== テーブル用共通設定 =====
+    w = [55, 35, 25, 75]  # 幅調整：説明欄を広く
     headers = ["項目", "金額", "支払時期", "説明"]
 
-    def table_section(title, rows):
+    def draw_table_section(title, rows):
         pdf.set_font("IPAexGothic", "B", 10)
         pdf.cell(0, 7, title, ln=1)
         pdf.set_fill_color(220, 230, 250)
         for h, ww in zip(headers, w):
             pdf.cell(ww, 7, h, 1, 0, "C", 1)
         pdf.ln(7)
+
         pdf.set_font("IPAexGothic", "", 9)
         for r in rows:
-            pdf.cell(w[0], 7, r[0], 1)
-            pdf.cell(w[1], 7, r[1], 1, 0, "R")
-            pdf.cell(w[2], 7, r[2], 1, 0, "C")
-            pdf.multi_cell(w[3], 7, r[3], 1)
+            y_before = pdf.get_y()
+            x_before = pdf.get_x()
+
+            pdf.cell(w[0], 6, r[0], border=1)
+            pdf.cell(w[1], 6, r[1], border=1, align="R")
+            pdf.cell(w[2], 6, r[2], border=1, align="C")
+
+            x = pdf.get_x()
+            y = pdf.get_y()
+            pdf.multi_cell(w[3], 6, r[3], border=1)
+            pdf.set_xy(x_before, max(y, pdf.get_y()))
         pdf.ln(3)
 
-    # ===== 登記費用・税金・精算金等 =====
-    table_section("◆ 登記費用・税金・精算金等", [
+    # ===== 各セクション =====
+    draw_table_section("◆ 登記費用・税金・精算金等", [
         ["契約書 印紙代", fmt_jpy(stamp_fee), "契約時", "電子契約で削減可能"],
         ["登記費用", fmt_jpy(regist_fee), "決済時", "司法書士報酬＋登録免許税"],
         ["精算金", fmt_jpy(tax_clear), "決済時", "固都税・管理費等（日割り精算）"],
         ["表示登記", fmt_jpy(display_fee), "決済時", "新築戸建の場合必要（目安10万円）"],
     ])
 
-    # ===== 金融機関・火災保険 =====
-    table_section("◆ 金融機関・火災保険", [
+    draw_table_section("◆ 金融機関・火災保険", [
         ["銀行事務手数料", fmt_jpy(loan_fee), "決済時", "借入金額概算として物件価格×2.2%"],
         ["金消契約 印紙税", fmt_jpy(kinko_stamp), "金消契約時", "電子契約は不要・金融機関により必要"],
         ["火災保険", fmt_jpy(fire_fee), "決済時", "5年の火災保険（概算）"],
         ["適合証明書", fmt_jpy(tekigo_fee), "相談", "フラット35の場合 必須"],
     ])
 
-    # ===== 仲介会社（TERASS） =====
-    table_section("◆ 仲介会社（TERASS）", [
+    draw_table_section("◆ 仲介会社（TERASS）", [
         ["仲介手数料（合計）", fmt_jpy(brokerage_total), "契約時/決済時", "物件価格×3%＋6万＋税"],
         ["契約時", fmt_jpy(brokerage_contract), "契約時", "手付金と同時入金"],
         ["決済時", fmt_jpy(brokerage_settlement), "決済時", "残金決済時支払い"],
     ])
 
-    # ===== 追加工事・引越し =====
-    table_section("◆ 追加工事・引越し", [
+    draw_table_section("◆ 追加工事・引越し", [
         ["引越し費用", fmt_jpy(move_fee), "入居時", "距離・荷物量による"],
         ["追加リフォーム", fmt_jpy(reform_fee), "相談", "内容により異なる"],
     ])
 
     # ===== 注意書き =====
     pdf.set_font("IPAexGothic", "", 9)
-    pdf.multi_cell(0, 5,
-        "※諸費用は全て目安です。物件・契約形態・条件により変動します。\n"
-        "登記費用・火災保険・精算金等も見積取得後に確定します。")
+    pdf.multi_cell(0, 5, "※諸費用は全て目安です。物件・契約形態・条件により変動します。\n登記費用・火災保険・精算金等も見積取得後に確定します。")
     pdf.ln(3)
 
-    # ===== 合計（見やすい色付きテーブル） =====
+    # ===== 合計部分（背景付き） =====
     pdf.set_fill_color(235, 240, 255)
     pdf.set_font("IPAexGothic", "B", 11)
     pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計（物件＋諸費用）：{fmt_jpy(total)}", ln=1, fill=True)
@@ -356,7 +359,6 @@ def build_pdf():
 
     out = pdf.output(dest="S")
     return out.encode("latin-1") if isinstance(out, str) else bytes(out)
-
 # --- PDF生成 ---
 pdf_bytes = build_pdf()
 
