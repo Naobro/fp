@@ -182,67 +182,7 @@ mB = monthly_payment(loanB, yearB, rateB)
 need_contract = deposit + stamp_fee + brokerage_contract
 need_settle = property_price - deposit + regist_fee + tax_clear + brokerage_settlement
 
-# ============ PDF ============
-# ============ PDF ============
-def build_pdf():
-    pdf = FPDF(unit="mm", format="A4")
-    _register_jp_fonts(pdf)
-    pdf.add_page()
 
-    # タイトル部
-    pdf.set_font("IPAexGothic", "B", 12)
-    if st.session_state["customer_name"]:
-        pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
-    pdf.set_font("IPAexGothic", "", 11)
-    pdf.cell(0, 7, f"物件名：{st.session_state['property_name']}", ln=1)
-    pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
-    pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}", ln=1)
-    pdf.cell(0, 7, f"諸費用合計：{fmt_jpy(total_expenses)}", ln=1)
-    pdf.cell(0, 7, f"契約時必要資金：{fmt_jpy(need)}", ln=1)
-    pdf.ln(3)
-
-    # 明細表
-    headers = ["項目", "金額", "時期", "説明"]
-    w = [46, 34, 33, 77]
-    pdf.set_font("IPAexGothic", "B", 10)
-    pdf.set_fill_color(220, 230, 250)
-    for h, ww in zip(headers, w):
-        pdf.cell(ww, 7, h, 1, 0, "C", 1)
-    pdf.ln(7)
-
-    pdf.set_font("IPAexGothic", "", 10)
-    for r in cost_rows:
-        if "◆" in r[0]:
-            pdf.set_font("IPAexGothic", "B", 10)
-            pdf.cell(sum(w), 7, r[0], 1, 1)
-            pdf.set_font("IPAexGothic", "", 10)
-        else:
-            pdf.cell(w[0], 7, r[0], 1, 0)
-            pdf.cell(w[1], 7, r[1], 1, 0, "R")
-            pdf.cell(w[2], 7, r[2], 1, 0, "C")
-            pdf.cell(w[3], 7, r[3], 1, 1)
-    pdf.ln(3)
-
-    # 支払例表
-    pdf.set_font("IPAexGothic", "B", 11)
-    pdf.cell(0, 7, "（支払例）", ln=1)
-    pdf.set_font("IPAexGothic", "", 10)
-    rows = [
-        ["①自己資金0", property_price + total_expenses, m_full],
-        ["②諸費用のみ", property_price, m_only],
-        [f"③A 金利{rateA:.3f}%／{yearA}年", loanA, mA],
-        [f"④B 金利{rateB:.3f}%／{yearB}年", loanB, mB],
-    ]
-    for r in rows:
-        pdf.cell(80, 7, r[0], 1)
-        pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
-        pdf.cell(60, 7, fmt_jpy(r[2]), 1, 1, "R")
-
-    # 出力（文字コード安全処理）
-    out = pdf.output(dest="S")
-    if isinstance(out, str):
-        return out.encode("utf-8", errors="ignore")
-    return bytes(out)
 # ============ フォント登録関数（PDF生成前に必須） ============
 from fpdf import FPDF
 import requests, io, zipfile, tempfile
@@ -300,6 +240,12 @@ brokerage_settlement = brokerage_total - brokerage_contract
 
 # --- 契約時・決済時必要資金 ---
 contract_funds = int(deposit + stamp_fee + brokerage_contract)
+# --- 諸費用合計と総合計 ---
+total_expenses = int(
+    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
+    tekigo_fee + brokerage_total + move_fee + reform_fee + stamp_fee
+)
+total = property_price + total_expenses
 settlement_funds = int((property_price - deposit) + tax_clear + regist_fee + brokerage_settlement)
 
 # --- PDF構築 ---
