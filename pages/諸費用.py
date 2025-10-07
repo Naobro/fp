@@ -251,11 +251,28 @@ def _register_jp_fonts(pdf: FPDF):
 
 # ======== PDF生成・保存・DL ========
 
-# --- 仲介手数料（契約時／決済時）計算 ---
+# --- 仲介手数料（契約時／決済時）自動割振り ---
 brokerage_total = int((property_price * 0.03 + 60000) * 1.1)
-brokerage_contract = brokerage_total // 2
+
+# 条件分岐
+if brokerage_total >= 2_200_000:
+    brokerage_contract = 1_100_000
+elif brokerage_total >= 1_100_000:
+    brokerage_contract = 550_000
+else:
+    brokerage_contract = 330_000
+
 brokerage_settlement = brokerage_total - brokerage_contract
 
+# 表示欄（確認用）
+st.markdown("#### 仲介手数料（自動割振り）")
+col_b1, col_b2, col_b3 = st.columns(3)
+with col_b1:
+    st.number_input("仲介手数料（合計・円）", value=brokerage_total, step=10_000, disabled=True)
+with col_b2:
+    st.number_input("契約時（円）", value=brokerage_contract, step=10_000, disabled=True)
+with col_b3:
+    st.number_input("決済時（円）", value=brokerage_settlement, step=10_000, disabled=True)
 # --- 契約時・決済時必要資金 ---
 contract_funds = int(deposit + stamp_fee + brokerage_contract)
 # --- 諸費用合計と総合計 ---
