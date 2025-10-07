@@ -164,7 +164,7 @@ save_to_state("stamp_fee", stamp_fee)
 brokerage_total = int((property_price * 0.03 + 60_000) * 1.1)
 save_to_state("brokerage_total", brokerage_total)
 
-# 登記・銀行・火災・精算
+# 登記・銀行・火災・精算・印紙税
 regist_fee = number_input_commas("登記費用（円）",
                                  st.session_state.get("regist_fee", 400_000))
 loan_fee = number_input_commas("銀行事務手数料（円）",
@@ -174,13 +174,25 @@ fire_fee = number_input_commas("火災保険料（円）",
 tax_clear = number_input_commas("精算金（円）",
                                 st.session_state.get("tax_clear", 100_000))
 display_fee = number_input_commas("表示登記（円）",
-                                  st.session_state.get("display_fee", 100_000 if (prop_type == "戸建て" and is_new) else 0))
+                                  st.session_state.get("display_fee", 110_000 if (prop_type == "戸建て" and is_new) else 0))
 tekigo_fee = number_input_commas("適合証明書（円）",
                                  st.session_state.get("tekigo_fee", 55_000 if use_flat35 else 0))
 reform_fee = number_input_commas("追加リフォーム費用（円）",
                                  st.session_state.get("reform_fee", 0))
 move_fee = number_input_commas("引越し費用（円）",
                                st.session_state.get("move_fee", 120_000))
+
+# --- 金消契約 印紙税（電子契約なら0円に） ---
+use_e_contract = st.checkbox("金消契約も電子契約（印紙代0円）",
+                             value=st.session_state.get("use_e_contract", False),
+                             key="e_contract_stamp")
+if use_e_contract:
+    kinko_stamp = 0
+else:
+    kinko_stamp = number_input_commas("金消契約 印紙税（円）",
+                                      st.session_state.get("kinko_stamp", 0))
+
+# --- 状態保存 ---
 save_to_state("regist_fee", regist_fee)
 save_to_state("loan_fee", loan_fee)
 save_to_state("fire_fee", fire_fee)
@@ -189,6 +201,8 @@ save_to_state("display_fee", display_fee)
 save_to_state("tekigo_fee", tekigo_fee)
 save_to_state("reform_fee", reform_fee)
 save_to_state("move_fee", move_fee)
+save_to_state("use_e_contract", use_e_contract)
+save_to_state("kinko_stamp", kinko_stamp)
 
 # 金利条件
 base_rate = st.number_input("基準金利（年%）", value=0.780, step=0.001, format="%.3f")
@@ -214,10 +228,6 @@ m_full = monthly_payment(loan_full, base_years, base_rate)
 m_only = monthly_payment(property_price, base_years, base_rate)
 mA = monthly_payment(loanA, yearA, rateA)
 mB = monthly_payment(loanB, yearB, rateB)
-
-# 契約時・決済時資金
-need_contract = deposit + stamp_fee + brokerage_contract
-need_settle = property_price - deposit + regist_fee + tax_clear + brokerage_settlement
 
 
 # ============ フォント登録関数（PDF生成前に必須） ============
@@ -273,13 +283,13 @@ def _register_jp_fonts(pdf: FPDF):
 # --- 仲介手数料（契約時／決済時）自動判定＆割振り ---
 brokerage_total = int((property_price * 0.03 + 60_000) * 1.1)
 
-# 物件価格による自動判定
-if property_price >= 70_000_000:  # 約7,000万円以上 → 高額帯
-    auto_contract = 1_100_000
-elif property_price >= 35_000_000:  # 約3,500〜6,999万円 → 中間帯
-    auto_contract = 550_000
-else:  # 約3,499万円以下 → 低価格帯
-    auto_contract = 330_000
+# 仲介手数料（合計金額）による自動判定
+if brokerage_total >= 2_200_000:       # 合計220万円以上 → 高額帯
+    auto_contract = 1_100_000          # 契約時110万円
+elif brokerage_total >= 1_100_000:     # 合計110〜219万円 → 中間帯
+    auto_contract = 550_000            # 契約時55万円
+else:                                  # 合計110万円未満 → 低価格帯
+    auto_contract = 330_000            # 契約時33万円
 
 # --- ユーザーが手動で上書きできる ---
 brokerage_contract = st.number_input(
@@ -306,9 +316,10 @@ with col_b2:
 with col_b3:
     st.number_input("決済時（円）", value=brokerage_settlement, step=10_000, disabled=True)
 
-# --- 契約時・決済時必要資金 ---
+# --- 仲介手数料（契約時／決済時）自動割振り後に必要資金を計算 ---
+# 契約時必要資金：
+#   手付金 + 契約書印紙代 + 契約時仲介手数料
 contract_funds = int(deposit + stamp_fee + brokerage_contract)
-settlement_funds = int((property_price - deposit) + regist_fee + tax_clear + brokerage_settlement)
 
 # 決済時必要資金：
 #   残代金 + 登記費用 + 精算金 + 決済時仲介手数料
@@ -318,13 +329,21 @@ settlement_funds = int(
     + tax_clear
     + brokerage_settlement
 )
+
 # --- 諸費用合計と総合計 ---
 total_expenses = int(
-    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
-    tekigo_fee + brokerage_total + move_fee + reform_fee + stamp_fee
+    regist_fee
+    + loan_fee
+    + fire_fee
+    + tax_clear
+    + display_fee
+    + tekigo_fee
+    + brokerage_total
+    + move_fee
+    + reform_fee
+    + stamp_fee
 )
 total = property_price + total_expenses
-
 
 def build_pdf():
     pdf = FPDF(unit="mm", format="A4")
