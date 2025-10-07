@@ -108,68 +108,87 @@ def monthly_payment(loan, years, rate):
     return int(loan * r * (1 + r) ** n / ((1 + r) ** n - 1))
 
 # ============ 入力エリア ============
-st.session_state["customer_name"] = st.text_input("お客様名", st.session_state.get("customer_name", ""))
-st.session_state["property_name"] = st.text_input("物件名", st.session_state.get("property_name", ""))
+# ============ 入力エリア ============
+def save_to_state(key, value):
+    st.session_state[key] = value
+    return value
 
+# お客様・物件名
+st.session_state["customer_name"] = st.text_input(
+    "お客様名", st.session_state.get("customer_name", "")
+)
+st.session_state["property_name"] = st.text_input(
+    "物件名", st.session_state.get("property_name", "")
+)
+
+# 種別・条件
 col1, col2, col3 = st.columns(3)
-with col1: prop_type = st.selectbox("物件種別", ["マンション", "戸建て"], index=0)
-with col2: is_new = st.checkbox("新築戸建（表示登記あり）", value=(prop_type == "戸建て"))
-with col3: use_flat35 = st.checkbox("フラット35（適合証明）", value=False)
+with col1:
+    prop_type = st.selectbox("物件種別", ["マンション", "戸建て"],
+                             index=0 if st.session_state.get("prop_type", "マンション") == "マンション" else 1)
+    save_to_state("prop_type", prop_type)
+with col2:
+    is_new = st.checkbox("新築戸建（表示登記あり）",
+                         value=st.session_state.get("is_new", prop_type == "戸建て"))
+    save_to_state("is_new", is_new)
+with col3:
+    use_flat35 = st.checkbox("フラット35（適合証明）",
+                             value=st.session_state.get("use_flat35", False))
+    save_to_state("use_flat35", use_flat35)
 
 # 価格・基礎費用
-price_man = st.number_input("物件価格（万円）", min_value=100, max_value=200_000, value=5800, step=10)
+price_man = st.number_input("物件価格（万円）",
+                            min_value=100,
+                            max_value=200_000,
+                            value=st.session_state.get("price_man", 5800),
+                            step=10)
+save_to_state("price_man", price_man)
 property_price = price_man * 10_000
-deposit = number_input_commas("手付金（円）", round_deposit(property_price))
-kanri_month = number_input_commas("管理費・修繕積立（月額）", 18_000)
 
-# 契約書印紙税（自動計算：物件価格連動＋電子契約で0円）
-st.markdown("#### 契約書 印紙代（自動計算）")
-col_stamp1, col_stamp2 = st.columns([1, 1])
-with col_stamp1:
-    elec_contract = st.checkbox("電子契約（印紙代 0円）", value=False)
+deposit = number_input_commas("手付金（円）",
+                              st.session_state.get("deposit", round_deposit(property_price)))
+save_to_state("deposit", deposit)
 
-# 自動計算ロジック
-if elec_contract:
-    stamp_fee = 0
-else:
-    stamp_fee = calc_stamp_tax(property_price)
+kanri_month = number_input_commas("管理費・修繕積立（月額）",
+                                  st.session_state.get("kanri_month", 18_000))
+save_to_state("kanri_month", kanri_month)
 
-# 自動反映欄（編集不可・見た目は数値欄）
-with col_stamp2:
-    st.number_input(
-        "契約書 印紙代（円）",
-        value=int(stamp_fee),
-        step=1,
-        disabled=True,
-        help="物件価格に応じて自動計算されます（電子契約時は0円）"
-    )
-# 仲介手数料
-st.markdown("#### 仲介手数料")
-brokerage_total = number_input_commas("仲介手数料（合計・円）", int(property_price * 0.03 + 60_000))
-brokerage_contract = number_input_commas("仲介手数料（契約時・円）", int(brokerage_total / 2))
-brokerage_settlement = brokerage_total - brokerage_contract
+# 電子契約・印紙税
+elec_contract = st.checkbox("電子契約（印紙代 0円）",
+                            value=st.session_state.get("elec_contract", False))
+save_to_state("elec_contract", elec_contract)
+stamp_fee = 0 if elec_contract else calc_stamp_tax(property_price)
+save_to_state("stamp_fee", stamp_fee)
 
-# 登記・火災・銀行
-regist_fee = number_input_commas("登記費用（円）", 400_000)
-loan_fee = number_input_commas("銀行事務手数料（円）", int(property_price * 0.022))
+# 仲介手数料（後の自動判定ブロックと連動）
+brokerage_total = int((property_price * 0.03 + 60_000) * 1.1)
+save_to_state("brokerage_total", brokerage_total)
 
-# --- 金消契約 印紙税（電子契約なら0円に） ---
-use_e_contract = st.checkbox("電子契約（印紙代 0円）", value=False, key="e_contract_stamp")
-if use_e_contract:
-    kinko_stamp = 0
-else:
-    kinko_stamp = number_input_commas("金消契約 印紙税（円）", 0)
-
-fire_fee = number_input_commas("火災保険料（円）", 200_000)
-tax_clear = number_input_commas("精算金（円）", 100_000)
-display_fee = number_input_commas("表示登記（円）", 100_000 if (prop_type == "戸建て" and is_new) else 0)
-# --- 追加リフォーム費用・引越し費用 ---
-reform_fee = number_input_commas("追加リフォーム費用（円）", 0)
-move_fee = number_input_commas("引越し費用（円）", 120_000)
-tekigo_fee = number_input_commas("適合証明書（円）", 55_000 if use_flat35 else 0)
-# リフォーム・引越し
-option_fee = number_input_commas("リフォーム費用（円）", 0)
-move_fee = number_input_commas("引越し費用（円）", 150_000)
+# 登記・銀行・火災・精算
+regist_fee = number_input_commas("登記費用（円）",
+                                 st.session_state.get("regist_fee", 400_000))
+loan_fee = number_input_commas("銀行事務手数料（円）",
+                               st.session_state.get("loan_fee", int(property_price * 0.022)))
+fire_fee = number_input_commas("火災保険料（円）",
+                               st.session_state.get("fire_fee", 200_000))
+tax_clear = number_input_commas("精算金（円）",
+                                st.session_state.get("tax_clear", 100_000))
+display_fee = number_input_commas("表示登記（円）",
+                                  st.session_state.get("display_fee", 100_000 if (prop_type == "戸建て" and is_new) else 0))
+tekigo_fee = number_input_commas("適合証明書（円）",
+                                 st.session_state.get("tekigo_fee", 55_000 if use_flat35 else 0))
+reform_fee = number_input_commas("追加リフォーム費用（円）",
+                                 st.session_state.get("reform_fee", 0))
+move_fee = number_input_commas("引越し費用（円）",
+                               st.session_state.get("move_fee", 120_000))
+save_to_state("regist_fee", regist_fee)
+save_to_state("loan_fee", loan_fee)
+save_to_state("fire_fee", fire_fee)
+save_to_state("tax_clear", tax_clear)
+save_to_state("display_fee", display_fee)
+save_to_state("tekigo_fee", tekigo_fee)
+save_to_state("reform_fee", reform_fee)
+save_to_state("move_fee", move_fee)
 
 # 金利条件
 base_rate = st.number_input("基準金利（年%）", value=0.780, step=0.001, format="%.3f")
