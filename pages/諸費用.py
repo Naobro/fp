@@ -157,12 +157,22 @@ price_man = st.number_input("物件価格（万円）",
 save_to_state("price_man", price_man)
 property_price = price_man * 10_000
 
-# --- 手付金（物件価格×5%を50万円単位で四捨五入・自動計算＋手動修正可） ---
+# --- 手付金（物件価格×5%を動的反映。初期は自動→手動修正時は固定） ---
 auto_deposit = round_deposit(price_man * 10_000)
-deposit_default = st.session_state.get("deposit", auto_deposit)
-deposit = number_input_commas("手付金（円：物件価格×5%を自動計算）", deposit_default)
-save_to_state("deposit", deposit)
 
+# 直前の保存値
+prev_deposit = st.session_state.get("deposit")
+
+# 手動修正検出フラグ（前回値と自動値が違えば固定化）
+if prev_deposit is None or prev_deposit == round_deposit(st.session_state.get("price_man", price_man) * 10_000):
+    # 自動再計算
+    deposit_value = auto_deposit
+else:
+    # 手動入力を保持
+    deposit_value = prev_deposit
+
+deposit = number_input_commas("手付金（円：物件価格×5%を自動計算・変更時自動更新）", deposit_value)
+save_to_state("deposit", deposit)
 # --- 印紙代（自動計算＋電子契約で0円） ---
 elec_contract = st.checkbox("電子契約（印紙代 0円）",
                             value=st.session_state.get("elec_contract", False))
