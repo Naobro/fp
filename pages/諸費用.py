@@ -35,11 +35,16 @@ def load_saved_data(client_id: str):
         st.warning(f"保存データ読み込み失敗: {e}")
     return None
 
+# ----------------------------
+# Supabaseから保存データを取得・反映
+# ----------------------------
 client_id = st.query_params.get("client", "unknown")
 saved = load_saved_data(client_id)
+
+# ---- 🔧 Supabaseデータをsession_stateに強制上書き（初期値ロジック排除） ----
 if saved:
     for k, v in saved.items():
-        st.session_state[k] = v
+        st.session_state[k] = v  # すべて強制的に上書き
 
 # ----------------------------
 # 画面設定
