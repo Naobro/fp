@@ -234,9 +234,11 @@ save_to_state("loan_fee", new_loan_fee)
 
 # --- 仲介手数料（物件価格に自動連動＋分割） ---
 tax_rate = 0.10
+
+# 自動算出
 auto_broker_total = int((property_price * 0.03 + 60_000) * (1 + tax_rate))
 
-# 自動算出（契約時分の初期値）
+# 契約時分の初期値（段階的に決定）
 if auto_broker_total >= 2_200_000:
     auto_broker_contract = 1_100_000
 elif auto_broker_total >= 1_100_000:
@@ -247,37 +249,39 @@ else:
 auto_broker_settlement = auto_broker_total - auto_broker_contract
 
 # -------------------------------
-# ✅ 仲介手数料は「物件価格」変更時のみ再計算（借入金額では反応しない）
+# ✅ 仲介手数料は「物件価格」変更時のみ再計算
 # -------------------------------
 prev_broker_price = st.session_state.get("_prev_broker_price", 0)
 manual_broker_flag = st.session_state.get("_manual_broker", False)
 
-# 🔹物件価格（円単位）で比較することで確実に検出
+# 🔹物件価格が変更されたときだけ再計算
 if (prev_broker_price != property_price) and not manual_broker_flag:
     broker_total = auto_broker_total
     broker_contract = auto_broker_contract
 else:
-    broker_total = st.session_state.get("broker_total", auto_broker_total)
-    broker_contract = st.session_state.get("broker_contract", auto_broker_contract)
+    broker_total = int(st.session_state.get("broker_total", auto_broker_total) or 0)
+    broker_contract = int(st.session_state.get("broker_contract", auto_broker_contract) or 0)
 
-# --- 入力欄（手動修正可） ---
+# --- 入力欄（カンマ入力でも安全に数値変換） ---
 new_broker_total = number_input_commas("仲介手数料 総額（円）", broker_total)
 new_broker_contract = number_input_commas("仲介手数料 契約時（円）", broker_contract)
 
-# --- 安全ロジック：契約時が総額を超えない ---
+# --- 安全ロジック（契約時が総額を超えたら補正） ---
 if new_broker_contract > new_broker_total:
     new_broker_contract = new_broker_total
-broker_settlement = new_broker_total - new_broker_contract
+
+broker_settlement = int(new_broker_total) - int(new_broker_contract)
 
 # --- 手動検出・保存 ---
 st.session_state["_manual_broker"] = (
     new_broker_total != auto_broker_total or new_broker_contract != auto_broker_contract
 )
-st.session_state["_prev_broker_price"] = property_price  # 円単位で更新
+st.session_state["_prev_broker_price"] = property_price
 
-save_to_state("broker_total", new_broker_total)
-save_to_state("broker_contract", new_broker_contract)
-save_to_state("broker_settlement", broker_settlement)
+# --- 保存（確実にint型で保持） ---
+save_to_state("broker_total", int(new_broker_total))
+save_to_state("broker_contract", int(new_broker_contract))
+save_to_state("broker_settlement", int(broker_settlement))
 # --- 各種費用 ---
 regist_fee = number_input_commas("登記費用（円）",
                                  st.session_state.get("regist_fee", 400_000))
