@@ -159,60 +159,59 @@ property_price = price_man * 10_000
 
 # --- 手付金（物件価格×5%を動的自動計算＋手動修正可） ---
 auto_deposit = round_deposit(price_man * 10_000)
-
-# 初回 or 物件価格変更時は自動更新
 prev_price = st.session_state.get("_prev_price")
-prev_manual_flag = st.session_state.get("_deposit_manual", False)
+manual_flag = st.session_state.get("_deposit_manual", False)
 
-# 手付金が未定義、または価格変更時は再計算
-if (prev_price != price_man) and not prev_manual_flag:
+# 自動反映
+if (prev_price != price_man) and not manual_flag:
     deposit = auto_deposit
 else:
     deposit = st.session_state.get("deposit", auto_deposit)
 
-# 入力欄（手動入力を検出）
 new_deposit = number_input_commas("手付金（円：物件価格×5%を自動計算）", deposit)
 
-# 手動入力を検出（自動計算との差分で判定）
+# 手動入力の検出
 if new_deposit != auto_deposit:
     st.session_state["_deposit_manual"] = True
 else:
     st.session_state["_deposit_manual"] = False
 
-# 状態保存
 st.session_state["_prev_price"] = price_man
 save_to_state("deposit", new_deposit)
+
+
 # --- 印紙代（自動計算＋電子契約で0円） ---
 elec_contract = st.checkbox("電子契約（印紙代 0円）",
                             value=st.session_state.get("elec_contract", False))
 save_to_state("elec_contract", elec_contract)
+
 stamp_fee_auto = 0 if elec_contract else calc_stamp_tax(price_man * 10_000)
 stamp_fee = number_input_commas("契約書 印紙代（円：自動計算）",
                                 st.session_state.get("stamp_fee", stamp_fee_auto))
 save_to_state("stamp_fee", stamp_fee)
 
-# --- 管理費・修繕積立（月額） ---
-kanri_month = number_input_commas("管理費・修繕積立（月額）",
-                                  st.session_state.get("kanri_month", 18_000))
-save_to_state("kanri_month", kanri_month)
 
-# --- 借入金額入力＋銀行手数料（借入金額×2.2% 自動連動） ---
-loan_amount_man = st.number_input(
-    "借入金額（万円）",
-    min_value=0,
-    max_value=200_000,
-    value=st.session_state.get("loan_amount_man", int(price_man)),
-    step=10
-)
-save_to_state("loan_amount_man", loan_amount_man)
-loan_amount = loan_amount_man * 10_000
-save_to_state("loan_amount", loan_amount)
+# --- 銀行事務手数料（借入金額×2.2％を動的自動反映＋手動修正可） ---
+loan_amount_yen = loan_amount_man * 10_000
+auto_loan_fee = int(loan_amount_yen * 0.022)
 
-loan_fee_auto = int(loan_amount * 0.022)
-loan_fee_default = st.session_state.get("loan_fee", loan_fee_auto)
-loan_fee = number_input_commas("銀行事務手数料（円：借入金額×2.2% 自動計算）", loan_fee_default)
-save_to_state("loan_fee", loan_fee)
+prev_loan = st.session_state.get("_prev_loan_amount")
+prev_manual_loanfee = st.session_state.get("_loanfee_manual", False)
 
+if (prev_loan != loan_amount_man) and not prev_manual_loanfee:
+    loan_fee = auto_loan_fee
+else:
+    loan_fee = st.session_state.get("loan_fee", auto_loan_fee)
+
+new_loan_fee = number_input_commas("銀行事務手数料（円：借入金額×2.2％を自動計算）", loan_fee)
+
+if new_loan_fee != auto_loan_fee:
+    st.session_state["_loanfee_manual"] = True
+else:
+    st.session_state["_loanfee_manual"] = False
+
+st.session_state["_prev_loan_amount"] = loan_amount_man
+save_to_state("loan_fee", new_loan_fee)
 # --- 仲介手数料 ---
 tax_rate = 0.10
 broker_total_auto = int((property_price * 0.03 + 60_000) * (1 + tax_rate))  # 総額自動計算
@@ -267,12 +266,7 @@ save_to_state("tekigo_fee", tekigo_fee)
 save_to_state("reform_fee", reform_fee)
 save_to_state("move_fee", move_fee)
 
-# --- 印紙代 ---
-elec_contract = st.checkbox("電子契約（印紙代 0円）",
-                            value=st.session_state.get("elec_contract", False))
-save_to_state("elec_contract", elec_contract)
-stamp_fee = 0 if elec_contract else calc_stamp_tax(property_price)
-save_to_state("stamp_fee", stamp_fee)
+
 
 # --- 金利パターン ---
 st.markdown("#### 借入パターン A / B（手動入力）")
