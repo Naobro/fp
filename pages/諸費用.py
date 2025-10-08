@@ -254,14 +254,22 @@ auto_broker_settlement = auto_broker_total - auto_broker_contract
 prev_broker_price = st.session_state.get("_prev_broker_price", 0)
 manual_broker_flag = st.session_state.get("_manual_broker", False)
 
-# 🔹物件価格が変更されたときだけ再計算
-if (prev_broker_price != property_price) and not manual_broker_flag:
+# 🔹物件価格が変更されたとき or 初回ロード時に物件価格と一致しないとき
+#    手動フラグがあっても強制的に自動計算値を適用する
+if (prev_broker_price != property_price) or \
+   (not manual_broker_flag and st.session_state.get("broker_total") != auto_broker_total): # ← この行を追加・修正
+
     broker_total = auto_broker_total
     broker_contract = auto_broker_contract
+    # 強制的に自動計算値を適用した場合は、手動フラグをFalseに戻す
+    st.session_state["_manual_broker"] = False # ← この行を追加
+
 else:
+    # 以前の値かセッションステートの値を読み込む（手動フラグがTrueの場合）
     broker_total = int(st.session_state.get("broker_total", auto_broker_total) or 0)
     broker_contract = int(st.session_state.get("broker_contract", auto_broker_contract) or 0)
 
+# 🔽 以下の入力欄のコードはそのまま 🔽
 # --- 入力欄（カンマ入力でも安全に数値変換） ---
 new_broker_total = number_input_commas("仲介手数料 総額（円）", broker_total)
 new_broker_contract = number_input_commas("仲介手数料 契約時（円）", broker_contract)
@@ -273,9 +281,14 @@ if new_broker_contract > new_broker_total:
 broker_settlement = int(new_broker_total) - int(new_broker_contract)
 
 # --- 手動検出・保存 ---
-st.session_state["_manual_broker"] = (
-    new_broker_total != auto_broker_total or new_broker_contract != auto_broker_contract
-)
+# 🚨 ここで手動フラグのロジックを修正し、自動計算値から少しでもズレたら手動と見なす
+# (new_broker_total != auto_broker_total) または (new_broker_contract != auto_broker_contract) のどちらか。
+# このままでも動作はしますが、新しい値（new_broker_totalなど）が使われるように調整
+if new_broker_total != auto_broker_total or new_broker_contract != auto_broker_contract:
+    st.session_state["_manual_broker"] = True
+else:
+    st.session_state["_manual_broker"] = False # ← 追加: 自動計算値に戻ったらフラグも戻す
+
 st.session_state["_prev_broker_price"] = property_price
 
 # --- 保存（確実にint型で保持） ---
