@@ -149,16 +149,27 @@ price_man = st.number_input("物件価格（万円）",
 save_to_state("price_man", price_man)
 property_price = price_man * 10_000
 
-deposit = number_input_commas("手付金（円）",
-                              st.session_state.get("deposit", round_deposit(property_price)))
+# --- 手付金：物件価格×5%（50万円単位で四捨五入）を自動計算しつつ手動修正可 ---
+auto_deposit = round_deposit(price_man * 10_000)
+deposit_default = st.session_state.get("deposit", auto_deposit)
+deposit = number_input_commas("手付金（円：物件価格×5%を自動計算）", deposit_default)
 save_to_state("deposit", deposit)
-# ----------------------------
-# 管理費・修繕積立・借入金額・銀行手数料
-# ----------------------------
+
+# --- 印紙代（自動計算＋電子契約で0円） ---
+elec_contract = st.checkbox("電子契約（印紙代 0円）",
+                            value=st.session_state.get("elec_contract", False))
+save_to_state("elec_contract", elec_contract)
+stamp_fee_auto = 0 if elec_contract else calc_stamp_tax(price_man * 10_000)
+stamp_fee = number_input_commas("契約書 印紙代（円：自動計算）",
+                                st.session_state.get("stamp_fee", stamp_fee_auto))
+save_to_state("stamp_fee", stamp_fee)
+
+# --- 管理費・修繕積立（月額） ---
 kanri_month = number_input_commas("管理費・修繕積立（月額）",
                                   st.session_state.get("kanri_month", 18_000))
 save_to_state("kanri_month", kanri_month)
 
+# --- 借入金額入力＋銀行手数料（借入金額×2.2% 自動連動） ---
 loan_amount_man = st.number_input(
     "借入金額（万円）",
     min_value=0,
@@ -170,33 +181,41 @@ save_to_state("loan_amount_man", loan_amount_man)
 loan_amount = loan_amount_man * 10_000
 save_to_state("loan_amount", loan_amount)
 
-# --- 銀行事務手数料：借入金額×2.2% 自動反映 ---
 loan_fee_auto = int(loan_amount * 0.022)
-loan_fee = number_input_commas(
-    "銀行事務手数料（円：借入金額×2.2% 自動）",
-    st.session_state.get("loan_fee", loan_fee_auto)
-)
+loan_fee_default = st.session_state.get("loan_fee", loan_fee_auto)
+loan_fee = number_input_commas("銀行事務手数料（円：借入金額×2.2% 自動計算）", loan_fee_default)
 save_to_state("loan_fee", loan_fee)
 
 # --- 仲介手数料 ---
 tax_rate = 0.10
-broker_total = int((property_price * 0.03 + 60_000) * (1 + tax_rate))  # 総額
-if broker_total >= 2_200_000:
-    broker_contract = 1_100_000
-elif broker_total >= 1_100_000:
-    broker_contract = 550_000
+broker_total_auto = int((property_price * 0.03 + 60_000) * (1 + tax_rate))  # 総額自動計算
+
+# 自動判定（契約時分の初期値）
+if broker_total_auto >= 2_200_000:
+    broker_contract_auto = 1_100_000
+elif broker_total_auto >= 1_100_000:
+    broker_contract_auto = 550_000
 else:
-    broker_contract = 330_000
+    broker_contract_auto = 330_000
+
+broker_settlement_auto = broker_total_auto - broker_contract_auto
+
+# --- 手動修正可能な入力欄 ---
+broker_total = number_input_commas("仲介手数料 総額（円）", st.session_state.get("broker_total", broker_total_auto))
+broker_contract = number_input_commas("仲介手数料 契約時（円）", st.session_state.get("broker_contract", broker_contract_auto))
+
+# --- 決済時は自動的に残額計算 ---
 broker_settlement = broker_total - broker_contract
 
-broker_total = number_input_commas("仲介手数料 総額（円）", broker_total)
-broker_contract = number_input_commas("仲介手数料 契約時（円）", broker_contract)
-broker_settlement = number_input_commas("仲介手数料 決済時（円）", broker_settlement)
+# --- 安全ロジック：契約時が総額を超えたら自動修正 ---
+if broker_contract > broker_total:
+    broker_contract = broker_total
+    broker_settlement = 0
 
+# --- 保存 ---
 save_to_state("broker_total", broker_total)
 save_to_state("broker_contract", broker_contract)
 save_to_state("broker_settlement", broker_settlement)
-
 # --- 各種費用 ---
 regist_fee = number_input_commas("登記費用（円）",
                                  st.session_state.get("regist_fee", 400_000))
