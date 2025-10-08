@@ -241,11 +241,14 @@ else:
 
 auto_broker_settlement = auto_broker_total - auto_broker_contract
 
-prev_price_broker = st.session_state.get("_prev_price_broker", 0)
-manual_broker_flag = st.session_state.get("_broker_manual", False)
+# -------------------------------
+# ✅ 仲介手数料は「物件価格」変更時のみ再計算
+# -------------------------------
+prev_broker_price = st.session_state.get("_prev_broker_price", 0)
+manual_broker_flag = st.session_state.get("_manual_broker", False)
 
-# 自動更新条件
-if (prev_price_broker != price_man) and not manual_broker_flag:
+# 物件価格が変わったときだけ再計算（借入金額の変更では再実行されても無視）
+if (prev_broker_price != price_man) and not manual_broker_flag:
     broker_total = auto_broker_total
     broker_contract = auto_broker_contract
 else:
@@ -262,10 +265,10 @@ if new_broker_contract > new_broker_total:
 broker_settlement = new_broker_total - new_broker_contract
 
 # 手動検出＋保存
-st.session_state["_broker_manual"] = (
+st.session_state["_manual_broker"] = (
     new_broker_total != auto_broker_total or new_broker_contract != auto_broker_contract
 )
-st.session_state["_prev_price_broker"] = price_man
+st.session_state["_prev_broker_price"] = price_man
 
 save_to_state("broker_total", new_broker_total)
 save_to_state("broker_contract", new_broker_contract)
