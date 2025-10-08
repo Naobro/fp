@@ -191,6 +191,16 @@ stamp_fee = number_input_commas("契約書 印紙代（円：自動計算）",
 save_to_state("stamp_fee", stamp_fee)
 
 
+# --- 借入金額入力 ---
+loan_amount_man = st.number_input(
+    "借入金額（万円）",
+    min_value=0,
+    max_value=200_000,
+    value=st.session_state.get("loan_amount_man", int(price_man)),
+    step=10
+)
+save_to_state("loan_amount_man", loan_amount_man)
+
 # --- 銀行事務手数料（借入金額×2.2％を動的自動反映＋手動修正可） ---
 loan_amount_yen = loan_amount_man * 10_000
 auto_loan_fee = int(loan_amount_yen * 0.022)
@@ -198,18 +208,22 @@ auto_loan_fee = int(loan_amount_yen * 0.022)
 prev_loan = st.session_state.get("_prev_loan_amount")
 prev_manual_loanfee = st.session_state.get("_loanfee_manual", False)
 
+# 自動計算の更新条件
 if (prev_loan != loan_amount_man) and not prev_manual_loanfee:
     loan_fee = auto_loan_fee
 else:
     loan_fee = st.session_state.get("loan_fee", auto_loan_fee)
 
+# 入力欄（自動反映＋手動変更対応）
 new_loan_fee = number_input_commas("銀行事務手数料（円：借入金額×2.2％を自動計算）", loan_fee)
 
+# 手動入力を検出（自動値との差分で判定）
 if new_loan_fee != auto_loan_fee:
     st.session_state["_loanfee_manual"] = True
 else:
     st.session_state["_loanfee_manual"] = False
 
+# 状態保存
 st.session_state["_prev_loan_amount"] = loan_amount_man
 save_to_state("loan_fee", new_loan_fee)
 # --- 仲介手数料 ---
