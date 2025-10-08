@@ -97,10 +97,18 @@ def _register_jp_fonts(pdf: FPDF):
 # ----------------------------
 def fmt_jpy(n): return f"{int(n):,} 円"
 def number_input_commas(label, value, step=1):
-    s = st.text_input(label, f"{value:,}")
+    """カンマ付き整数入力（Noneや空値を安全に処理）"""
+    if value is None:
+        value = 0
+    try:
+        s = st.text_input(label, f"{int(value):,}")
+    except Exception:
+        s = st.text_input(label, "0")
     s = re.sub(r"[^\d]", "", s)
-    try: return int(s)
-    except: return value
+    try:
+        return int(s)
+    except Exception:
+        return int(value)
 def round_deposit(price_yen): return int(round(price_yen * 0.05 / 500_000) * 500_000)
 def calc_stamp_tax(p):
     if p <= 5_000_000: return 5_000
@@ -149,7 +157,7 @@ price_man = st.number_input("物件価格（万円）",
 save_to_state("price_man", price_man)
 property_price = price_man * 10_000
 
-# --- 手付金：物件価格×5%（50万円単位で四捨五入）を自動計算しつつ手動修正可 ---
+# --- 手付金（物件価格×5%を50万円単位で四捨五入・自動計算＋手動修正可） ---
 auto_deposit = round_deposit(price_man * 10_000)
 deposit_default = st.session_state.get("deposit", auto_deposit)
 deposit = number_input_commas("手付金（円：物件価格×5%を自動計算）", deposit_default)
