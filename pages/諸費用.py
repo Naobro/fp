@@ -212,13 +212,19 @@ save_to_state("loan_amount_man", loan_amount_man)
 
 
 # --- 銀行事務手数料（借入金額×2.2％を自動計算＋手動修正可） ---
-auto_loan_fee = int(loan_amount_man * 10_000 * 0.022)
+# 借入金額（円）の計算
+loan_amount = loan_amount_man * 10_000 # 👈 loan_amountをここで定義
+save_to_state("loan_amount", loan_amount) # 👈 loan_amountをここで保存
+
+auto_loan_fee = int(loan_amount * 0.022) # 👈 loan_amountを使って計算
 prev_loan = st.session_state.get("_prev_loan_amount", 0)
 manual_fee_flag = st.session_state.get("_loanfee_manual", False)
 
-# 自動更新条件
-if (prev_loan != loan_amount_man) and not manual_fee_flag:
+# 自動更新条件: 借入金額が変わった or （手動フラグがFalseなのに）保存値が自動計算値と異なる
+if (prev_loan != loan_amount_man) or \
+   (not manual_fee_flag and st.session_state.get("loan_fee") != auto_loan_fee): # 👈 修正点: 初期ロード時の補正を追加
     loan_fee = auto_loan_fee
+    st.session_state["_loanfee_manual"] = False # 👈 修正点: 強制更新で手動フラグをリセット
 else:
     loan_fee = st.session_state.get("loan_fee", auto_loan_fee)
 
@@ -227,7 +233,11 @@ new_loan_fee = number_input_commas(
 )
 
 # 手動検出・保存
-st.session_state["_loanfee_manual"] = (new_loan_fee != auto_loan_fee)
+if new_loan_fee != auto_loan_fee: # 👈 修正点: 自動計算値と異なればTrue
+    st.session_state["_loanfee_manual"] = True
+else:
+    st.session_state["_loanfee_manual"] = False # 👈 修正点: 自動計算値に戻ったらFalse
+
 st.session_state["_prev_loan_amount"] = loan_amount_man
 save_to_state("loan_fee", new_loan_fee)
 
