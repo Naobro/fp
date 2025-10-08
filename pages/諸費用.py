@@ -157,6 +157,10 @@ price_man = st.number_input("物件価格（万円）",
 save_to_state("price_man", price_man)
 property_price = price_man * 10_000
 
+# ================================
+# 自動計算ブロック（手付金・印紙代・銀行事務手数料・仲介手数料）
+# ================================
+
 # --- 手付金（物件価格×5%を自動計算＋手動修正可） ---
 auto_deposit = round_deposit(price_man * 10_000)
 prev_price = st.session_state.get("_prev_price", 0)
@@ -175,14 +179,19 @@ st.session_state["_deposit_manual"] = (new_deposit != auto_deposit)
 st.session_state["_prev_price"] = price_man
 save_to_state("deposit", new_deposit)
 
+
 # --- 印紙代（自動計算＋電子契約で0円） ---
-elec_contract = st.checkbox("電子契約（印紙代 0円）",
-                            value=st.session_state.get("elec_contract", False))
+elec_contract = st.checkbox(
+    "電子契約（印紙代 0円）",
+    value=st.session_state.get("elec_contract", False)
+)
 save_to_state("elec_contract", elec_contract)
 
 stamp_fee_auto = 0 if elec_contract else calc_stamp_tax(price_man * 10_000)
-stamp_fee = number_input_commas("契約書 印紙代（円：自動計算）",
-                                st.session_state.get("stamp_fee", stamp_fee_auto))
+stamp_fee = number_input_commas(
+    "契約書 印紙代（円：自動計算）",
+    st.session_state.get("stamp_fee", stamp_fee_auto)
+)
 save_to_state("stamp_fee", stamp_fee)
 
 
@@ -195,6 +204,7 @@ loan_amount_man = st.number_input(
     step=10
 )
 save_to_state("loan_amount_man", loan_amount_man)
+
 
 # --- 銀行事務手数料（借入金額×2.2％を自動計算＋手動修正可） ---
 auto_loan_fee = int(loan_amount_man * 10_000 * 0.022)
@@ -215,6 +225,8 @@ new_loan_fee = number_input_commas(
 st.session_state["_loanfee_manual"] = (new_loan_fee != auto_loan_fee)
 st.session_state["_prev_loan_amount"] = loan_amount_man
 save_to_state("loan_fee", new_loan_fee)
+
+
 # --- 仲介手数料（物件価格に自動連動＋分割） ---
 tax_rate = 0.10
 auto_broker_total = int((property_price * 0.03 + 60_000) * (1 + tax_rate))
