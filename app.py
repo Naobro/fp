@@ -31,7 +31,7 @@ except Exception:
 
 if client_id:
     import client_portal
-    client_portal.render(client_id=client_id)
+    client_portal.main(client_id=client_id)
     st.stop()
     
 
