@@ -157,10 +157,10 @@ with col3:
 price_man = st.number_input("物件価格（万円）",
                             min_value=100,
                             max_value=200_000,
-                            value=st.session_state.get("price_man", 5800),
+                            value=int(st.session_state.get("price_man", 5800) or 5800),
                             step=10)
-save_to_state("price_man", price_man)
-property_price = price_man * 10_000
+save_to_state("price_man", int(price_man))
+property_price = int(price_man) * 10_000
 
 # ================================
 # 自動計算ブロック（手付金・印紙代・銀行事務手数料・仲介手数料）
