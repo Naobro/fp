@@ -101,12 +101,20 @@ def build_url(path: str, cid: str) -> str:
 # ---------------- Main ----------------
 def main(client_id: str | None = None):
     st.set_page_config(page_title="クライアント専用ポータル", layout="wide")
+    # --- クライアント名の取得 ---
+client_name = None
+if SB is not None:
+    res = SB.table("client_profiles").select("name").eq("client_id", client_id).limit(1).execute()
+    if res.data and res.data[0].get("name"):
+        client_name = res.data[0]["name"]
+
+# --- タイトル表示 ---
+if client_name:
+    st.title(f"👤 {client_name} 様 専用ページ")
+else:
     st.title("👤 クライアント専用ページ")
 
-    if not client_id:
-        client_id = get_client_code()
-
-    st.info(f"クライアントID: **{client_id}**")
+st.info(f"クライアントID: **{client_id}**")
 
     st.subheader("📋 固定リンク")
     for title, path in PAGES.items():
