@@ -653,11 +653,14 @@ def create_pdf() -> io.BytesIO:
     pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
 
     x = x_left + plan_w_mm
-    for b in BANKS + ["フラット35"]:
-        txt = "\n".join(SPECIAL_NOTES.get(b, []))
-        pdf.rect(x, y_notes, bank_w_mm, notes_h)
-        pdf.set_xy(x + 1, y_notes + pad_v)
-        pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)
+        for b in BANKS + ["フラット35"]:
+        pdf.rect(x, y_top, bank_w_mm, 10, style="F")
+        pdf.rect(x, y_top, bank_w_mm, 10)
+        pdf.set_xy(x, y_top)
+        header_label = b
+        if b == "フラット35":
+            header_label = "フラット35"
+        pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
         x += bank_w_mm
 
     pdf.set_fill_color(252, 249, 240)
