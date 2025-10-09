@@ -449,26 +449,25 @@ def build_pdf():
     pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}", ln=1, fill=True)
     pdf.ln(4)
 
-    pdf.set_font("IPAexGothic", "B", 10)
-pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
-pdf.cell(90, 7, "借入金額", 1, 0, "C")
-pdf.cell(50, 7, "支払い合計（管理費含む）", 1, 1, "C")
+        pdf.set_font("IPAexGothic", "B", 10)
+    pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
+    pdf.cell(90, 7, "借入金額", 1, 0, "C")
+    pdf.cell(50, 7, "支払い合計（管理費含む）", 1, 1, "C")
 
-rows = [
-    ["①自己資金0（物件＋諸費用）", round_to_10man(property_price + total_expenses), m_full],
-    ["②諸費用のみ自己資金", round_to_10man(property_price), m_only],
-    [f"③A 金利{rateA:.3f}%／{yearA}年", round_to_10man(loanA), mA],
-    [f"④B 金利{rateB:.3f}%／{yearB}年", round_to_10man(loanB), mB],
-]
+    rows = [
+        ["①自己資金0（物件＋諸費用）", round_to_10man(property_price + total_expenses), m_full],
+        ["②諸費用のみ自己資金", round_to_10man(property_price), m_only],
+        [f"③A 金利{rateA:.3f}%／{yearA}年", round_to_10man(loanA), mA],
+        [f"④B 金利{rateB:.3f}%／{yearB}年", round_to_10man(loanB), mB],
+    ]
 
-for r in rows:
-    pdf.cell(90, 7, r[0], 1)
-    pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
-    pdf.cell(50, 7, fmt_jpy(r[2]), 1, 1, "R")
+    for r in rows:
+        pdf.cell(90, 7, r[0], 1)
+        pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
+        pdf.cell(50, 7, fmt_jpy(r[2]), 1, 1, "R")
 
     out = pdf.output(dest="S")
     return out.encode("latin-1") if isinstance(out, str) else bytes(out)
-
 
 # ----------------------------
 # Supabase保存
