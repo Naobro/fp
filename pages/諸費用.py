@@ -357,8 +357,7 @@ mB = monthly_payment(loanB, yearB, rateB)
 
 # --- 契約・決済必要資金 ---
 contract_funds = int(deposit + stamp_fee + broker_contract)
-settlement_funds = int((property_price - deposit) + regist_fee + tax_clear + broker_settlement)
-
+settlement_funds = int((property_price - deposit) + regist_fee + tax_clear + broker_settlement + loan_fee)
 # --- 諸費用合計 ---
 total_expenses = int(
     regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
@@ -423,8 +422,8 @@ def build_pdf():
 
     draw_table("◆ 仲介会社（TERASS）", [
         ["仲介手数料 総額", fmt_jpy(broker_total), "契約＋決済", "物件価格×3%＋6万＋税"],
-        ["契約時 仲介手数料", fmt_jpy(broker_contract), "契約時", "上限1,100,000円（自動算出）"],
-        ["決済時 仲介手数料", fmt_jpy(broker_settlement), "決済時", "残額分（自動算出）"],
+        ["契約時 仲介手数料", fmt_jpy(broker_contract), "契約時", "契約時 半金"],
+        ["決済時 仲介手数料", fmt_jpy(broker_settlement), "決済時", "残額分"],
     ])
 
     draw_table("◆ 追加工事・引越し", [
@@ -440,23 +439,27 @@ def build_pdf():
 
     pdf.set_fill_color(235, 240, 255)
     pdf.set_font("IPAexGothic", "B", 11)
-    pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}", ln=1, fill=True)
+    pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}　自己資金差額：{fmt_jpy(max(0, loan_amount - total))}", ln=1, fill=True)
     pdf.cell(0, 8, f"契約時必要資金：{fmt_jpy(contract_funds)}", ln=1, fill=True)
     pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}", ln=1, fill=True)
     pdf.ln(4)
 
     pdf.set_font("IPAexGothic", "B", 10)
-    pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
-    rows = [
-        ["①自己資金0（物件＋諸費用）", property_price + total_expenses, m_full],
-        ["②諸費用のみ自己資金", property_price, m_only],
-        [f"③A 金利{rateA:.3f}%／{yearA}年", loanA, mA],
-        [f"④B 金利{rateB:.3f}%／{yearB}年", loanB, mB],
-    ]
-    for r in rows:
-        pdf.cell(90, 7, r[0], 1)
-        pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
-        pdf.cell(50, 7, fmt_jpy(r[2]), 1, 1, "R")
+pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
+pdf.cell(90, 7, "借入金額", 1, 0, "C")
+pdf.cell(50, 7, "支払い合計（管理費含む）", 1, 1, "C")
+
+rows = [
+    ["①自己資金0（物件＋諸費用）", round_to_10man(property_price + total_expenses), m_full],
+    ["②諸費用のみ自己資金", round_to_10man(property_price), m_only],
+    [f"③A 金利{rateA:.3f}%／{yearA}年", round_to_10man(loanA), mA],
+    [f"④B 金利{rateB:.3f}%／{yearB}年", round_to_10man(loanB), mB],
+]
+
+for r in rows:
+    pdf.cell(90, 7, r[0], 1)
+    pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
+    pdf.cell(50, 7, fmt_jpy(r[2]), 1, 1, "R")
 
     out = pdf.output(dest="S")
     return out.encode("latin-1") if isinstance(out, str) else bytes(out)
