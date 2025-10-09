@@ -159,36 +159,35 @@ with col3:
                              value=st.session_state.get("use_flat35", False))
     save_to_state("use_flat35", use_flat35)
 
-price_man = st.number_input("物件価格（万円）",
-                            min_value=100,
-                            max_value=200_000,
-                            value=int(st.session_state.get("price_man", 5800) or 5800),
-                            step=10)
-save_to_state("price_man", int(price_man))
-property_price = int(price_man) * 10_000
+# --- 物件価格入力（上限制限なし・小数もOK） ---
+price_man = st.number_input(
+    "物件価格（万円）",
+    min_value=0.0,  # ✅ 下限のみ（上限指定なし＝制限なし）
+    value=float(st.session_state.get("price_man", 5800) or 5800),
+    step=1.0,       # ✅ 万円単位
+    format="%.1f"   # ✅ 小数入力OK（例：7988.8万円など）
+)
+save_to_state("price_man", price_man)
+property_price = int(price_man * 10_000)  # 円換算
 
 # ================================
 # 自動計算ブロック（手付金・印紙代・銀行事務手数料・仲介手数料）
 # ================================
 
-# --- 手付金（物件価格×5%を自動計算＋手動修正可） ---
-auto_deposit = round_deposit(price_man * 10_000)
+# --- 手付金（物件価格×5%を自動計算＋手動修正可／物件価格変更時のみ再計算） ---
+auto_deposit = int(round(price_man * 10_000 * 0.05 / 500_000) * 500_000)
 prev_price = st.session_state.get("_prev_price", 0)
 manual_flag = st.session_state.get("_deposit_manual", False)
 
-# 自動計算（物件価格変更時のみ再計算）
 if (prev_price != price_man) and not manual_flag:
     deposit = auto_deposit
 else:
     deposit = st.session_state.get("deposit", auto_deposit)
 
-new_deposit = number_input_commas("手付金（円：物件価格×5%を自動計算）", deposit)
-
-# 手動変更検出
+new_deposit = number_input_commas("手付金（円：物件価格×5%自動計算／50万円単位）", deposit)
 st.session_state["_deposit_manual"] = (new_deposit != auto_deposit)
 st.session_state["_prev_price"] = price_man
 save_to_state("deposit", new_deposit)
-
 
 # --- 印紙代（自動計算＋電子契約で0円） ---
 elec_contract = st.checkbox(
