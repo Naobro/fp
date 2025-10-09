@@ -366,7 +366,7 @@ total_expenses = int(
 )
 total = property_price + total_expenses
 # ----------------------------
-# PDF 生成
+# PDF 生成関数
 # ----------------------------
 def build_pdf():
     pdf = FPDF(unit="mm", format="A4")
@@ -384,15 +384,13 @@ def build_pdf():
     pdf.ln(4)
 
     # --- テーブル設定（A4幅内に収まるサイズ） ---
-    w = [50, 35, 25, 70]  # ← 合計180mm程度に調整
+    w = [50, 35, 25, 70]
     headers = ["項目", "金額", "支払時期", "説明"]
 
     def draw_table(title, rows):
         pdf.set_font("IPAexGothic", "B", 10)
         pdf.cell(0, 7, title, ln=1)
         pdf.set_fill_color(220, 230, 250)
-
-        # 見出し行
         for h, ww in zip(headers, w):
             pdf.cell(ww, 7, h, 1, 0, "C", 1)
         pdf.ln(7)
@@ -400,20 +398,13 @@ def build_pdf():
         pdf.set_font("IPAexGothic", "", 9)
         for r in rows:
             y_start = pdf.get_y()
-            x_start = pdf.get_x()
-
-            # 項目・金額・支払時期
             pdf.cell(w[0], 6, r[0], border=1)
             pdf.cell(w[1], 6, r[1], border=1, align="R")
             pdf.cell(w[2], 6, r[2], border=1, align="C")
-
-            # 説明欄はマルチラインでも隣とズレないように固定高さ処理
             x = pdf.get_x()
             y = pdf.get_y()
             pdf.multi_cell(w[3], 6, r[3], border=1)
-            y_end = pdf.get_y()
-            line_height = y_end - y
-            pdf.set_y(y_start + line_height)
+            pdf.set_y(max(pdf.get_y(), y_start + 6))
         pdf.ln(3)
 
     # --- 各テーブル ---
@@ -441,7 +432,6 @@ def build_pdf():
         ["引越し費用", fmt_jpy(move_fee), "入居時", "距離・荷物量による目安"],
     ])
 
-    # --- 備考・合計 ---
     pdf.set_font("IPAexGothic", "", 9)
     pdf.multi_cell(0, 5,
         "※諸費用は概算です。物件・契約内容により増減します。\n"
@@ -455,7 +445,6 @@ def build_pdf():
     pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}", ln=1, fill=True)
     pdf.ln(4)
 
-    # --- 借入比較 ---
     pdf.set_font("IPAexGothic", "B", 10)
     pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
     rows = [
@@ -471,6 +460,8 @@ def build_pdf():
 
     out = pdf.output(dest="S")
     return out.encode("latin-1") if isinstance(out, str) else bytes(out)
+
+
 # ----------------------------
 # Supabase保存
 # ----------------------------
@@ -514,11 +505,23 @@ if st.button("💾 諸費用データを保存"):
         st.error(f"保存中にエラー: {e}")
 
 # ----------------------------
+# PDF生成（確実に定義後に呼び出し）
+# ----------------------------
+try:
+    pdf_bytes = build_pdf()
+except Exception as e:
+    st.error(f"PDF生成エラー: {e}")
+    pdf_bytes = b""
+
+# ----------------------------
 # PDFダウンロードボタン
 # ----------------------------
-st.download_button(
-    "📄 諸費用明細PDFをダウンロード",
-    data=pdf_bytes,
-    file_name=f"{st.session_state['property_name']}　諸費用明細.pdf",
-    mime="application/pdf",
-)
+if pdf_bytes:
+    st.download_button(
+        "📄 諸費用明細PDFをダウンロード",
+        data=pdf_bytes,
+        file_name=f"{st.session_state['property_name']}　諸費用明細.pdf",
+        mime="application/pdf",
+    )
+else:
+    st.warning("⚠️ PDFを生成できませんでした。")
