@@ -111,10 +111,7 @@ def build_url(path: str, cid: str) -> str:
     return f"{APP_BASE}{safe_path}?client={urllib.parse.quote(cid)}"
 
 
-# ---------------- Main ----------------
-# ---------------- Main ----------------
 def main(client_id: str | None = None):
-    """クライアント専用ポータル"""
     st.set_page_config(page_title="クライアント専用ポータル", layout="wide")
 
     if not client_id:
@@ -133,10 +130,10 @@ def main(client_id: str | None = None):
             )
             if res.data:
                 row = res.data[0]
-                # ① name カラムに直接値がある場合
+                # 1) name カラムに値がある場合
                 if row.get("name"):
                     client_name = row["name"]
-                # ② profile 内に name が入っている場合
+                # 2) profile 内に name が入っている場合
                 elif isinstance(row.get("profile"), dict) and row["profile"].get("name"):
                     client_name = row["profile"]["name"]
         except Exception as e:
@@ -150,13 +147,43 @@ def main(client_id: str | None = None):
 
     st.info(f"クライアントID: **{client_id}**")
 
-    # --- 以下、ポータル内のUIを記述（例） ---
-    st.subheader("基本情報")
-    st.write("ここにお客様のプロフィール情報を表示します。")
+    # --- 固定リンク ---
+    st.subheader("📋 固定リンク")
+    for title, path in PAGES.items():
+        url = build_url(path, client_id)
+        st.markdown(f"- [{title}]({url})")
 
-    st.subheader("登録内容")
-    st.write("各種シミュレーションや資料へのリンクをここに表示。")
+    st.divider()
 
+    # --- 外部リンク管理 ---
+    st.subheader("🔗 外部リンク（管理者用）")
+    links = get_links(client_id)
+
+    for i, link in enumerate(links):
+        col1, col2, col3 = st.columns([3, 6, 2])
+        with col1:
+            t = st.text_input(f"タイトル {i+1}", link.get("title", ""), key=f"title_{i}")
+        with col2:
+            u = st.text_input(f"URL {i+1}", link.get("url", ""), key=f"url_{i}")
+        with col3:
+            if st.button("削除", key=f"del_{i}"):
+                links.pop(i)
+                upsert_links(client_id, links)
+                st.rerun()
+        link["title"], link["url"] = t, u
+
+    with st.form("new_link", clear_on_submit=True):
+        nt = st.text_input("新しいリンク名")
+        nu = st.text_input("新しいURL")
+        add = st.form_submit_button("追加")
+        if add and nt and nu:
+            links.append({"title": nt, "url": nu})
+            upsert_links(client_id, links)
+            st.rerun()
+
+    if st.button("💾 保存"):
+        upsert_links(client_id, links)
+        st.success("保存しました")
 if __name__ == "__main__":
     main()
 
