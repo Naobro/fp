@@ -496,8 +496,8 @@ def build_pdf():
 # ----------------------------
 if st.button("💾 諸費用データを保存"):
     try:
-        # 保存前にセッションステートから最新の値を取得
-        # 手動フラグも保存する
+        # 不要な一時キー（内部フラグ）を除外
+        exclude_keys = {"_deposit_manual", "_prev_price", "_loanfee_manual", "_prev_loan_amount", "_manual_broker", "_prev_broker_price"}
         payload = {
             "client_id": client_id,
             "customer_name": st.session_state["customer_name"],
@@ -529,17 +529,15 @@ if st.button("💾 諸費用データを保存"):
             "rateA": rateA,
             "rateB": rateB,
             "saved_at": now_iso(),
-            # 自動計算制御用フラグの保存を追加
-            "_deposit_manual": st.session_state.get("_deposit_manual", False),
-            "_loanfee_manual": st.session_state.get("_loanfee_manual", False),
-            "_manual_broker": st.session_state.get("_manual_broker", False),
         }
-        # 既存の_prev_priceや_prev_loan_amountは保存しない
+
+        # 安全対策：Supabaseのスキーマにないキーを排除
+        payload = {k: v for k, v in payload.items() if k not in exclude_keys}
+
         SB.table("fees_detail").upsert(payload, on_conflict="client_id").execute()
         st.success("保存しました ✅")
     except Exception as e:
         st.error(f"保存中にエラー: {e}")
-
 # ----------------------------
 # PDF生成（確実に定義後に呼び出し）
 # ----------------------------
