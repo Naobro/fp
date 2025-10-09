@@ -162,17 +162,19 @@ with col3:
                               value=st.session_state.get("use_flat35", False))
     save_to_state("use_flat35", use_flat35)
 
-# --- 物件価格入力（上限制限なし・小数もOK） ---
 price_man = st.number_input(
     "物件価格（万円）",
-    min_value=0.0,  # ✅ 下限のみ（上限指定なし＝制限なし）
-    value=float(st.session_state.get("price_man", 5800) or 5800),
-    step=1.0,       # ✅ 万円単位
-    format="%.0f"   # ✅ 小数点なし表示（7280.0 → 7280）
+    min_value=0,                 # ✅ int型モード
+    max_value=10_000_000,        # ✅ 上限 1,000万万円（＝100億円）
+    value=int(float(st.session_state.get("price_man", 5800) or 5800)),
+    step=1,                      # ✅ 万円単位
+    format="%d"                  # ✅ 整数表示
 )
-save_to_state("price_man", price_man)
-property_price = int(price_man * 10_000)  # 円換算
 
+# ✅ Supabase 保存安全化処理：float混入防止
+price_man = int(price_man)
+save_to_state("price_man", price_man)
+property_price = int(price_man * 10_000)  # ✅ 円換算（bigint対応）
 # ================================
 # 自動計算ブロック（手付金・印紙代・銀行事務手数料・仲介手数料）
 # ================================
