@@ -56,31 +56,53 @@ class KVStore:
         return res.data[0] if res.data else None
 
     def set(self, key: str, value: dict) -> None:
-        """client_profiles に安全に upsert"""
+        """client_profiles に安全に upsert（name と meta を必ず保存）"""
         if not self.sb or not isinstance(value, dict):
             return
 
-        # 不正キー削除
-        clean = {
-            "client_id": key,
-            "name": value.get("name"),
-            "updated_at": datetime.now().isoformat(),
-        }
+        # --- name 決定（payload.name → meta.name → ゲストID末尾） ---
+        name = value.get("name")
+        if not name:
+            meta_src = value.get("meta") if isinstance(value.get("meta"), dict) else {}
+            name = meta_src.get("name")
+        if not name or str(name).strip() == "":
+            name = f"ゲスト{key[-4:].upper()}"
 
-        # profile は JSONB として格納（辞書型でなければ空）
-        profile = value.get("profile") if isinstance(value.get("profile"), dict) else {}
+        # --- meta(JSONB) を整形 ---
+        src_meta = value.get("meta") if isinstance(value.get("meta"), dict) else {}
+        if not src_meta.get("created_at"):
+            src_meta["created_at"] = datetime.now().isoformat()
+        src_meta["client_id"] = key
+        src_meta["name"] = name
 
-        # JSONに変換できるキーだけ残す（Widget Stateや関数を除外）
+        clean_meta = {}
+        for k, v in src_meta.items():
+            try:
+                json.dumps(v)
+                clean_meta[k] = v
+            except Exception:
+                continue
+
+        # --- profile(JSONB) を整形 ---
+        src_profile = value.get("profile") if isinstance(value.get("profile"), dict) else {}
         clean_profile = {}
-        for k, v in profile.items():
+        for k, v in src_profile.items():
             try:
                 json.dumps(v)
                 clean_profile[k] = v
             except Exception:
                 continue
 
-        clean["profile"] = clean_profile
+        # --- DBに送るレコード ---
+        clean = {
+            "client_id": key,
+            "name": name,
+            "meta": clean_meta,
+            "profile": clean_profile,
+            "updated_at": datetime.now().isoformat(),
+        }
 
+        # --- upsert ---
         try:
             self.sb.table(TABLE_NAME).upsert(clean, on_conflict="client_id").execute()
         except Exception as e:
@@ -113,7 +135,6 @@ class KVStore:
         buf = io.StringIO()
         json.dump({"clients": self.all()}, buf, ensure_ascii=False, indent=2)
         return buf.getvalue().encode("utf-8")
-
 
 @st.cache_resource(show_spinner=False)
 def get_kv() -> KVStore:
