@@ -117,26 +117,32 @@ def main(client_id: str | None = None):
     if not client_id:
         client_id = get_client_code()
 
-    # --- クライアント名の取得 ---
-    client_name = None
-    if SB is not None:
-        res = (
-            SB.table("client_profiles")
-            .select("name")
-            .eq("client_id", client_id)
-            .limit(1)
-            .execute()
-        )
-        if res.data and res.data[0].get("name"):
-            client_name = res.data[0]["name"]
+# --- クライアント名の取得 ---
+client_name = None
+if SB is not None:
+    res = (
+        SB.table("client_profiles")
+        .select("name, profile")
+        .eq("client_id", client_id)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        row = res.data[0]
+        # 1️⃣ name カラムに値がある場合
+        if row.get("name"):
+            client_name = row["name"]
+        # 2️⃣ profile 内に name が入っている場合
+        elif isinstance(row.get("profile"), dict) and row["profile"].get("name"):
+            client_name = row["profile"]["name"]
 
-    # --- タイトル表示 ---
-    if client_name:
-        st.title(f"👤 {client_name} 様 専用ページ")
-    else:
-        st.title("👤 クライアント専用ページ")
+# --- タイトル表示 ---
+if client_name:
+    st.title(f"👤 {client_name} 様 専用ページ")
+else:
+    st.title("👤 クライアント専用ページ")
 
-    st.info(f"クライアントID: **{client_id}**")
+st.info(f"クライアントID: **{client_id}**")
 
     # --- 固定リンク ---
     st.subheader("📋 固定リンク")
