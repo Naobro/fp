@@ -101,6 +101,17 @@ class KVStore:
             st.error(f"Supabase upsert 失敗: {e}")
             raise
 
+    def delete(self, key: str) -> bool:
+        """指定client_idを削除"""
+        if not self.sb:
+            return False
+        try:
+            self.sb.table(TABLE_NAME).delete().eq("client_id", key).execute()
+            return True
+        except Exception as e:
+            st.error(f"削除失敗: {e}")
+            return False
+
     def all(self) -> dict:
         """全件取得"""
         if not self.sb:
@@ -120,6 +131,7 @@ class KVStore:
         buf = io.StringIO()
         json.dump({"clients": self.all()}, buf, ensure_ascii=False, indent=2)
         return buf.getvalue().encode("utf-8")
+
 
 @st.cache_resource(show_spinner=False)
 def get_kv() -> KVStore:
