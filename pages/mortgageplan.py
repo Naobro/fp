@@ -651,7 +651,7 @@ def create_pdf() -> io.BytesIO:
     x_left = 10
     y_top = pdf.get_y()
 
-    # テーブルヘッダーの描画
+    # ヘッダー
     pdf.set_font("NotoSansJP", size=10)
     pdf.set_fill_color(242, 246, 250)
     pdf.rect(x_left, y_top, plan_w_mm, 10, style="F")
@@ -664,9 +664,7 @@ def create_pdf() -> io.BytesIO:
         pdf.rect(x, y_top, bank_w_mm, 10, style="F")
         pdf.rect(x, y_top, bank_w_mm, 10)
         pdf.set_xy(x, y_top)
-        header_label = b
-        # 修正: フラット35のヘッダーラベル設定に関する不要な行を削除
-        pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
+        pdf.multi_cell(bank_w_mm, 10, b, align="C", border=0)
         x += bank_w_mm
 
     y_cursor = y_top + 10
@@ -676,7 +674,7 @@ def create_pdf() -> io.BytesIO:
             return ["", "", ""]
         return [f"{d['rate']*100:.3f}%", f"¥{d['monthly']:,.0f}", f"({d['years']}年)"]
 
-    def _draw_row(label: str, cells: list[dict], y: float, fill_rgb: tuple | None = None, label_fill: tuple | None = None):
+    def _draw_row(label: str, cells: list[dict], y: float, fill_rgb=None, label_fill=None):
         if label_fill:
             pdf.set_fill_color(*label_fill)
             pdf.rect(x_left, y, plan_w_mm, cell_h, style="F")
@@ -685,15 +683,10 @@ def create_pdf() -> io.BytesIO:
         pdf.multi_cell(plan_w_mm, line_h, label, align="C", border=0)
 
         x = x_left + plan_w_mm
-        
-        # 描画されたテーブルデータ（cells）に基づいてセルを描画
         for col_idx, d in enumerate(cells):
-            # 最小値のハイライト処理をここで実行しない（簡易PDFのため）
-            
             if fill_rgb:
-                 pdf.set_fill_color(*fill_rgb)
-                 pdf.rect(x, y, bank_w_mm, cell_h, style="F")
-
+                pdf.set_fill_color(*fill_rgb)
+                pdf.rect(x, y, bank_w_mm, cell_h, style="F")
             pdf.rect(x, y, bank_w_mm, cell_h)
             t1, t2, t3 = _cell_text(d)
             pdf.set_xy(x, y)
@@ -703,7 +696,7 @@ def create_pdf() -> io.BytesIO:
             pdf.set_xy(x, y + 2 * line_h)
             pdf.multi_cell(bank_w_mm, line_h, t3, align="C", border=0)
             x += bank_w_mm
-        
+
     pdf.set_font("NotoSansJP", size=10)
     for i, plan in enumerate(PLANS):
         _draw_row(plan, table_rows[i], y_cursor)
@@ -714,13 +707,10 @@ def create_pdf() -> io.BytesIO:
 
     # 特記事項  
     pdf.set_font("NotoSansJP", size=9)  
-    notes_line_h = 5.6     # 行間をわずかに狭める  
-    pad_v = 2.0            # 上下余白をさらに縮小  
+    notes_line_h = 5.6  
+    pad_v = 2.0  
     max_lines = max(len(SPECIAL_NOTES.get(b, [])) for b in BANKS + ["フラット35"])  
-    
-    # 高さを7mm追加して計算しています
-    notes_h = max_lines * notes_line_h + pad_v * 2.0 + 7.0
-    
+    notes_h = max_lines * notes_line_h + pad_v * 2.0 + 7.0  
     y_notes = y_cursor + 1.5  
 
     pdf.set_fill_color(252, 249, 240)  
@@ -732,11 +722,14 @@ def create_pdf() -> io.BytesIO:
     x = x_left + plan_w_mm  
     for b in BANKS + ["フラット35"]:  
         txt = "\n".join(SPECIAL_NOTES.get(b, []))  
-        pdf.rect(x, y_notes, bank_w_mm, notes_h, style="F") # 特記事項のセル背景色  
+        pdf.rect(x, y_notes, bank_w_mm, notes_h, style="F")  
         pdf.rect(x, y_notes, bank_w_mm, notes_h)  
         pdf.set_xy(x + 1, y_notes + pad_v)  
         pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)  
-        x += bank_w_mm
+        x += bank_w_mm  
+
+    # ✅ これを追加（戻り値）
+    return _pdf_to_bytesio(pdf)
     
 # ===== PDFダウンロードボタン =====
 try:
