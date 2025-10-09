@@ -643,7 +643,7 @@ def create_pdf() -> io.BytesIO:
     notes_line_h = 5.6   # 行間をわずかに狭める
     pad_v = 2.0          # 上下余白をさらに縮小
     max_lines = max(len(SPECIAL_NOTES.get(b, [])) for b in BANKS + ["フラット35"])
-    notes_h = max_lines * notes_line_h + pad_v * 5.0  # 合計高さを20mm以下に抑える
+    notes_h = max_lines * notes_line_h + pad_v * 2.0  # 合計高さを20mm以下に抑える
     y_notes = y_cursor + 1.5
 
     pdf.set_fill_color(252, 249, 240)
