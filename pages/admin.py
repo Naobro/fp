@@ -141,6 +141,7 @@ def save_client(client_id: str, payload: dict):
     if not name or str(name).strip() == "":
         # 名前が未入力なら自動生成（例：ゲストH2A3）
         meta["name"] = f"ゲスト{client_id[-4:].upper()}"  # ✅ meta に設定
+        name = meta["name"]
 
     # --- メタ補完（client_id, created_at） ---
     if not meta.get("client_id"):
@@ -152,14 +153,17 @@ def save_client(client_id: str, payload: dict):
     payload["meta"] = meta
 
     # --- KVStore.set で正しい name を使うため root にコピー ---
-    payload["name"] = meta["name"]
+    payload["name"] = name or meta.get("name") or f"ゲスト{client_id[-4:].upper()}"
+    # ✅ ↑ どんな場合でもnameがNoneや空にならない最終安全弁
 
     # --- 保存 ---
     KV.set(client_id, payload)
+    st.toast(f"💾 {payload['name']} 様を保存しました", icon="✅")
+
+
 def load_client(client_id: str) -> dict | None:
     """特定のクライアントデータを読み込み"""
     return KV.get(client_id)
-
 def load_all_clients() -> list[dict]:
     """全クライアントデータを読み込み（UI表示用に整形）"""
     raw = KV.all()
