@@ -132,14 +132,22 @@ def gen_id(n: int = 6) -> str:
 
 def save_client(client_id: str, payload: dict):
     """クライアントデータをKey/Valueに保存（UPSERT）"""
-    # メタ補完
+
+    # --- 顧客名の補完（無名を防ぐ） ---
+    name = payload.get("name")
+    if not name or str(name).strip() == "":
+        # 名前が未入力なら自動生成（例：ゲストH2A3）
+        payload["name"] = f"ゲスト{client_id[-4:].upper()}"
+
+    # --- メタ補完 ---
     meta = payload.get("meta", {})
     if not meta.get("client_id"):
         meta["client_id"] = client_id
     if not meta.get("created_at"):
         meta["created_at"] = datetime.now().isoformat()
     payload["meta"] = meta
-    # 保存
+
+    # --- 保存 ---
     KV.set(client_id, payload)
 
 def load_client(client_id: str) -> dict | None:
