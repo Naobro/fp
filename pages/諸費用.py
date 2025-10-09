@@ -165,13 +165,13 @@ with col3:
 # --- 物件価格入力（上限制限なし・小数もOK） ---
 price_man = st.number_input(
     "物件価格（万円）",
-    min_value=0.0, # ✅ 下限のみ（上限指定なし＝制限なし）
+    min_value=0.0,  # ✅ 下限のみ（上限指定なし＝制限なし）
     value=float(st.session_state.get("price_man", 5800) or 5800),
-    step=1.0, # ✅ 万円単位
-    format="%.1f" # ✅ 小数入力OK（例：7988.8万円など）
+    step=1.0,       # ✅ 万円単位
+    format="%.0f"   # ✅ 小数点なし表示（7280.0 → 7280）
 )
 save_to_state("price_man", price_man)
-property_price = int(price_man * 10_000) # 円換算
+property_price = int(price_man * 10_000)  # 円換算
 
 # ================================
 # 自動計算ブロック（手付金・印紙代・銀行事務手数料・仲介手数料）
