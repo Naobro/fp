@@ -1,6 +1,3 @@
-# fp/pages/諸費用明細.py
-# 保存機能＋仲介手数料分割＋銀行事務手数料連動＋PDF出力（完全版）
-
 import os
 import re
 import io
@@ -44,7 +41,13 @@ saved = load_saved_data(client_id)
 # ---- 🔧 Supabaseデータをsession_stateに強制上書き（初期値ロジック排除） ----
 if saved:
     for k, v in saved.items():
-        st.session_state[k] = v  # すべて強制的に上書き
+        # Supabaseからのロード時、自動計算フラグもロードする
+        if k in ["_deposit_manual", "_loanfee_manual", "_manual_broker"]:
+            st.session_state[k] = v
+        # _prev_price, _prev_loan_amount, _prev_broker_price はロードしない (現在の値と比較するため)
+        elif not k.startswith("_prev_"):
+            st.session_state[k] = v 
+
 
 # ----------------------------
 # 画面設定
@@ -152,42 +155,61 @@ with col1:
     save_to_state("prop_type", prop_type)
 with col2:
     is_new = st.checkbox("新築戸建（表示登記あり）",
-                         value=st.session_state.get("is_new", prop_type == "戸建て"))
+                             value=st.session_state.get("is_new", prop_type == "戸建て"))
     save_to_state("is_new", is_new)
 with col3:
     use_flat35 = st.checkbox("フラット35（適合証明）",
-                             value=st.session_state.get("use_flat35", False))
+                              value=st.session_state.get("use_flat35", False))
     save_to_state("use_flat35", use_flat35)
 
 # --- 物件価格入力（上限制限なし・小数もOK） ---
 price_man = st.number_input(
     "物件価格（万円）",
-    min_value=0.0,  # ✅ 下限のみ（上限指定なし＝制限なし）
+    min_value=0.0, # ✅ 下限のみ（上限指定なし＝制限なし）
     value=float(st.session_state.get("price_man", 5800) or 5800),
-    step=1.0,       # ✅ 万円単位
-    format="%.1f"   # ✅ 小数入力OK（例：7988.8万円など）
+    step=1.0, # ✅ 万円単位
+    format="%.1f" # ✅ 小数入力OK（例：7988.8万円など）
 )
 save_to_state("price_man", price_man)
-property_price = int(price_man * 10_000)  # 円換算
+property_price = int(price_man * 10_000) # 円換算
 
 # ================================
 # 自動計算ブロック（手付金・印紙代・銀行事務手数料・仲介手数料）
 # ================================
 
 # --- 手付金（物件価格×5%を自動計算＋手動修正可／物件価格変更時のみ再計算） ---
+
+# 1. 自動計算値 (物件価格の5%を50万円単位で丸める)
 auto_deposit = int(round(price_man * 10_000 * 0.05 / 500_000) * 500_000)
+
+# 2. 自動更新の条件をチェック
 prev_price = st.session_state.get("_prev_price", 0)
 manual_flag = st.session_state.get("_deposit_manual", False)
 
-if (prev_price != price_man) and not manual_flag:
-    deposit = auto_deposit
+# 物件価格が変わった場合、または手動フラグが立っていない場合に自動計算値を初期値とする
+if (prev_price != price_man) or not manual_flag:
+    # 💡 修正: 価格が変わったら、強制的に自動計算値を初期値にセット
+    deposit_initial = auto_deposit
+    st.session_state["_deposit_manual"] = False # 強制的にリセット
 else:
-    deposit = st.session_state.get("deposit", auto_deposit)
+    # 💡 修正: 価格が変わっていない、かつ手動修正済みなら、保存された値を初期値とする
+    # savedがNoneの場合のフォールバックとしてauto_depositを設定
+    deposit_initial = st.session_state.get("deposit", auto_deposit) 
 
-new_deposit = number_input_commas("手付金（円：物件価格×5%自動計算／50万円単位）", deposit)
-st.session_state["_deposit_manual"] = (new_deposit != auto_deposit)
+# 3. ユーザー入力
+new_deposit = number_input_commas("手付金（円：物件価格×5%自動計算／50万円単位）", deposit_initial)
+
+# 4. 手動フラグの更新
+# ユーザーが入力した値が自動計算値と異なる場合、手動フラグをTrueにする
+if new_deposit != auto_deposit:
+    st.session_state["_deposit_manual"] = True
+else:
+    st.session_state["_deposit_manual"] = False
+
+# 5. セッションステートの更新と永続化に必要な値の保存
 st.session_state["_prev_price"] = price_man
-save_to_state("deposit", new_deposit)
+deposit = save_to_state("deposit", new_deposit)
+
 
 # --- 印紙代（自動計算＋電子契約で0円） ---
 elec_contract = st.checkbox(
@@ -313,9 +335,9 @@ save_to_state("broker_settlement", int(broker_settlement))
 regist_fee = number_input_commas("登記費用（円）",
                                  st.session_state.get("regist_fee", 400_000))
 fire_fee = number_input_commas("火災保険料（円）",
-                               st.session_state.get("fire_fee", 200_000))
+                              st.session_state.get("fire_fee", 200_000))
 tax_clear = number_input_commas("精算金（円）",
-                                st.session_state.get("tax_clear", 100_000))
+                                 st.session_state.get("tax_clear", 100_000))
 display_fee = number_input_commas("表示登記（円）",
                                   st.session_state.get("display_fee", 110_000 if (prop_type == "戸建て" and is_new) else 0))
 tekigo_fee = number_input_commas("適合証明書（円）",
@@ -323,7 +345,7 @@ tekigo_fee = number_input_commas("適合証明書（円）",
 reform_fee = number_input_commas("追加リフォーム費用（円）",
                                  st.session_state.get("reform_fee", 0))
 move_fee = number_input_commas("引越し費用（円）",
-                               st.session_state.get("move_fee", 120_000))
+                              st.session_state.get("move_fee", 120_000))
 
 save_to_state("regist_fee", regist_fee)
 save_to_state("fire_fee", fire_fee)
@@ -448,7 +470,7 @@ def build_pdf():
     pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}", ln=1, fill=True)
     pdf.ln(4)
 
-       # --- 借入パターン比較 ---
+        # --- 借入パターン比較 ---
     pdf.set_font("IPAexGothic", "B", 10)
     pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
     pdf.cell(90, 7, "借入パターン", 1, 0, "C")
@@ -474,6 +496,8 @@ def build_pdf():
 # ----------------------------
 if st.button("💾 諸費用データを保存"):
     try:
+        # 保存前にセッションステートから最新の値を取得
+        # 手動フラグも保存する
         payload = {
             "client_id": client_id,
             "customer_name": st.session_state["customer_name"],
@@ -505,7 +529,12 @@ if st.button("💾 諸費用データを保存"):
             "rateA": rateA,
             "rateB": rateB,
             "saved_at": now_iso(),
+            # 自動計算制御用フラグの保存を追加
+            "_deposit_manual": st.session_state.get("_deposit_manual", False),
+            "_loanfee_manual": st.session_state.get("_loanfee_manual", False),
+            "_manual_broker": st.session_state.get("_manual_broker", False),
         }
+        # 既存の_prev_priceや_prev_loan_amountは保存しない
         SB.table("fees_detail").upsert(payload, on_conflict="client_id").execute()
         st.success("保存しました ✅")
     except Exception as e:
