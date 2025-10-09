@@ -133,33 +133,30 @@ def gen_id(n: int = 6) -> str:
 def save_client(client_id: str, payload: dict):
     """クライアントデータをKey/Valueに保存（UPSERT）"""
 
-    # --- メタデータの初期化/取得 ---
+    # --- メタデータを初期化または取得 ---
     meta = payload.get("meta", {})
 
-    # --- 顧客名の補完（無名を防ぐ） ---
-    name = meta.get("name")  # ✅ meta から name を取得
-    if not name or str(name).strip() == "":
-        # 名前が未入力なら自動生成（例：ゲストH2A3）
-        meta["name"] = f"ゲスト{client_id[-4:].upper()}"  # ✅ meta に設定
+    # --- nameをmetaから探す / なければpayload直下から補完 ---
+    name = None
+    if meta.get("name"):
         name = meta["name"]
+    elif payload.get("name"):
+        name = payload["name"]
 
-    # --- メタ補完（client_id, created_at） ---
-    if not meta.get("client_id"):
-        meta["client_id"] = client_id
-    if not meta.get("created_at"):
-        meta["created_at"] = datetime.now().isoformat()
+    # --- それでも空ならゲスト名を自動生成 ---
+    if not name or str(name).strip() == "":
+        name = f"ゲスト{client_id[-4:].upper()}"
 
-    # --- payloadへ書き戻し ---
+    # --- meta と payload の両方に統一的に保存 ---
+    meta["name"] = name
+    meta["client_id"] = client_id
+    meta["created_at"] = meta.get("created_at") or datetime.now().isoformat()
     payload["meta"] = meta
-
-    # --- KVStore.set で正しい name を使うため root にコピー ---
-    payload["name"] = name or meta.get("name") or f"ゲスト{client_id[-4:].upper()}"
-    # ✅ ↑ どんな場合でもnameがNoneや空にならない最終安全弁
+    payload["name"] = name  # ✅ Supabaseのnameカラム用
 
     # --- 保存 ---
     KV.set(client_id, payload)
-    st.toast(f"💾 {payload['name']} 様を保存しました", icon="✅")
-
+    st.toast(f"💾 {name} 様を保存しました", icon="✅")
 
 def load_client(client_id: str) -> dict | None:
     """特定のクライアントデータを読み込み"""
