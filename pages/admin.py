@@ -164,16 +164,14 @@ def save_client(client_id: str, payload: dict):
     elif payload.get("name"):
         name = payload["name"]
 
-    # --- それでも空ならゲスト名を自動生成 ---
-    if not name or str(name).strip() == "":
-        name = f"ゲスト{client_id[-4:].upper()}"
+    # ⚠️ 名前必須化により、ゲスト自動生成ロジックを削除 ⚠️
 
     # --- meta と payload の両方に統一的に保存 ---
     meta["name"] = name
     meta["client_id"] = client_id
     meta["created_at"] = meta.get("created_at") or datetime.now().isoformat()
     payload["meta"] = meta
-    payload["name"] = name  # ✅ Supabaseのnameカラム用
+    payload["name"] = name  # ✅ Supabaseのnameカラムに保存
 
     # --- 保存 ---
     KV.set(client_id, payload)
@@ -220,7 +218,7 @@ st.header("お客様ページの新規発行（PINなし）")
 with st.form("new_client"):
     c1, c2 = st.columns(2)
     with c1:
-        name  = st.text_input("お客様名")
+        name = st.text_input("お客様名", required=True)  # ✅ 必須化
         phone = st.text_input("電話番号（任意）")
     with c2:
         email = st.text_input("メール（任意）")
