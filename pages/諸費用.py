@@ -374,68 +374,90 @@ def build_pdf():
     pdf.add_page()
     pdf.set_font("IPAexGothic", "B", 12)
 
+    # --- ヘッダー ---
     if st.session_state["customer_name"]:
         pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
     pdf.set_font("IPAexGothic", "", 11)
     pdf.cell(0, 7, f"物件名：{st.session_state['property_name']}", ln=1)
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
-    pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%前後／契約時振込・物件価格に充当）", ln=1)
-    pdf.ln(3)
+    pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%目安）", ln=1)
+    pdf.ln(4)
 
-    w = [55, 35, 25, 75]
+    # --- テーブル設定（A4幅内に収まるサイズ） ---
+    w = [50, 35, 25, 70]  # ← 合計180mm程度に調整
     headers = ["項目", "金額", "支払時期", "説明"]
 
     def draw_table(title, rows):
         pdf.set_font("IPAexGothic", "B", 10)
         pdf.cell(0, 7, title, ln=1)
         pdf.set_fill_color(220, 230, 250)
+
+        # 見出し行
         for h, ww in zip(headers, w):
             pdf.cell(ww, 7, h, 1, 0, "C", 1)
         pdf.ln(7)
+
         pdf.set_font("IPAexGothic", "", 9)
         for r in rows:
+            y_start = pdf.get_y()
+            x_start = pdf.get_x()
+
+            # 項目・金額・支払時期
             pdf.cell(w[0], 6, r[0], border=1)
             pdf.cell(w[1], 6, r[1], border=1, align="R")
             pdf.cell(w[2], 6, r[2], border=1, align="C")
+
+            # 説明欄はマルチラインでも隣とズレないように固定高さ処理
+            x = pdf.get_x()
+            y = pdf.get_y()
             pdf.multi_cell(w[3], 6, r[3], border=1)
+            y_end = pdf.get_y()
+            line_height = y_end - y
+            pdf.set_y(y_start + line_height)
         pdf.ln(3)
 
+    # --- 各テーブル ---
     draw_table("◆ 登記費用・税金・精算金等", [
-        ["契約書 印紙代", fmt_jpy(stamp_fee), "契約時", "電子契約で削減可能"],
+        ["契約書 印紙代", fmt_jpy(stamp_fee), "契約時", "電子契約なら0円"],
         ["登記費用", fmt_jpy(regist_fee), "決済時", "司法書士報酬＋登録免許税"],
-        ["精算金", fmt_jpy(tax_clear), "決済時", "固都税・管理費等（日割り精算）"],
-        ["表示登記", fmt_jpy(display_fee), "決済時", "新築戸建の場合必要（目安10万円）"],
+        ["精算金", fmt_jpy(tax_clear), "決済時", "固都税・管理費の日割精算"],
+        ["表示登記", fmt_jpy(display_fee), "決済時", "新築戸建のみ必要（約10万円）"],
     ])
 
     draw_table("◆ 金融機関・火災保険", [
         ["銀行事務手数料", fmt_jpy(loan_fee), "決済時", "借入金額×2.2%で自動算出"],
-        ["火災保険", fmt_jpy(fire_fee), "決済時", "5年の火災保険（概算）"],
-        ["適合証明書", fmt_jpy(tekigo_fee), "相談", "フラット35の場合 必須"],
+        ["火災保険", fmt_jpy(fire_fee), "決済時", "5年分の概算"],
+        ["適合証明書", fmt_jpy(tekigo_fee), "相談", "フラット35利用時に必要"],
     ])
 
     draw_table("◆ 仲介会社（TERASS）", [
         ["仲介手数料 総額", fmt_jpy(broker_total), "契約＋決済", "物件価格×3%＋6万＋税"],
-        ["契約時 仲介手数料", fmt_jpy(broker_contract), "契約時", "物件価格によって自動算出"],
-        ["決済時 仲介手数料", fmt_jpy(broker_settlement), "決済時", "総額から契約時分を差引いた残額"],
+        ["契約時 仲介手数料", fmt_jpy(broker_contract), "契約時", "上限1,100,000円（自動算出）"],
+        ["決済時 仲介手数料", fmt_jpy(broker_settlement), "決済時", "残額分（自動算出）"],
     ])
 
     draw_table("◆ 追加工事・引越し", [
         ["追加リフォーム", fmt_jpy(reform_fee), "相談", "内容により異なる"],
-        ["引越し費用", fmt_jpy(move_fee), "入居時", "距離・荷物量による"],
+        ["引越し費用", fmt_jpy(move_fee), "入居時", "距離・荷物量による目安"],
     ])
 
+    # --- 備考・合計 ---
     pdf.set_font("IPAexGothic", "", 9)
     pdf.multi_cell(0, 5,
-        "※諸費用は全て目安です。物件・契約形態・条件により変動します。\n"
-        "登記費用・火災保険・精算金等も見積取得後に確定します。")
-    pdf.ln(3)
+        "※諸費用は概算です。物件・契約内容により増減します。\n"
+        "登記費用・保険料・精算金などは見積確定後に決定します。")
+    pdf.ln(2)
+
     pdf.set_fill_color(235, 240, 255)
     pdf.set_font("IPAexGothic", "B", 11)
     pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}", ln=1, fill=True)
     pdf.cell(0, 8, f"契約時必要資金：{fmt_jpy(contract_funds)}", ln=1, fill=True)
     pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}", ln=1, fill=True)
-    pdf.ln(5)
+    pdf.ln(4)
 
+    # --- 借入比較 ---
+    pdf.set_font("IPAexGothic", "B", 10)
+    pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
     rows = [
         ["①自己資金0（物件＋諸費用）", property_price + total_expenses, m_full],
         ["②諸費用のみ自己資金", property_price, m_only],
@@ -443,15 +465,12 @@ def build_pdf():
         [f"④B 金利{rateB:.3f}%／{yearB}年", loanB, mB],
     ]
     for r in rows:
-        pdf.cell(80, 7, r[0], 1)
+        pdf.cell(90, 7, r[0], 1)
         pdf.cell(50, 7, fmt_jpy(r[1]), 1, 0, "R")
-        pdf.cell(60, 7, fmt_jpy(r[2]), 1, 1, "R")
+        pdf.cell(50, 7, fmt_jpy(r[2]), 1, 1, "R")
 
     out = pdf.output(dest="S")
     return out.encode("latin-1") if isinstance(out, str) else bytes(out)
-
-pdf_bytes = build_pdf()
-
 # ----------------------------
 # Supabase保存
 # ----------------------------
