@@ -640,11 +640,25 @@ def create_pdf() -> io.BytesIO:
 
        # 特記事項
     pdf.set_font("NotoSansJP", size=9)
-    notes_line_h = 5.8   # 行間やや広め
-    pad_v = 2.5          # 余白を控えめに
+    notes_line_h = 5.6   # 行間をわずかに狭める
+    pad_v = 2.0          # 上下余白をさらに縮小
     max_lines = max(len(SPECIAL_NOTES.get(b, [])) for b in BANKS + ["フラット35"])
-    notes_h = max_lines * notes_line_h + pad_v * 2.5  # 高さを約20mm前後に調整
-    y_notes = y_cursor + 2
+    notes_h = max_lines * notes_line_h + pad_v * 5.0  # 合計高さを20mm以下に抑える
+    y_notes = y_cursor + 1.5
+
+    pdf.set_fill_color(252, 249, 240)
+    pdf.rect(x_left, y_notes, plan_w_mm, notes_h, style="F")
+    pdf.rect(x_left, y_notes, plan_w_mm, notes_h)
+    pdf.set_xy(x_left, y_notes + (notes_h - notes_line_h) / 2)
+    pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
+
+    x = x_left + plan_w_mm
+    for b in BANKS + ["フラット35"]:
+        txt = "\n".join(SPECIAL_NOTES.get(b, []))
+        pdf.rect(x, y_notes, bank_w_mm, notes_h)
+        pdf.set_xy(x + 1, y_notes + pad_v)
+        pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)
+        x += bank_w_mm
 
     pdf.set_fill_color(252, 249, 240)
     pdf.rect(x_left, y_notes, plan_w_mm, notes_h, style="F")
