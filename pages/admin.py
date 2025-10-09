@@ -60,41 +60,34 @@ class KVStore:
         if not self.sb or not isinstance(value, dict):
             return
 
-        # --- name 決定（payload.name → meta.name → ゲストID末尾） ---
-        name = value.get("name")
-        if not name:
-            meta_src = value.get("meta") if isinstance(value.get("meta"), dict) else {}
-            name = meta_src.get("name")
+        # --- name 確定（payload.name または meta.name） ---
+        meta_src = value.get("meta") if isinstance(value.get("meta"), dict) else {}
+        name = value.get("name") or meta_src.get("name")
         if not name or str(name).strip() == "":
-            name = f"ゲスト{key[-4:].upper()}"
+            name = "(未入力)"
 
         # --- meta(JSONB) を整形 ---
-        src_meta = value.get("meta") if isinstance(value.get("meta"), dict) else {}
-        if not src_meta.get("created_at"):
-            src_meta["created_at"] = datetime.now().isoformat()
+        src_meta = dict(meta_src)
         src_meta["client_id"] = key
         src_meta["name"] = name
+        src_meta["created_at"] = src_meta.get("created_at") or datetime.now().isoformat()
 
-        clean_meta = {}
-        for k, v in src_meta.items():
-            try:
-                json.dumps(v)
-                clean_meta[k] = v
-            except Exception:
-                continue
+        # --- JSON整形（安全化） ---
+        def safe_json(d: dict) -> dict:
+            clean = {}
+            for k, v in d.items():
+                try:
+                    json.dumps(v)
+                    clean[k] = v
+                except Exception:
+                    continue
+            return clean
 
-        # --- profile(JSONB) を整形 ---
-        src_profile = value.get("profile") if isinstance(value.get("profile"), dict) else {}
-        clean_profile = {}
-        for k, v in src_profile.items():
-            try:
-                json.dumps(v)
-                clean_profile[k] = v
-            except Exception:
-                continue
+        clean_meta = safe_json(src_meta)
+        clean_profile = safe_json(value.get("profile") if isinstance(value.get("profile"), dict) else {})
 
-        # --- DBに送るレコード ---
-        clean = {
+        # --- DBへUPSERT ---
+        record = {
             "client_id": key,
             "name": name,
             "meta": clean_meta,
@@ -102,19 +95,11 @@ class KVStore:
             "updated_at": datetime.now().isoformat(),
         }
 
-        # --- upsert ---
         try:
-            self.sb.table(TABLE_NAME).upsert(clean, on_conflict="client_id").execute()
+            self.sb.table(TABLE_NAME).upsert(record, on_conflict="client_id").execute()
         except Exception as e:
             st.error(f"Supabase upsert 失敗: {e}")
             raise
-
-    def delete(self, key: str) -> bool:
-        """指定client_idを削除"""
-        if not self.sb:
-            return False
-        self.sb.table(TABLE_NAME).delete().eq("client_id", key).execute()
-        return True
 
     def all(self) -> dict:
         """全件取得"""
