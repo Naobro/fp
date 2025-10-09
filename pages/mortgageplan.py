@@ -47,13 +47,20 @@ def _resolve_font_path() -> str | None:
 BANKS = ["SBI新生銀行", "三菱UFJ銀行", "PayPay銀行", "じぶん銀行", "住信SBI銀行"]
 PLANS = ["一般団信", "がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]
 
-SPECIAL_NOTES = {
-    "SBI新生銀行": ["125%ルールなし", "ZEH -0.1%"],
-    "三菱UFJ銀行": ["三大疾病50%", "ワイド団信+0.3%"],
-    "PayPay銀行":  ["がん50以上で全疾病・失業補償", "ソフトバンク割 最大-0.13%", "125%ルールなし"],
-    "じぶん銀行":  ["ワイド団信+0.3%", "じぶん割 最大-0.15%"],
-    "住信SBI銀行": ["全疾病保障+三大疾病50%標準付帯", "125%ルールなし"],
-}
+# 既存の SPECIAL_NOTES 辞書（例として）
+# SPECIAL_NOTES = {
+#     "みずほ銀行": ["金利優遇に条件あり"],
+#     "三井住友銀行": ["保証料が別途必要"],
+#     # ... 他の銀行 ...
+#     "フラット35": ["機構団信に加入が必須"] # もし既存の記述があれば
+# }
+
+# 修正後の SPECIAL_NOTES 辞書 (データを追加)
+if "フラット35" not in SPECIAL_NOTES:
+    SPECIAL_NOTES["フラット35"] = []
+
+# フラット35の特記事項リストに新しい項目を追加
+SPECIAL_NOTES["フラット35"].append("融資上限は1人あたり8,000万円までです。")
 
 def extra_rate_percent(bank: str, plan: str, age: int) -> float:
     if bank == "SBI新生銀行":
@@ -652,12 +659,15 @@ def create_pdf() -> io.BytesIO:
     pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
 
     x = x_left + plan_w_mm
-    for b in BANKS + ["フラット35"]:
-        txt = "\n".join(SPECIAL_NOTES.get(b, []))
-        pdf.rect(x, y_notes, bank_w_mm, notes_h)
-        pdf.set_xy(x + 1, y_notes + pad_v)
-        pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)
-        x += bank_w_mm
+    for b in BANKS + ["フラット35"]:
+        pdf.rect(x, y_top, bank_w_mm, 10, style="F")
+        pdf.rect(x, y_top, bank_w_mm, 10)
+        pdf.set_xy(x, y_top)
+        header_label = b
+        # if b == "フラット35":
+        #     header_label = "フラット35\n※1人上限8,000万"  # ← 削除またはコメントアウト
+        pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
+        x += bank_w_mm
 
     pdf.set_xy(x_left, y_notes + notes_h + 2)
     return _pdf_to_bytesio(pdf)
