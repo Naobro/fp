@@ -595,7 +595,7 @@ def create_pdf() -> io.BytesIO:
         pdf.set_xy(x, y_top)
         header_label = b
         if b == "フラット35":
-            header_label = "フラット35\n※1人上限8,000万"
+        
         pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
         x += bank_w_mm
 
