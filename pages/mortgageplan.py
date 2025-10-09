@@ -542,7 +542,7 @@ for i, plan in enumerate(PLANS):
 html += "<tr>"
 html += f"<td style='{plan_w}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
 for b in BANKS + ["フラット35"]:
-    html += f"<td style='{bank_w}font-size:13px;text-align:left;vertical-align:top;background-color:#FCF9F0;padding:10px 6px;line-height:1.7;'>{'<br>'.join(SPECIAL_NOTES.get(b, []))}</td>"
+    html += f"<td style='{bank_w}font-size:13px;text-align:left;vertical-align:top;background-color:#FCF9F0;padding:20px 6px;line-height:1.7;'>{'<br>'.join(SPECIAL_NOTES.get(b, []))}</td>"
 html += "</tr></tbody></table>"
 
 
