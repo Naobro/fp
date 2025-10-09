@@ -638,12 +638,12 @@ def create_pdf() -> io.BytesIO:
             _draw_row("最長50年", row50, y_cursor, fill_rgb=(249, 246, 239), label_fill=(249, 246, 239))
             y_cursor += cell_h
 
-       # 特記事項
+     # 特記事項
     pdf.set_font("NotoSansJP", size=9)
-    notes_line_h = 5.2
-    pad_v = 1.5
+    notes_line_h = 6.5  # 行間を広めに
+    pad_v = 3.0         # 上下余白を拡大
     max_lines = max(len(SPECIAL_NOTES.get(b, [])) for b in BANKS + ["フラット35"])
-    notes_h = max_lines * notes_line_h + pad_v * 2
+    notes_h = max_lines * notes_line_h + pad_v * 3  # 高さも余裕を持たせる
     y_notes = y_cursor + 2
 
     pdf.set_fill_color(252, 249, 240)
