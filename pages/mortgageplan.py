@@ -660,7 +660,18 @@ def create_pdf() -> io.BytesIO:
 
     pdf.set_xy(x_left, y_notes + notes_h + 2)
     return _pdf_to_bytesio(pdf)
-
+# ===== PDFダウンロードボタン =====
+try:
+    pdf_bytes = create_pdf()
+    st.download_button(
+        label="📄 PDFをダウンロード",
+        data=pdf_bytes,
+        file_name="住宅ローン提案書.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+except Exception as e:
+    st.error(f"PDF生成エラー: {e}")
 
 # ===== 金利修正（パスワード一致で表示） =====
 st.markdown("---")
