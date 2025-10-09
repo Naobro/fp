@@ -129,6 +129,11 @@ def monthly_payment(loan, years, rate):
     r = rate / 100 / 12
     if r == 0: return int(loan / n)
     return int(loan * r * (1 + r) ** n / ((1 + r) ** n - 1))
+    
+def round_to_10man(n):
+    """金額を10万円単位で繰り上げ"""
+    import math
+    return int(math.ceil(n / 100_000.0) * 100_000)
 
 def save_to_state(key, value):
     st.session_state[key] = value
