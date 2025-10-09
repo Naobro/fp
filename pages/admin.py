@@ -26,36 +26,76 @@ def share_url_for(cid: str) -> str:
     return f"{base}?client={cid}"
 
 # ===============================
-# Supabaseストア（永続化対応版）
+# Supabaseストア（永続化対応版 / JSONB整合対応）
 # ===============================
 from client_portal import get_sb
-SB = get_sb()
+import streamlit as st
+from datetime import datetime
+import json, io
 
+SB = get_sb()
 TABLE_NAME = "client_profiles"
 
 class KVStore:
+    """クライアント情報を Supabase に安全保存する Key-Value ストア"""
+
     def __init__(self):
         self.sb = SB
 
     def get(self, key: str) -> dict | None:
+        """client_id で1件取得"""
         if not self.sb:
             return None
-        res = self.sb.table(TABLE_NAME).select("*").eq("client_id", key).execute()
+        res = (
+            self.sb.table(TABLE_NAME)
+            .select("*")
+            .eq("client_id", key)
+            .limit(1)
+            .execute()
+        )
         return res.data[0] if res.data else None
 
     def set(self, key: str, value: dict) -> None:
-        if not self.sb:
+        """client_profiles に安全に upsert"""
+        if not self.sb or not isinstance(value, dict):
             return
-        value["client_id"] = key
-        self.sb.table(TABLE_NAME).upsert(value, on_conflict="client_id").execute()
+
+        # 不正キー削除
+        clean = {
+            "client_id": key,
+            "name": value.get("name"),
+            "updated_at": datetime.now().isoformat(),
+        }
+
+        # profile は JSONB として格納（辞書型でなければ空）
+        profile = value.get("profile") if isinstance(value.get("profile"), dict) else {}
+
+        # JSONに変換できるキーだけ残す（Widget Stateや関数を除外）
+        clean_profile = {}
+        for k, v in profile.items():
+            try:
+                json.dumps(v)
+                clean_profile[k] = v
+            except Exception:
+                continue
+
+        clean["profile"] = clean_profile
+
+        try:
+            self.sb.table(TABLE_NAME).upsert(clean, on_conflict="client_id").execute()
+        except Exception as e:
+            st.error(f"Supabase upsert 失敗: {e}")
+            raise
 
     def delete(self, key: str) -> bool:
+        """指定client_idを削除"""
         if not self.sb:
             return False
         self.sb.table(TABLE_NAME).delete().eq("client_id", key).execute()
         return True
 
     def all(self) -> dict:
+        """全件取得"""
         if not self.sb:
             return {}
         res = self.sb.table(TABLE_NAME).select("*").execute()
@@ -65,17 +105,21 @@ class KVStore:
         return out
 
     def count(self) -> int:
+        """クライアント件数"""
         return len(self.all())
 
     def snapshot_bytes(self) -> bytes:
-        import json, io
+        """全データをJSON化してbytesで返す"""
         buf = io.StringIO()
         json.dump({"clients": self.all()}, buf, ensure_ascii=False, indent=2)
         return buf.getvalue().encode("utf-8")
 
+
 @st.cache_resource(show_spinner=False)
 def get_kv() -> KVStore:
+    """キャッシュ付きKVインスタンス"""
     return KVStore()
+
 
 KV = get_kv()
 # -------------------------------
