@@ -540,7 +540,12 @@ url_map = {
     "住信SBI銀行": "https://naokifp.streamlit.app/SumishinSBI",
 }
 for bank, val in rows_limit_html:
-    url = url_map.get(bank, "#")
+    # フラット35のみ公式サイトリンクを付与
+    if bank == "フラット35":
+        url = "https://www.sbiaruhi.co.jp/product/flat35/"
+    else:
+        url = url_map.get(bank, "#")
+    
     tbl += f"<tr><td align='center'><a href='{url}' target='_blank' style='color:#226BB3;text-decoration:none;font-weight:bold;'>{bank}</a></td><td align='right'>{val}</td></tr>"
 
 tbl += "</tbody></table>"
