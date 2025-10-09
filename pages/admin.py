@@ -133,23 +133,29 @@ def gen_id(n: int = 6) -> str:
 def save_client(client_id: str, payload: dict):
     """クライアントデータをKey/Valueに保存（UPSERT）"""
 
+    # --- メタデータの初期化/取得 ---
+    meta = payload.get("meta", {})
+
     # --- 顧客名の補完（無名を防ぐ） ---
-    name = payload.get("name")
+    name = meta.get("name")  # ✅ meta から name を取得
     if not name or str(name).strip() == "":
         # 名前が未入力なら自動生成（例：ゲストH2A3）
-        payload["name"] = f"ゲスト{client_id[-4:].upper()}"
+        meta["name"] = f"ゲスト{client_id[-4:].upper()}"  # ✅ meta に設定
 
-    # --- メタ補完 ---
-    meta = payload.get("meta", {})
+    # --- メタ補完（client_id, created_at） ---
     if not meta.get("client_id"):
         meta["client_id"] = client_id
     if not meta.get("created_at"):
         meta["created_at"] = datetime.now().isoformat()
+
+    # --- payloadへ書き戻し ---
     payload["meta"] = meta
+
+    # --- KVStore.set で正しい name を使うため root にコピー ---
+    payload["name"] = meta["name"]
 
     # --- 保存 ---
     KV.set(client_id, payload)
-
 def load_client(client_id: str) -> dict | None:
     """特定のクライアントデータを読み込み"""
     return KV.get(client_id)
