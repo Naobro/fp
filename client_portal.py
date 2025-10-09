@@ -12,21 +12,22 @@ except Exception:
 
 
 # ---------------- Supabase接続 ----------------
-def get_sb() -> "Client|None":
-    if create_client is None:
-        return None
-    url = st.secrets.get("SUPABASE_URL", "")
-    key = st.secrets.get("SUPABASE_ANON_KEY", "")
-    if not url or not key:
-        return None
-    try:
-        return create_client(url, key)
-    except Exception:
-        return None
+import streamlit as st
+from supabase import create_client, Client
 
+def get_sb() -> Client | None:
+    """Supabaseクライアントを生成して返す"""
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_SERVICE_KEY"]
+        if not url or not key:
+            return None
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"Supabase接続失敗: {e}")
+        return None
 
 SB = get_sb()
-
 
 # ----------- 外部リンク保存を profile 内に格納する -----------
 def upsert_links(client_id: str, links: list[Dict[str, str]]):
