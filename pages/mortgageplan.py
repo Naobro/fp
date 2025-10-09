@@ -718,8 +718,8 @@ def create_pdf() -> io.BytesIO:
     pad_v = 2.0            # 上下余白をさらに縮小  
     max_lines = max(len(SPECIAL_NOTES.get(b, [])) for b in BANKS + ["フラット35"])  
     
-    # ✅ ここを修正しました。元の高さに + 7.0 (7ミリ) を追加しています。
-    notes_h = max_lines * notes_line_h + pad_v * 2.0 + 7.0 # 合計高さを計算 (7mm追加)
+    # 高さを7mm追加して計算しています
+    notes_h = max_lines * notes_line_h + pad_v * 2.0 + 7.0
     
     y_notes = y_cursor + 1.5  
 
@@ -737,44 +737,6 @@ def create_pdf() -> io.BytesIO:
         pdf.set_xy(x + 1, y_notes + pad_v)  
         pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)  
         x += bank_w_mm
-
-
-
-    pdf.set_fill_color(252, 249, 240)
-
-    pdf.rect(x_left, y_notes, plan_w_mm, notes_h, style="F")
-
-    pdf.rect(x_left, y_notes, plan_w_mm, notes_h)
-
-    pdf.set_xy(x_left, y_notes + (notes_h - notes_line_h) / 2)
-
-    pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
-
-
-
-    x = x_left + plan_w_mm
-
-    for b in BANKS + ["フラット35"]:
-
-        txt = "\n".join(SPECIAL_NOTES.get(b, []))
-
-        pdf.rect(x, y_notes, bank_w_mm, notes_h, style="F") # 特記事項のセル背景色
-
-        pdf.rect(x, y_notes, bank_w_mm, notes_h)
-
-        pdf.set_xy(x + 1, y_notes + pad_v)
-
-        pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)
-
-        x += bank_w_mm
-
-    pdf.set_fill_color(252, 249, 240)
-    pdf.rect(x_left, y_notes, plan_w_mm, notes_h, style="F")
-    pdf.rect(x_left, y_notes, plan_w_mm, notes_h)
-    
-    # ... (後続の描画ロジックは notes_h が反映されるため、変更は不要)
-    pdf.set_xy(x_left, y_notes + notes_h + 2)
-    return _pdf_to_bytesio(pdf)
     
 # ===== PDFダウンロードボタン =====
 try:
