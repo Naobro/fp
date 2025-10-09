@@ -644,7 +644,7 @@ def create_pdf() -> io.BytesIO:
             _draw_row("最長50年", row50, y_cursor, fill_rgb=(249, 246, 239), label_fill=(249, 246, 239))
             y_cursor += cell_h
 
-    # 特記事項
+       # 特記事項
     pdf.set_font("NotoSansJP", size=9)
     notes_line_h = 5.2
     pad_v = 1.5
@@ -659,16 +659,15 @@ def create_pdf() -> io.BytesIO:
     pdf.multi_cell(plan_w_mm, notes_line_h, "特記事項", align="C", border=0)
 
     x = x_left + plan_w_mm
-    for b in BANKS + ["フラット35"]:
-        pdf.rect(x, y_top, bank_w_mm, 10, style="F")
-        pdf.rect(x, y_top, bank_w_mm, 10)
-        pdf.set_xy(x, y_top)
-        header_label = b
-        # if b == "フラット35":
-        #     header_label = "フラット35\n※1人上限8,000万"  # ← 削除またはコメントアウト
-        pdf.multi_cell(bank_w_mm, 10, header_label, align="C", border=0)
-        x += bank_w_mm
+    for b in BANKS + ["フラット35"]:
+        txt = "\n".join(SPECIAL_NOTES.get(b, []))
+        pdf.rect(x, y_notes, bank_w_mm, notes_h)
+        pdf.set_xy(x + 1, y_notes + pad_v)
+        pdf.multi_cell(bank_w_mm - 2, notes_line_h, txt, align="L", border=0)
+        x += bank_w_mm
 
+    pdf.set_xy(x_left, y_notes + notes_h + 2)
+    return _pdf_to_bytesio(pdf)
     pdf.set_xy(x_left, y_notes + notes_h + 2)
     return _pdf_to_bytesio(pdf)
 # ===== PDFダウンロードボタン =====
