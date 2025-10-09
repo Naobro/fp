@@ -522,7 +522,7 @@ html = """
 """
 html += f"<th style='{plan_w}text-align:center;font-size:18px;'>プラン</th>"
 for b in BANKS + ["フラット35"]:
-    label = b if b != "フラット35" else "フラット35※1人上限8,000万円"
+    label = b  # ← フラット35もそのまま表示
     html += f"<th style='{bank_w}text-align:center;font-size:18px'>{label}</th>"
 html += "</tr></thead><tbody>"
 
@@ -542,8 +542,9 @@ for i, plan in enumerate(PLANS):
 html += "<tr>"
 html += f"<td style='{plan_w}text-align:center;font-weight:bold;font-size:14px;background-color:#FCF9F0;'>特記事項</td>"
 for b in BANKS + ["フラット35"]:
-    html += f"<td style='{bank_w}font-size:12px;text-align:left;vertical-align:top;background-color:#FCF9F0;'>{'<br>'.join(SPECIAL_NOTES.get(b, []))}</td>"
+    html += f"<td style='{bank_w}font-size:13px;text-align:left;vertical-align:top;background-color:#FCF9F0;padding:10px 6px;line-height:1.7;'>{'<br>'.join(SPECIAL_NOTES.get(b, []))}</td>"
 html += "</tr></tbody></table>"
+
 
 st.markdown(html, unsafe_allow_html=True)
 # ===== PDF出力 =====
