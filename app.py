@@ -566,7 +566,7 @@ st.markdown("**アプリ内リンク（同一アプリのページに遷移）**
 
 # ✅ 同一アプリ内ページへ遷移（ファイルパスで指定）
 st.page_link("pages/admin.py", label="👑 Admin 管理画面", icon="👑")
-st.page_link("mortgageplan.py", label="🏦 住宅ローン提案シミュレーター", icon="🏦")
+st.page_link("pages/mortgageplan.py", label="🏦 住宅ローン提案シミュレーター", icon="🏦")
 st.page_link("client_portal.py", label="💼 クライアントポータル", icon="💼")
 st.divider()
 
