@@ -427,6 +427,26 @@ def build_pdf():
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%目安）", ln=1)
     pdf.ln(4)
+# ✅ 3行まとめて外枠付き（罫線ボックス化）
+    pdf.set_fill_color(235, 240, 255)
+    pdf.set_font("IPAexGothic", "B", 11)
+
+    # 枠の開始位置と幅・高さを記録
+    x_start = pdf.get_x()
+    y_start = pdf.get_y()
+    box_width = 190  # A4余白考慮
+    line_height = 8
+    total_height = line_height * 3
+
+    # 背景ボックス描画（塗り＋外枠）
+    pdf.rect(x_start, y_start, box_width, total_height, style="DF")  # D=枠線, F=塗り
+
+    # テキスト描画（背景付き）
+    pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}　自己資金差額：{fmt_jpy(max(0, total - (loan_amount_man * 10_000)))}", ln=1)
+    pdf.cell(0, 8, f"契約時必要資金：{fmt_jpy(contract_funds)}", ln=1)
+    pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}　※（追加リフォーム・火災保険・引っ越し費用除く）", ln=1)
+    pdf.ln(4)
+    
 
     # --- テーブル設定（A4幅内に収まるサイズ） ---
     w = [50, 35, 25, 70]
@@ -483,25 +503,7 @@ def build_pdf():
         "登記費用・保険料・精算金などは見積確定後に決定します。")
     pdf.ln(2)
 
-    # ✅ 3行まとめて外枠付き（罫線ボックス化）
-    pdf.set_fill_color(235, 240, 255)
-    pdf.set_font("IPAexGothic", "B", 11)
-
-    # 枠の開始位置と幅・高さを記録
-    x_start = pdf.get_x()
-    y_start = pdf.get_y()
-    box_width = 190  # A4余白考慮
-    line_height = 8
-    total_height = line_height * 3
-
-    # 背景ボックス描画（塗り＋外枠）
-    pdf.rect(x_start, y_start, box_width, total_height, style="DF")  # D=枠線, F=塗り
-
-    # テキスト描画（背景付き）
-    pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}　自己資金差額：{fmt_jpy(max(0, total - (loan_amount_man * 10_000)))}", ln=1)
-    pdf.cell(0, 8, f"契約時必要資金：{fmt_jpy(contract_funds)}", ln=1)
-    pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}　※（追加リフォーム・火災保険・引っ越し費用除く）", ln=1)
-    pdf.ln(4)
+    
 
         # --- 借入パターン比較 ---
     pdf.set_font("IPAexGothic", "B", 10)
