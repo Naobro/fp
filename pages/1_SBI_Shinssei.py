@@ -7,27 +7,7 @@ from utils.rates import get_base_rates_for_current_month, month_label
 # =============================
 st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
 
-# ✅ Streamlitサイドバー完全非表示（CSS＋DOM削除）
-hide_sidebar = """
-<style>
-/* 通常のサイドバー非表示 */
-section[data-testid='stSidebar'] {display: none !important;}
-/* 上部メニューボタンやドロップダウンを隠す */
-button[kind="header"] {display: none !important;}
-[data-testid="stHeader"] {visibility: hidden !important;}
-/* ページメニューの再描画防止 */
-[data-testid="stToolbar"] {display: none !important;}
-/* mainエリアを全幅に拡張 */
-div.block-container {padding-top: 1rem !important; max-width: 100% !important;}
-</style>
-"""
-st.markdown(hide_sidebar, unsafe_allow_html=True)
-
-# ✅ 自動的にサイドバーを折りたたむ（Streamlit内部API）
-try:
-    st.session_state["__streamlit_sidebar_state__"] = "collapsed"
-except Exception:
-    pass
+st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
 
 # 余白・テーブル体裁
 st.markdown("""
