@@ -382,8 +382,15 @@ with colB3: yearB = st.number_input("年数（B）", value=35, step=1)
 loanB = loanB_man * 10_000
 
 # --- 月々支払計算 ---
-# ✅ 修正：自己資金0は「物件＋諸費用＝total」全額を借入
-loan_full = total                     # 物件＋諸費用すべてを借入
+# ✅ 修正：total（物件＋諸費用合計）をここで再定義してから利用
+total_expenses = int(
+    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
+    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
+)
+total = property_price + total_expenses
+
+# ✅ 自己資金0（物件＋諸費用すべてを借入）
+loan_full = total
 m_full = monthly_payment(loan_full, base_years, base_rate)
 
 # ✅ 諸費用のみ自己資金パターン
@@ -401,6 +408,8 @@ total_expenses = int(
     tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
 )
 total = property_price + total_expenses
+
+
 # ----------------------------
 # PDF 生成関数
 # ----------------------------
