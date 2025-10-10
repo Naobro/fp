@@ -544,19 +544,30 @@ st.link_button(
 
 st.divider()
 st.subheader("便利ツールへジャンプ")
+
+# 外部サイト（URL先が外部ドメイン）
 tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
     "住宅ローン チェッカー": "https://loan-checker.jp/loan",
-    "👑 Admin 管理画面": "https://naokifp.streamlit.app/1_admin",
-    "🏦 住宅ローン提案シミュレーター": "https://naokifp.streamlit.app/mortgageplan",
-    "💼 クライアントポータル": "https://naokifp.streamlit.app/client_portal",
 }
+
+# 外部サイトボタン（2列）
 cols = st.columns(2)
 for i, (label, url) in enumerate(tools.items()):
     with cols[i % 2]:
         st.link_button(label, url)
+
+# 外部サイトのテキストリンク（任意）
 for name, url in tools.items():
     st.markdown(f'<a href="{url}" target="_blank">{name}</a>', unsafe_allow_html=True)
+
+st.markdown("---")
+st.markdown("**アプリ内リンク（同一アプリのページに遷移）**")
+
+# ✅ 同一アプリ内ページへ遷移（ファイルパスで指定）
+st.page_link("pages/admin.py", label="👑 Admin 管理画面", icon=":crown:")
+st.page_link("mortgageplan.py", label="🏦 住宅ローン提案シミュレーター", icon=":bank:")
+st.page_link("client_portal.py", label="💼 クライアントポータル", icon=":briefcase:")
 
 st.divider()
 
