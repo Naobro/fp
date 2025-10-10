@@ -547,6 +547,9 @@ st.subheader("便利ツールへジャンプ")
 tools = {
     "物件検索": "https://picks-agent.terass.com/search/mansion",
     "住宅ローン チェッカー": "https://loan-checker.jp/loan",
+    "👑 Admin 管理画面": "https://naokifp.streamlit.app/1_admin",
+    "🏦 住宅ローン提案シミュレーター": "https://naokifp.streamlit.app/mortgageplan",
+    "💼 クライアントポータル": "https://naokifp.streamlit.app/client_portal",
 }
 cols = st.columns(2)
 for i, (label, url) in enumerate(tools.items()):
