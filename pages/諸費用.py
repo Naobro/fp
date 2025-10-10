@@ -467,7 +467,7 @@ def build_pdf():
 
     pdf.set_fill_color(235, 240, 255)
     pdf.set_font("IPAexGothic", "B", 11)
-    pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}　自己資金差額：{fmt_jpy(max(0, loan_amount - total))}", ln=1, fill=True)
+    pdf.cell(0, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}　自己資金差額：{fmt_jpy(max(0, total - (loan_amount_man * 10_000)))}", ln=1, fill=True)
     pdf.cell(0, 8, f"契約時必要資金：{fmt_jpy(contract_funds)}", ln=1, fill=True)
     pdf.cell(0, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}", ln=1, fill=True)
     pdf.ln(4)
