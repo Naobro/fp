@@ -6,8 +6,18 @@ from utils.rates import get_base_rates_for_current_month, month_label
 # ページ設定（必ず一番最初）
 # =============================
 st.set_page_config(page_title="SBI新生銀行｜住宅ローン", page_icon="🏦", layout="wide")
-st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
 
+# ✅ Streamlitサイドバー非表示（pages共通対応）
+st.markdown("""
+<style>
+/* サイドバー非表示 */
+section[data-testid='stSidebar'] {display: none !important;}
+/* メニューボタン（≡）非表示 */
+button[kind="header"] {display: none !important;}
+/* ページ切替メニュー（右上ドロップダウン）非表示 */
+[data-testid="stHeader"] {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
 
 # 余白・テーブル体裁
 st.markdown("""
