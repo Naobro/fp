@@ -568,12 +568,13 @@ st.markdown("**アプリ内リンク（同一アプリのページに遷移）**
 st.page_link("pages/admin.py", label="👑 Admin 管理画面", icon="👑")
 st.page_link("pages/mortgageplan.py", label="🏦 住宅ローン提案シミュレーター", icon="🏦")
 
-# ✅ client_portal は pages外なのでURLリンクとして指定
+# ✅ クライアントポータル：client指定なしの共通入口
 st.link_button(
-    "💼 クライアントポータル（共通入口）",
-    "https://naokifp.streamlit.app/?client=",
+    "💼 クライアント専用ページ",
+    "https://naokifp.streamlit.app/client_portal",
     type="secondary"
 )
+st.caption("※ 各お客様には '?client=ID' を付けた専用リンクを発行してください。")
 st.divider()
 
 # ============================================
