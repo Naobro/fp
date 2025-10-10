@@ -12,12 +12,10 @@ from fpdf import FPDF  # fpdf2（パッケージ名）の正しいインポー�
 # ============================================
 # 1) ページ設定（このページで1回だけ・最初に必ず実行）
 # ============================================
-st.set_page_config(
-    page_title="不動産エージェント NAOKI",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
+# ✅ ページ設定とサイドバー削除（最初の3行）
+import streamlit as st
+st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide", initial_sidebar_state="collapsed")
+st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
 # ============================================
 # 3) URLに client があればどのパスでもお客様ページへ（PINは見ない）
 # ============================================
