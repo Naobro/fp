@@ -382,12 +382,16 @@ with colB3: yearB = st.number_input("年数（B）", value=35, step=1)
 loanB = loanB_man * 10_000
 
 # --- 月々支払計算 ---
-loan_full = property_price + regist_fee + fire_fee + loan_fee
+# ✅ 修正：自己資金0は「物件＋諸費用＝total」全額を借入
+loan_full = total                     # 物件＋諸費用すべてを借入
 m_full = monthly_payment(loan_full, base_years, base_rate)
+
+# ✅ 諸費用のみ自己資金パターン
 m_only = monthly_payment(property_price, base_years, base_rate)
+
+# ✅ A／Bパターン
 mA = monthly_payment(loanA, yearA, rateA)
 mB = monthly_payment(loanB, yearB, rateB)
-
 # --- 契約・決済必要資金 ---
 contract_funds = int(deposit + stamp_fee + broker_contract)
 settlement_funds = int((property_price - deposit) + regist_fee + tax_clear + broker_settlement + loan_fee)
