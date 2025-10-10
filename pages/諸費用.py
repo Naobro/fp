@@ -390,7 +390,7 @@ total_expenses = int(
 total = property_price + total_expenses
 
 # ✅ 自己資金0（物件＋諸費用すべてを借入）
-loan_full = total
+loan_full = round_to_10man(total)  # ✅ 総額を10万円単位で切り上げて借入額に
 m_full = monthly_payment(loan_full, base_years, base_rate)
 
 # ✅ 諸費用のみ自己資金パターン
