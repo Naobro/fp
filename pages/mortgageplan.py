@@ -18,7 +18,10 @@ from auth import login_ui
 from supabase import create_client # create_client は supabase から直接インポート
 
 # ===== 画面設定 =====
-st.set_page_config(page_title="住宅ローン 提案シミュレーター", layout="wide")
+# ✅ ページ設定とサイドバー削除（最初の3行）
+import streamlit as st
+st.set_page_config(page_title="住宅ローン提案", layout="wide", initial_sidebar_state="collapsed")
+st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
 authenticated = login_ui()
 if not authenticated:
     st.warning("🔑 このシミュレーターを利用するにはLINE登録とログインが必要です。")
