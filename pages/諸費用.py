@@ -426,6 +426,7 @@ def build_pdf():
     pdf.cell(0, 7, f"物件名：{st.session_state['property_name']}", ln=1)
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%目安）", ln=1)
+    pdf.cell(0, 7, f"借入金額：{fmt_jpy(loan_amount_man * 10_000)}", ln=1)  # ✅ 追加（万円→円換算）
     pdf.ln(4)
 # ✅ 3行まとめて外枠付き（罫線ボックス化）
     pdf.set_fill_color(235, 240, 255)
