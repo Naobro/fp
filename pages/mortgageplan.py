@@ -328,25 +328,30 @@ years_init = saved.get("period", default_years) if saved else default_years
 property_price_init = principal_init + self_fund_init if principal_init + self_fund_init > 0 else 52000000
 
 
-col1, col2, col3, col4 = st.columns(4)
+# ===== 入力欄（物件・自己資金・諸費用・年齢） =====
+col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
-    property_price_input = st.number_input("物件価格 (万円)", min_value=500, max_value=200000, 
+    property_price_input = st.number_input("物件価格 (万円)", min_value=500, max_value=200000,
                                            value=int(property_price_init / 10000), key="inp_property") * 10000
 with col2:
-    self_fund = st.number_input("自己資金 (万円)", min_value=0, max_value=100000, 
-                                value=int(self_fund_init / 10000), key="inp_self_fund") * 10000
+    # デフォルトは物件価格の7%を自動反映（手動修正も可能）
+    default_costs = int(property_price_input * 0.07)
+    extra_costs = st.number_input("諸費用 (円)", min_value=0, max_value=50000000,
+                                  value=default_costs, step=100000, key="inp_costs")
 with col3:
-    annual_income = st.number_input("年収 (万円)", min_value=100, max_value=10000, 
-                                    value=int(annual_income_init / 10000), key="inp_income") * 10000
+    self_fund = st.number_input("自己資金 (万円)", min_value=0, max_value=100000,
+                                value=int(self_fund_init / 10000), key="inp_self_fund") * 10000
 with col4:
-    age = st.number_input("年齢", min_value=18, max_value=80, 
+    annual_income = st.number_input("年収 (万円)", min_value=100, max_value=10000,
+                                    value=int(annual_income_init / 10000), key="inp_income") * 10000
+with col5:
+    age = st.number_input("年齢", min_value=18, max_value=80,
                           value=age_init, key="inp_age")
 
-# 借入額は「物件価格 − 自己資金」で自動計算
-principal = property_price_input - self_fund
-# 借入額が0以下になる場合は、0にクランプ（実際にはStreamlitのnumber_inputで対応）
-principal = max(0, principal) 
-
+# ===== 借入額の自動計算 =====
+total_price = property_price_input + extra_costs
+principal = total_price - self_fund
+principal = max(0, principal)
 max_year = min(79 - int(age), 50)
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(years_init, max_year), key="inp_years")
 # --- 入力条件の保存ボタン処理 ---
