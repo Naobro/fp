@@ -447,7 +447,7 @@ def build_table(principal: float, years_req: int, age_now: int):
                 # 借入比率で金利を判定 (rates['flat35_90']などは既に小数)
                 borrowing_ratio = principal / property_price_input
 
-                y_flat = cap_years("フラット35", years_req)
+                y_flat = 35  # フラット35は常に35年固定
                 
                 # 金利の読み込みと判定のロジック
                 base_flat_rate = 0.0189 # デフォルト（1.89%）
