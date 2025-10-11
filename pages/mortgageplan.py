@@ -508,10 +508,10 @@ def build_table(principal: float, years_req: int, age_now: int):
         except Exception:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
-
-       if bank == "住信SBI銀行":
-    eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
-    base = eff_pct / 100.0
+        if bank == "住信SBI銀行":
+            # ✅ 住信SBIネット銀行：期間補正は sbi_effective_percent に一本化
+            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
+            base = eff_pct / 100.0
         else:
             base = base_percent_saved / 100.0
             if bank in ["PayPay銀行", "じぶん銀行"] and y50 > 35:
