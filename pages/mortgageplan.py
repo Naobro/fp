@@ -509,15 +509,9 @@ def build_table(principal: float, years_req: int, age_now: int):
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        if bank == "住信SBI銀行":
-            # ✅ 住信SBIネット銀行：期間による上乗せを正確に適用
-            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
-            base = eff_pct / 100.0
-            # 借入期間36〜40年は+0.07%、41年以上は+0.15%
-            if 36 <= y50 <= 40:
-                base += 0.07 / 100.0
-            elif y50 > 40:
-                base += 0.15 / 100.0
+       if bank == "住信SBI銀行":
+    eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
+    base = eff_pct / 100.0
         else:
             base = base_percent_saved / 100.0
             if bank in ["PayPay銀行", "じぶん銀行"] and y50 > 35:
