@@ -1,6 +1,18 @@
 import streamlit as st
 import pandas as pd
 
+# ✅ サイドバー完全非表示＋全幅化（共通CSS）
+st.set_page_config(page_title="家賃補助シミュレーション", layout="wide")
+st.markdown("""
+<style>
+section[data-testid='stSidebar'] {display: none !important;}
+button[kind="header"] {display: none !important;}
+[data-testid="stHeader"] {visibility: hidden !important;}
+[data-testid="stToolbar"] {display: none !important;}
+div.block-container {padding-top: 1rem !important; max-width: 100% !important;}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🏠 家賃補助シミュレーション")
 
 # -------------------------
@@ -9,6 +21,11 @@ st.title("🏠 家賃補助シミュレーション")
 age_start = st.number_input("現在の年齢", 20, 80, 35)
 age_end = 90
 support_end_age = st.number_input("家賃補助が終了する年齢", 40, 70, 65)
+
+# 入力検証
+if support_end_age <= age_start:
+    st.error("⚠️ 家賃補助終了年齢は現在の年齢より大きい値を入力してください。")
+    st.stop()
 
 st.markdown("### 家賃設定（最大6区分）")
 rent_settings = []
@@ -20,7 +37,11 @@ for i in range(6):
         end = st.number_input(f"区分{i+1} 終了年齢", 20, 100, 39 + i * 10, key=f"end_{i}")
     with c3:
         rent = st.number_input(f"区分{i+1} 家賃 (万円)", 0, 100, 10 + i * 2, key=f"rent_{i}")
-    rent_settings.append((start, end, rent))
+    if start <= end:
+        rent_settings.append((start, end, rent))
+
+if not rent_settings:
+    st.warning("⚠️ 家賃区分が未設定のため、全期間家賃0万円として計算します。")
 
 st.markdown("### 家賃補助のポートフォリオ（毎月・万円）")
 c1, c2, c3 = st.columns(3)
@@ -32,6 +53,7 @@ with c3:
     invest = st.number_input("運用 (万円)", 0, 50, 6)
 
 rate = st.number_input("運用利回り（年%）", 0.0, 10.0, 5.0) / 100
+rate = max(rate, 0)
 
 # -------------------------
 # 東京エリア別家賃相場表
@@ -57,15 +79,12 @@ investing = 0
 
 for i in range(years + 1):
     age = age_start + i
-
-    # 家賃決定
     rent_now = 0
     for s, e, r in rent_settings:
         if s <= age <= e:
             rent_now = r
             break
 
-    # 家賃補助がある間は積立
     if age < support_end_age:
         saving += save * 12
         investing = investing * (1 + rate) + invest * 12
@@ -81,14 +100,17 @@ for i in range(years + 1):
     total_asset = saving + investing
     rows.append([age, rent_now, round(saving), round(investing), round(total_asset)])
 
-asset_65 = next((row[4] for row in rows if row[0] == 65), 0)
+if rows:
+    asset_65 = next((row[4] for row in rows if row[0] == 65), 0)
+else:
+    asset_65 = 0
 
 st.markdown(f"### 💰 65歳時点の資産額（貯蓄＋運用分） ⇒ **{asset_65:,} 万円**")
 
 df_assets = pd.DataFrame(
     rows,
     columns=["年齢", "家賃 (万円)", "貯蓄 (万円)", "運用 (万円)", "総資産 (万円)"]
-)
+) if rows else pd.DataFrame(columns=["年齢", "家賃 (万円)", "貯蓄 (万円)", "運用 (万円)", "総資産 (万円)"])
 
 st.dataframe(
     df_assets.style.format({
