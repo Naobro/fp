@@ -184,7 +184,7 @@ def mech_add_psqm(unit_type:str, slots:int, total_private_area:float)->int:
 st.set_page_config(page_title="修繕積立｜結論PDF＋長期表（横）", layout="wide")
 st.title("修繕積立｜妥当性・次回大規模・安心ライン・収益性（＋長期表/横）")
 
-with st.sidebar:
+
     st.header("入力（整数）")
 
     # 現状の積立：psqmが0なら「住戸月額÷専有」で自動
