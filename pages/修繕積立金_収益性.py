@@ -16,15 +16,26 @@
 #  ・PDFの日本語はIPAexフォント。無ければ自動DL（./fonts/ipaexg.ttf）→登録。
 # ─────────────────────────────────────────────────────────
 
+import streamlit as st
+
+# ✅ サイドバー完全非表示＋全幅化
+hide_sidebar = """
+<style>
+section[data-testid='stSidebar'] {display: none !important;}
+button[kind="header"] {display: none !important;}
+[data-testid="stHeader"] {visibility: hidden !important;}
+[data-testid="stToolbar"] {display: none !important;}
+div.block-container {padding-top: 1rem !important; max-width: 100% !important;}
+</style>
+"""
+st.markdown(hide_sidebar, unsafe_allow_html=True)
+
 import io
 import math
 import datetime as dt
 import zipfile
 import requests
 from pathlib import Path
-
-import pandas as pd
-import streamlit as st
 
 # ===== PDF（日本語フォント） =====
 from reportlab.lib.pagesizes import A4, landscape
