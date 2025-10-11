@@ -172,8 +172,40 @@ def save_manual_rates(d: dict) -> bool:
         return False
 
 # ===== 計算関数 =====
-def monthly_payment(principal: float, annual_rate: float, years: int) -> float:
-    r = annual_rate / 12.0
+def monthly_payment(principal: float, annual_rate: float, years: int, bank_name: str = "", plan: str = "一般団信") -> float:
+    """銀行・プラン・期間別の金利上乗せルールを反映して月々返済額を算出"""
+
+    # --- 基準金利（小数表記） ---
+    base_rate = annual_rate
+
+    # --- ① 住信SBIネット銀行 ---
+    if "住信" in bank_name:
+        if years > 40:
+            base_rate += 0.0015  # +0.15%
+        elif years > 35:
+            base_rate += 0.0007  # +0.07%
+
+    # --- ② PayPay銀行 ---
+    if "PayPay" in bank_name:
+        if plan in ["がん50", "がん100"]:
+            base_rate += 0.001  # +0.1%
+        # 期間50年まで対応
+
+    # --- ③ じぶん銀行 ---
+    if "じぶん" in bank_name:
+        if plan in ["がん100", "7大疾病"]:
+            base_rate += 0.001  # +0.1%
+
+    # --- ④ 新生・三菱・フラット35 ---
+    if any(b in bank_name for b in ["新生", "三菱", "フラット"]):
+        years = min(years, 35)  # 35年超は不可
+
+    # --- ⑤ 一般団信は期間延長しても上乗せなし ---
+    if plan == "一般団信":
+        pass  # 上乗せなし
+
+    # --- 月々返済計算 ---
+    r = base_rate / 12.0
     n = years * 12
     if r == 0:
         return principal / n
