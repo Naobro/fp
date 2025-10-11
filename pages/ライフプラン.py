@@ -332,7 +332,7 @@ if submitted:
     st.subheader("ライフプラン50年表（A3横型・資産推移・全項目）")
     st.dataframe(df, height=900, width=2400)
     st.download_button("CSVでダウンロード", data=df.to_csv(index=False), file_name="lifeplan_fullwide.csv", mime="text/csv")
-    # ✅ 固定LINEバナー（右下）
+ # ✅ 固定LINEバナー（右下・@fudo3・公式QRコード付き）
 st.markdown("""
 <style>
 .line-banner {
@@ -341,10 +341,11 @@ st.markdown("""
   right: 18px;
   background: #06C755;
   color: white;
-  padding: 12px 18px;
-  border-radius: 10px;
+  padding: 14px 20px;
+  border-radius: 12px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.25);
   font-size: 15px;
+  text-align: center;
   z-index: 9999;
   transition: all 0.3s ease;
 }
@@ -353,17 +354,18 @@ st.markdown("""
   background: #05b34d;
 }
 .line-banner img {
-  width: 100px;
-  margin-top: 8px;
-  border-radius: 6px;
+  width: 130px;
+  margin: 10px auto;
+  display: block;
+  border-radius: 8px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 </style>
 
 <div class="line-banner">
-  <b>📲 シミュレーション利用は<br>公式LINEから！</b><br>
-  <span style="font-size:13px;">LINE ID：@fudo3</span><br>
-  <img src="https://qr-official.line.me/sid/L/1234567.png" alt="LINE QRコード"><br>
-  <a href="https://lin.ee/xxxxxx" target="_blank" style="color:white; text-decoration:underline;">LINE登録はこちら</a>
+  <b style="font-size:17px;">📲 シミュレーション利用は<br>公式LINEから！</b><br><br>
+  <b style="font-size:19px;">LINE ID：@fudo3</b><br>
+  <img src="https://qr-official.line.me/gs/M_277qthwd_GW.png?oat_content=qr" alt="LINE公式QRコード"><br>
+  <a href="https://lin.ee/bu7wqgQ" target="_blank" style="color:white; text-decoration:underline; font-weight:bold;">▶ 登録はこちら</a>
 </div>
 """, unsafe_allow_html=True)
