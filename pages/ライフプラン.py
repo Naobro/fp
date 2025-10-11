@@ -332,12 +332,12 @@ if submitted:
     st.subheader("ライフプラン50年表（A3横型・資産推移・全項目）")
     st.dataframe(df, height=900, width=2400)
     st.download_button("CSVでダウンロード", data=df.to_csv(index=False), file_name="lifeplan_fullwide.csv", mime="text/csv")
-# ✅ 固定LINEバナー（右下・@fudo3・公式QRコード・新文言）
+# ✅ 固定LINEバナー（@fudo3／公式QRコード／PC・スマホ共通で上にずらし済み）
 st.markdown("""
 <style>
 .line-banner-wrap {
   position: fixed;
-  bottom: 18px;
+  bottom: 100px;  /* 👈 Manage app と被らない高さ */
   right: 18px;
   z-index: 9999;
 }
@@ -361,7 +361,8 @@ st.markdown("""
 .line-banner .cta {
   display: inline-block; font-weight: 700; text-decoration: underline; color: #fff;
 }
-@media (max-width: 480px){
+@media (max-width: 768px){  /* 👈 スマホも同じ位置 */
+  .line-banner-wrap { bottom: 100px; right: 14px; }
   .line-banner { padding: 12px 14px; }
   .line-banner img { width: 110px; }
 }
