@@ -384,10 +384,8 @@ if _missing:
 # ===== 借入上限額（省略） =====
 
 # ===== 返済額テーブル計算 + 描画付き =====
+# ※ sbi_effective_percent / borrowing_limit が上で定義されている必要があります
 def build_table(principal: float, years_req: int, age_now: int):
-    # 既存のロジックに従い、テーブル計算を行う
-    # ... (既存の build_table の実装) ...
-
     def cap_years(bank_name: str, req: int) -> int:
         y = min(79 - age_now, req)
         if bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
@@ -400,92 +398,68 @@ def build_table(principal: float, years_req: int, age_now: int):
     for plan in PLANS:
         row = []
         vals = []
-        # 銀行ごとの列
         for col_idx, bank in enumerate(BANKS):
-            # 借入上限額のチェック
             if principal > limits.get(bank, float('inf')):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
-            # 金利の存在チェック
             if bank not in rates:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
-            # 団信の追加金利チェック
             if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
             y = cap_years(bank, years_req)
             try:
-                base_percent_saved = float(rates[bank]) # パーセント表記（例: 0.389）
+                base_percent_saved = float(rates[bank])
             except:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
             if bank == "住信SBI銀行":
-                # base_percent_savedはパーセント。sbi_effective_percentもパーセントを返す
                 eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
-                base = eff_pct / 100.0 # 小数に変換
+                base = eff_pct / 100.0
             else:
-                base = base_percent_saved / 100.0 # 小数に変換
-                # 35年超の金利上乗せ（PayPay銀行、じぶん銀行は35年超で+0.1%）
+                base = base_percent_saved / 100.0
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
 
-            add = extra_rate_percent(bank, plan, age_now) / 100.0 # 団信上乗せ金利（小数）
+            add = extra_rate_percent(bank, plan, age_now) / 100.0
             m = monthly_payment(principal, base + add, y)
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((col_idx, m))
 
-        # フラット35の列 (BANKSの次の列)
-        col_idx = len(BANKS) # 最後の列
+        col_idx = len(BANKS)
         if plan == "一般団信":
-            if principal > 8000 * 10000: # 借入額が8000万円を超えると空欄
+            if principal > 8000 * 10000:
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
-                # 借入比率で金利を判定 (rates['flat35_90']などは既に小数)
                 borrowing_ratio = principal / property_price_input
-
-                y_flat = 35  # フラット35は常に35年固定
-                
-                # 金利の読み込みと判定のロジック
-                base_flat_rate = 0.0189 # デフォルト（1.89%）
-                
+                y_flat = 35
+                base_flat_rate = 0.0189
                 if borrowing_ratio <= 0.90:
-                    # フラット35（9割以下）の金利は小数で保存されている
                     if "flat35_90" in rates and rates["flat35_90"] is not None:
                         base_flat_rate = float(rates["flat35_90"])
                 else:
-                    # フラット35（9割超）の金利は小数で保存されている
                     if "flat35_100" in rates and rates["flat35_100"] is not None:
                         base_flat_rate = float(rates["flat35_100"])
-
-                # 金利は既に小数（0.0XX）
-                base_flat = base_flat_rate 
-                add_flat = 0.0 # フラット35の団信は金利込みが基本
+                base_flat = base_flat_rate
+                add_flat = 0.0
                 m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
-
-                row.append({
-                    "rate": base_flat + add_flat,
-                    "monthly": m_flat,
-                    "years": y_flat
-                })
+                row.append({"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat})
                 vals.append((col_idx, m_flat))
         else:
             row.append({"rate": None, "monthly": None, "years": None})
-            
-        # 最小返済額の強調
+
         mins = set()
         if vals:
             mv = min(v for _, v in vals)
             for idx, v in vals:
                 if abs(v - mv) < 0.5:
                     mins.add(idx)
-
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # ===== 最長50年行 =====
     row50_local = []
     vals50 = []
     for col_idx, bank in enumerate(BANKS):
@@ -519,7 +493,6 @@ def build_table(principal: float, years_req: int, age_now: int):
         row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
         vals50.append((col_idx, m50))
 
-    # フラット35の50年欄は常に空欄
     row50_local.append({"rate": None, "monthly": None, "years": None})
 
     mins50 = set()
@@ -530,7 +503,6 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
-
 # ===== UI：借入上限額（再表示） =====
 # ... (既存の借入上限額の計算とHTML表示のロジック) ...
 # ※ 借入上限額の表示は既存のコードと重複するため省略（ただし、修正は不要です）
