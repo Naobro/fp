@@ -172,6 +172,21 @@ def save_manual_rates(d: dict) -> bool:
         return False
 
 # ===== 計算関数 =====
+# ===== 計算関数 =====
+def sbi_effective_percent(base_percent: float, ltv: float, years: int) -> float:
+    """住信SBIネット銀行の金利補正ルールを適用（LTV・年数による上乗せ）"""
+    rate = float(base_percent)
+    if ltv <= 0.80:
+        rate -= 0.09
+    elif ltv > 1.00:
+        rate += 0.07
+    # 借入期間に応じた上乗せ（36〜40年：+0.07%、41年以上：+0.15%）
+    if 36 <= years <= 40:
+        rate += 0.07
+    elif years >= 41:
+        rate += 0.15
+    return rate
+
 def monthly_payment(principal: float, annual_rate: float, years: int, bank_name: str = "", plan: str = "一般団信") -> float:
     """銀行・プラン・期間別の金利上乗せルールを反映して月々返済額を算出"""
 
