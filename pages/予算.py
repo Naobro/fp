@@ -1,4 +1,17 @@
 import streamlit as st
+
+# ✅ サイドバー完全非表示＋全幅化
+hide_sidebar = """
+<style>
+section[data-testid='stSidebar'] {display: none !important;}
+button[kind="header"] {display: none !important;}
+[data-testid="stHeader"] {visibility: hidden !important;}
+[data-testid="stToolbar"] {display: none !important;}
+div.block-container {padding-top: 1rem !important; max-width: 100% !important;}
+</style>
+"""
+st.markdown(hide_sidebar, unsafe_allow_html=True)
+
 import pandas as pd
 import numpy_financial as npf
 import matplotlib.pyplot as plt
