@@ -107,6 +107,16 @@ def estimated_combined_tax_rate(income_yen: float) -> float:
 
 # ========= 画面 =========
 st.set_page_config(page_title="社宅 vs 購入", layout="wide")
+st.markdown("""
+<style>
+section[data-testid='stSidebar'] {display: none !important;}
+button[kind="header"] {display: none !important;}
+[data-testid="stHeader"] {visibility: hidden !important;}
+[data-testid="stToolbar"] {display: none !important;}
+div.block-container {padding-top: 1rem !important; max-width: 100% !important;}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🏠 社宅 vs 不動産購入 シミュレーター")
 
 with st.expander("使い方 / 前提", expanded=False):
