@@ -60,21 +60,50 @@ SPECIAL_NOTES = {
 }
 
 def extra_rate_percent(bank: str, plan: str, age: int) -> float:
+    """銀行・団信プラン・年齢別の上乗せ金利（％）"""
+
+    # --- SBI新生銀行 ---
     if bank == "SBI新生銀行":
         return 0.1 if plan == "がん100" else 0.0
+
+    # --- 三菱UFJ銀行 ---
     if bank == "三菱UFJ銀行":
-        return {"がん50": 0.15, "7大疾病": 0.3, "全疾病": 0.5}.get(plan, 0.0)
+        if plan == "がん50":
+            return 0.15  # 三大疾病50%
+        elif plan == "7大疾病":
+            return 0.30  # 7大疾病100%
+        elif plan == "全疾病":
+            return 0.50  # 全疾病100%
+        else:
+            return 0.0
+
+    # --- PayPay銀行 ---
     if bank == "PayPay銀行":
         return {"がん50": 0.05, "がん100": 0.15}.get(plan, 0.0)
+
+    # --- じぶん銀行 ---
     if bank == "じぶん銀行":
-        return {"がん100": 0.054, "7大疾病": 0.1}.get(plan, 0.0)
-    # 住信SBI銀行: 7大疾病（全疾病）は標準付帯のため0.0。三大疾病は別途上乗せ金利がつく
+        return {"がん100": 0.054, "7大疾病": 0.10}.get(plan, 0.0)
+
+    # --- 住信SBI銀行 ---
     if bank == "住信SBI銀行":
-        # 三大疾病は年齢に応じて上乗せ（これは固定金利に対するもので、変動金利では通常は付帯しないか、全疾病が標準付帯）
-        # ここではコードの既存ロジックに従い、三大疾病のみ上乗せ金利を適用
-        if plan == "三大疾病":
-             return 0.2 if age < 40 else 0.4
-        return 0.0
+        # がん100 は非対応 → 完全非表示のためスキップ（return しない）
+        if plan == "がん50":
+            if age <= 50:
+                return 0.0  # 50歳以下は標準付帯
+            else:
+                return 0.25  # 51歳以上は +0.25%
+        elif plan == "三大疾病":
+            if age < 40:
+                return 0.20
+            elif age <= 50:
+                return 0.40
+            else:
+                return 0.40
+        elif plan in ["7大疾病", "全疾病"]:
+            return 0.0
+
+    # --- その他 ---
     return 0.0
 
 # ===== 保存（Supabase） =====
