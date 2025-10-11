@@ -336,7 +336,7 @@ with col1:
 with col2:
     # デフォルトは物件価格の7%を自動反映（手動修正も可能）
     default_costs = int(property_price_input * 0.07)
-    extra_costs = st.number_input("諸費用 (万円)7%自動計算", min_value=0, max_value=10000,
+    extra_costs = st.number_input("諸費用 (万円)自動計算 7%", min_value=0, max_value=10000,
                                   value=int(default_costs / 10000), step=10, key="inp_costs") * 10000
 with col3:
     self_fund = st.number_input("自己資金 (万円)", min_value=0, max_value=100000,
