@@ -557,7 +557,16 @@ for bank, info in banks_exam.items():
             info["返済比率"] = 0.35
 
 for bank, info in banks_exam.items():
-    lim = borrowing_limit(annual_income, info["審査金利"], info["返済比率"], int(age))
+    # ✅ 銀行ごとに審査年数を設定して借入上限額を算出
+    if bank in ["PayPay銀行", "じぶん銀行"]:
+        # スライダーの返済期間（years）を反映（最大50年まで）
+        lim = borrowing_limit(annual_income, info["審査金利"], info["返済比率"], int(age), years, bank)
+    elif bank in ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"]:
+        # スライダーが短ければその年数、長くても35年上限
+        lim = borrowing_limit(annual_income, info["審査金利"], info["返済比率"], int(age), years, bank)
+    else:
+        # フラット35は常に35年固定
+        lim = borrowing_limit(annual_income, info["審査金利"], info["返済比率"], int(age), 35, bank)
     limits[bank] = lim
     rows_limit_html.append((bank, f"{int(lim // 10000):,} 万円"))
 
