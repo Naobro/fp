@@ -332,3 +332,38 @@ if submitted:
     st.subheader("ライフプラン50年表（A3横型・資産推移・全項目）")
     st.dataframe(df, height=900, width=2400)
     st.download_button("CSVでダウンロード", data=df.to_csv(index=False), file_name="lifeplan_fullwide.csv", mime="text/csv")
+    # ✅ 固定LINEバナー（右下）
+st.markdown("""
+<style>
+.line-banner {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  background: #06C755;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  font-size: 15px;
+  z-index: 9999;
+  transition: all 0.3s ease;
+}
+.line-banner:hover {
+  transform: scale(1.05);
+  background: #05b34d;
+}
+.line-banner img {
+  width: 100px;
+  margin-top: 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+</style>
+
+<div class="line-banner">
+  <b>📲 シミュレーション利用は<br>公式LINEから！</b><br>
+  <span style="font-size:13px;">LINE ID：@fudo3</span><br>
+  <img src="https://qr-official.line.me/sid/L/1234567.png" alt="LINE QRコード"><br>
+  <a href="https://lin.ee/xxxxxx" target="_blank" style="color:white; text-decoration:underline;">LINE登録はこちら</a>
+</div>
+""", unsafe_allow_html=True)
