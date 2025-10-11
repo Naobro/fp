@@ -444,13 +444,14 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((col_idx, m))
 
+        # --- フラット35列 ---
         col_idx = len(BANKS)
         if plan == "一般団信":
             if principal > 8000 * 10000:
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
                 borrowing_ratio = principal / property_price_input
-                y_flat = 35
+                y_flat = min(35, years_req)  # ✅ スライダー値が35未満ならそのまま、35超は固定
                 base_flat_rate = 0.0189
                 if borrowing_ratio <= 0.90:
                     if "flat35_90" in rates and rates["flat35_90"] is not None:
@@ -475,13 +476,12 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-        row50_local = []
+    # ===== 最長50年行 =====
+    row50_local = []
     vals50 = []
-
     for col_idx, bank in enumerate(BANKS):
         # --- 銀行ごとの条件チェック ---
         if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
-            # 新生・三菱は35年上限
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
         if principal > limits.get(bank, float('inf')):
@@ -523,7 +523,6 @@ def build_table(principal: float, years_req: int, age_now: int):
             "years": y50
         })
         vals50.append((col_idx, m50))
-
     # --- フラット35は50年ローンなし ---
     row50_local.append({"rate": None, "monthly": None, "years": None})
 
