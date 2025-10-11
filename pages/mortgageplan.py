@@ -475,49 +475,67 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    row50_local = []
-    vals50 = []
-    for col_idx, bank in enumerate(BANKS):
-        if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
-        if principal > limits.get(bank, float('inf')):
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
-        if bank not in rates:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
+  row50_local = []
+vals50 = []
 
-        y50 = min(79 - age_now, 50)
-        try:
-            base_percent_saved = float(rates[bank])
-        except:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
+for col_idx, bank in enumerate(BANKS):
+    # --- 銀行ごとの条件チェック ---
+    if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
+        # 新生・三菱は35年上限
+        row50_local.append({"rate": None, "monthly": None, "years": None})
+        continue
+    if principal > limits.get(bank, float('inf')):
+        row50_local.append({"rate": None, "monthly": None, "years": None})
+        continue
+    if bank not in rates:
+        row50_local.append({"rate": None, "monthly": None, "years": None})
+        continue
 
-        if bank == "住信SBI銀行":
-            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
-            base = eff_pct / 100.0
-        else:
-            base = base_percent_saved / 100.0
-            if bank in ["PayPay銀行", "じぶん銀行"] and y50 > 35:
-                base += 0.10 / 100.0
+    # ✅ 年齢に応じた完済上限（79歳）
+    max_allowed = max(1, 79 - age_now)
+    y50 = min(years_req, max_allowed)  # スライダー値と完済上限の小さい方
 
-        add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
-        m50 = monthly_payment(principal, base + add, y50)
-        row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
-        vals50.append((col_idx, m50))
+    try:
+        base_percent_saved = float(rates[bank])
+    except:
+        row50_local.append({"rate": None, "monthly": None, "years": None})
+        continue
 
-    row50_local.append({"rate": None, "monthly": None, "years": None})
+    # ✅ 銀行別金利上乗せ
+    if bank == "住信SBI銀行":
+        eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
+        base = eff_pct / 100.0
+    else:
+        base = base_percent_saved / 100.0
+        if bank in ["PayPay銀行", "じぶん銀行"] and y50 > 35:
+            base += 0.10 / 100.0  # 35年超 +0.1%
 
-    mins50 = set()
-    if vals50:
-        mv50 = min(v for _, v in vals50)
-        for idx, v in vals50:
-            if abs(v - mv50) < 0.5:
-                mins50.add(idx)
+    # --- 団信上乗せ ---
+    add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
 
-    return table_rows_local, highlights_local, row50_local, mins50
+    # --- 月々返済額計算 ---
+    m50 = monthly_payment(principal, base + add, y50)
+
+    # --- 結果格納 ---
+    row50_local.append({
+        "rate": base + add,
+        "monthly": m50,
+        "years": y50
+    })
+    vals50.append((col_idx, m50))
+
+# --- フラット35は50年ローンなし ---
+row50_local.append({"rate": None, "monthly": None, "years": None})
+
+# --- 最小返済額ハイライト ---
+mins50 = set()
+if vals50:
+    mv50 = min(v for _, v in vals50)
+    for idx, v in vals50:
+        if abs(v - mv50) < 0.5:
+            mins50.add(idx)
+
+return table_rows_local, highlights_local, row50_local, mins50
 # ===== UI：借入上限額（再表示） =====
 # ... (既存の借入上限額の計算とHTML表示のロジック) ...
 # ※ 借入上限額の表示は既存のコードと重複するため省略（ただし、修正は不要です）
