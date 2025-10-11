@@ -475,7 +475,7 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    row50_local = []
+        row50_local = []
     vals50 = []
 
     for col_idx, bank in enumerate(BANKS):
@@ -524,6 +524,18 @@ def build_table(principal: float, years_req: int, age_now: int):
         })
         vals50.append((col_idx, m50))
 
+    # --- フラット35は50年ローンなし ---
+    row50_local.append({"rate": None, "monthly": None, "years": None})
+
+    # --- 最小返済額ハイライト ---
+    mins50 = set()
+    if vals50:
+        mv50 = min(v for _, v in vals50)
+        for idx, v in vals50:
+            if abs(v - mv50) < 0.5:
+                mins50.add(idx)
+
+    return table_rows_local, highlights_local, row50_local, mins50
     # --- フラット35は50年ローンなし ---
     row50_local.append({"rate": None, "monthly": None, "years": None})
 
