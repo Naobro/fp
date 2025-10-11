@@ -7,19 +7,47 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
+import sys
 from fpdf import FPDF  # fpdf2（パッケージ名）の正しいインポート名は「fpdf」
 
 # ============================================
 # 1) ページ設定（このページで1回だけ・最初に必ず実行）
 # ============================================
-# ✅ ページ設定とサイドバー削除（最初の3行）
-import streamlit as st
+
+# ==== 🚫 他ページへの誤リダイレクト防止 ====
+# スマホなどで /loan_comparison などを直接開いた場合も TOP(app.py) に戻す
+if len(sys.argv) > 1 and any(p in sys.argv[1] for p in ["loan_comparison", "mortgageplan", "client_portal"]):
+    st.write("リダイレクト中...")
+    st.markdown('<meta http-equiv="refresh" content="0; url=/" />', unsafe_allow_html=True)
+    st.stop()
+
 st.set_page_config(page_title="不動産エージェント NAOKI", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
 # ============================================
 # 3) URLに client があればどのパスでもお客様ページへ（PINは見ない）
 # ============================================
-# クエリ取得（新旧API対応）
+# クエリ取得（新旧API両対応）
+try:
+    params = st.query_params  # 1.33+ では dict 互換
+except Exception:
+    params = st.experimental_get_query_params()
+
+client = None
+if isinstance(params, dict):
+    v = params.get("client")
+    if isinstance(v, list):
+        client = v[0] if v else None
+    else:
+        client = v
+
+# client クエリがあれば、pages/client_portal.py へ強制遷移（クエリ引き継ぎ）
+if client:
+    try:
+        # 新API: 遷移前にクエリをセット（対応環境のみ）
+        st.query_params = {"client": client}
+    except Exception:
+        pass
+    st.switch_page("pages/client_portal.py")
 try:
     qp = st.query_params
     client_id = qp.get("client") or ""
