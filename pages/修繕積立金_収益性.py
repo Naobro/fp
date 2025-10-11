@@ -290,6 +290,11 @@ for cat, name, cy, utype, unit in ITEMS:
         continue
     add_row(row_index, data, cat, name, cy, utype, unit)
 
+# ✅ row_indexが空になるケースを防止（安全化版）
+if not row_index:
+    row_index = [("なし", "データ未入力", "—")]
+    data = {y: [0] for y in years}
+
 # 支出集計（内部は円で保持）
 row_index.append(("支出集計", "工事費小計", ""))
 for y in years:
@@ -347,6 +352,11 @@ for yi, y in enumerate(years):
     invest_add = int(round(annual_income_now * invest_share))
     sim_val = int(round((sim_val * (1 + invest_rate)) + invest_add))
     data[y].append(sim_val)  # 円（情報表示用）
+
+# ✅ row_indexが空でもDataFrame生成エラー防止
+if not row_index:
+    row_index = [("なし", "データ未入力", "—")]
+    data = {y: [0] for y in years}
 
 # 横テーブル：内部は円 → 表示時だけ万円文字列に変換
 idx = pd.MultiIndex.from_tuples(row_index, names=["区分","項目","周期"])
