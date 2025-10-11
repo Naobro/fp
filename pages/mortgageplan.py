@@ -401,20 +401,20 @@ if _missing:
 # ※ sbi_effective_percent / borrowing_limit が上で定義されている必要があります
 def build_table(principal: float, years_req: int, age_now: int):
     def cap_years(bank_name: str, req: int, plan: str) -> int:
-        """銀行・プラン別に返済年数を決定"""
+        """銀行・プラン別の返済年数制限"""
         # フラット35 → 常に35年固定
         if bank_name == "フラット35":
             return 35
         # 銀行固有制限（SBI新生銀行・三菱UFJ銀行）は最大35年
         elif bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
             return min(req, 35)
-        # 一般団信 → 最大35年（79歳完済も考慮）
+        # 一般団信 → スライダー値と79歳完済の両方を考慮（最大35年）
         elif plan == "一般団信":
             return min(req, 35, 79 - age_now)
         # がん・疾病系 → スライダー値を尊重（ただし79歳完済上限）
         elif plan in ["がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]:
             return min(req, 79 - age_now)
-        # その他 → スライダー値をそのまま
+        # その他 → スライダー値そのまま
         else:
             return req
 
