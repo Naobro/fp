@@ -347,9 +347,8 @@ principal = property_price_input - self_fund
 # 借入額が0以下になる場合は、0にクランプ（実際にはStreamlitのnumber_inputで対応）
 principal = max(0, principal) 
 
-max_year = max(1, 79 - int(age))
+max_year = min(79 - int(age), 50)
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(years_init, max_year), key="inp_years")
-
 # --- 入力条件の保存ボタン処理 ---
 if st.button("💾 入力条件を保存", type="primary"):
     try:
@@ -401,15 +400,25 @@ if _missing:
 # ===== 返済額テーブル計算 + 描画付き =====
 # ※ sbi_effective_percent / borrowing_limit が上で定義されている必要があります
 def build_table(principal: float, years_req: int, age_now: int):
-    def cap_years(bank_name: str, req: int) -> int:
-        y = min(79 - age_now, req)
-        if bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
-            y = min(y, 35)
-        return y
+    def cap_years(bank_name: str, req: int, plan: str) -> int:
+        """銀行・プラン別に返済年数を決定"""
+        # 一般団信 → 最大35年
+        if plan == "一般団信":
+            return min(req, 35)
+        # がん・疾病系 → 79歳完済上限
+        elif plan in ["がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]:
+            return min(req, 79 - age_now)
+        # フラット35 → 固定35年
+        elif bank_name == "フラット35":
+            return 35
+        # その他 → スライダー値をそのまま
+        else:
+            return req
 
     table_rows_local = []
     highlights_local = []
 
+    # ===== 各プラン行（一般団信〜疾病系） =====
     for plan in PLANS:
         row = []
         vals = []
@@ -424,13 +433,16 @@ def build_table(principal: float, years_req: int, age_now: int):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
-            y = cap_years(bank, years_req)
+            # ✅ 年数ロジック統一
+            y = cap_years(bank, years_req, plan)
+
             try:
                 base_percent_saved = float(rates[bank])
             except Exception:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
+            # ✅ 銀行別金利調整
             if bank == "住信SBI銀行":
                 eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
                 base = eff_pct / 100.0
@@ -444,13 +456,14 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((col_idx, m))
 
+        # ===== フラット35列 =====
         col_idx = len(BANKS)
         if plan == "一般団信":
             if principal > 8000 * 10000:
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
                 borrowing_ratio = principal / property_price_input
-                y_flat = min(35, years_req)
+                y_flat = 35
                 base_flat_rate = 0.0189
                 if borrowing_ratio <= 0.90:
                     if "flat35_90" in rates and rates["flat35_90"] is not None:
@@ -459,42 +472,37 @@ def build_table(principal: float, years_req: int, age_now: int):
                     if "flat35_100" in rates and rates["flat35_100"] is not None:
                         base_flat_rate = float(rates["flat35_100"])
                 base_flat = base_flat_rate
-                add_flat = 0.0
-                m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
-                row.append(
-                    {"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat}
-                )
+                m_flat = monthly_payment(principal, base_flat, y_flat)
+                row.append({"rate": base_flat, "monthly": m_flat, "years": y_flat})
                 vals.append((col_idx, m_flat))
         else:
             row.append({"rate": None, "monthly": None, "years": None})
 
+        # ✅ 最小返済額ハイライト処理
         mins = set()
         if vals:
             mv = min(v for _, v in vals)
             for idx, v in vals:
                 if abs(v - mv) < 0.5:
                     mins.add(idx)
+
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # ===== 最長50年行 =====
+    # ===== 最長50年行（スライダー上限 or 79歳完済上限） =====
     row50_local = []
     vals50 = []
-
     for col_idx, bank in enumerate(BANKS):
+        # 新生・三菱は35年まで
         if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
-        if principal > limits.get(bank, float("inf")):
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
-        if bank not in rates:
+        if principal > limits.get(bank, float("inf")) or bank not in rates:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        max_allowed = max(1, 79 - age_now)
-        y50 = min(years_req, max_allowed)
-
+        # ✅ 年齢制限（79歳完済）を考慮
+        y50 = min(79 - age_now, 50)
         try:
             base_percent_saved = float(rates[bank])
         except Exception:
@@ -511,12 +519,13 @@ def build_table(principal: float, years_req: int, age_now: int):
 
         add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
         m50 = monthly_payment(principal, base + add, y50)
-
         row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
         vals50.append((col_idx, m50))
 
+    # フラット35は空欄
     row50_local.append({"rate": None, "monthly": None, "years": None})
 
+    # ✅ 最小返済額ハイライト
     mins50 = set()
     if vals50:
         mv50 = min(v for _, v in vals50)
