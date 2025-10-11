@@ -444,7 +444,6 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((col_idx, m))
 
-        # --- フラット35列 ---
         col_idx = len(BANKS)
         if plan == "一般団信":
             if principal > 8000 * 10000:
@@ -475,13 +474,13 @@ def build_table(principal: float, years_req: int, age_now: int):
             for idx, v in vals:
                 if abs(v - mv) < 0.5:
                     mins.add(idx)
-
         table_rows_local.append(row)
         highlights_local.append(mins)
 
     # ===== 最長50年行 =====
     row50_local = []
     vals50 = []
+
     for col_idx, bank in enumerate(BANKS):
         if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row50_local.append({"rate": None, "monthly": None, "years": None})
@@ -526,42 +525,7 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
-    # --- フラット35は50年ローンなし ---
-    row50_local.append({"rate": None, "monthly": None, "years": None})
 
-    # --- 最小返済額ハイライト ---
-    mins50 = set()
-    if vals50:
-        mv50 = min(v for _, v in vals50)
-        for idx, v in vals50:
-            if abs(v - mv50) < 0.5:
-                mins50.add(idx)
-
-    return table_rows_local, highlights_local, row50_local, mins50
-    # --- フラット35は50年ローンなし ---
-    row50_local.append({"rate": None, "monthly": None, "years": None})
-
-    # --- 最小返済額ハイライト ---
-    mins50 = set()
-    if vals50:
-        mv50 = min(v for _, v in vals50)
-        for idx, v in vals50:
-            if abs(v - mv50) < 0.5:
-                mins50.add(idx)
-
-    return table_rows_local, highlights_local, row50_local, mins50
-# --- フラット35は50年ローンなし ---
-row50_local.append({"rate": None, "monthly": None, "years": None})
-
-# --- 最小返済額ハイライト ---
-mins50 = set()
-if vals50:
-    mv50 = min(v for _, v in vals50)
-    for idx, v in vals50:
-        if abs(v - mv50) < 0.5:
-            mins50.add(idx)
-
-return table_rows_local, highlights_local, row50_local, mins50
 # ===== UI：借入上限額（再表示） =====
 # ... (既存の借入上限額の計算とHTML表示のロジック) ...
 # ※ 借入上限額の表示は既存のコードと重複するため省略（ただし、修正は不要です）
