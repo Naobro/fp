@@ -69,11 +69,11 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
     # --- 三菱UFJ銀行 ---
     if bank == "三菱UFJ銀行":
         if plan == "がん50":
-            return 0.15  # 三大疾病50%
+            return 0.15
         elif plan == "7大疾病":
-            return 0.30  # 7大疾病100%
+            return 0.30
         elif plan == "全疾病":
-            return 0.50  # 全疾病100%
+            return 0.50
         else:
             return 0.0
 
@@ -87,12 +87,10 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
 
     # --- 住信SBI銀行 ---
     if bank == "住信SBI銀行":
-        # がん100 は非対応 → 完全非表示のためスキップ（return しない）
+        if plan == "がん100":
+            return 9999.0  # ← 非対応のマーカー値（スキップではなく空欄処理で拾える）
         if plan == "がん50":
-            if age <= 50:
-                return 0.0  # 50歳以下は標準付帯
-            else:
-                return 0.25  # 51歳以上は +0.25%
+            return 0.0 if age <= 50 else 0.25
         elif plan == "三大疾病":
             if age < 40:
                 return 0.20
@@ -101,6 +99,8 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
             else:
                 return 0.40
         elif plan in ["7大疾病", "全疾病"]:
+            return 0.0
+        else:
             return 0.0
 
     # --- その他 ---
