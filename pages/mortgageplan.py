@@ -432,9 +432,11 @@ def build_table(principal: float, years_req: int, age_now: int):
             if bank not in rates:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
+                        # --- 非対応銀行をスキップ（ただし三菱UFJ・住信SBIは除外して計算対象にする）
             if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
-                row.append({"rate": None, "monthly": None, "years": None})
-                continue
+                if bank not in ["三菱UFJ銀行", "住信SBI銀行"]:
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
 
             # ✅ 年数ロジック統一
             y = cap_years(bank, years_req, plan)
