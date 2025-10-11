@@ -336,11 +336,11 @@ with col1:
 with col2:
     # デフォルトは物件価格の7%を自動反映（手動修正も可能）
     default_costs = int(property_price_input * 0.07)
-    extra_costs = st.number_input("諸費用 (円)", min_value=0, max_value=50000000,
-                                  value=default_costs, step=100000, key="inp_costs")
+    extra_costs = st.number_input("諸費用 (万円)", min_value=0, max_value=10000,
+                                  value=int(default_costs / 10000), step=10, key="inp_costs") * 10000
 with col3:
     self_fund = st.number_input("自己資金 (万円)", min_value=0, max_value=100000,
-                                value=int(self_fund_init / 10000), key="inp_self_fund") * 10000
+                                value=int(self_fund_init / 10000), step=10, key="inp_self_fund") * 10000
 with col4:
     annual_income = st.number_input("年収 (万円)", min_value=100, max_value=10000,
                                     value=int(annual_income_init / 10000), key="inp_income") * 10000
@@ -352,6 +352,7 @@ with col5:
 total_price = property_price_input + extra_costs
 principal = total_price - self_fund
 principal = max(0, principal)
+
 max_year = min(79 - int(age), 50)
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(years_init, max_year), key="inp_years")
 # --- 入力条件の保存ボタン処理 ---
