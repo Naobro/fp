@@ -414,7 +414,7 @@ def build_table(principal: float, years_req: int, age_now: int):
         row = []
         vals = []
         for col_idx, bank in enumerate(BANKS):
-            if principal > limits.get(bank, float('inf')):
+            if principal > limits.get(bank, float("inf")):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
             if bank not in rates:
@@ -427,7 +427,7 @@ def build_table(principal: float, years_req: int, age_now: int):
             y = cap_years(bank, years_req)
             try:
                 base_percent_saved = float(rates[bank])
-            except:
+            except Exception:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
@@ -451,7 +451,7 @@ def build_table(principal: float, years_req: int, age_now: int):
                 row.append({"rate": None, "monthly": None, "years": None})
             else:
                 borrowing_ratio = principal / property_price_input
-                y_flat = min(35, years_req)  # ✅ スライダー値が35未満ならそのまま、35超は固定
+                y_flat = min(35, years_req)
                 base_flat_rate = 0.0189
                 if borrowing_ratio <= 0.90:
                     if "flat35_90" in rates and rates["flat35_90"] is not None:
@@ -462,7 +462,9 @@ def build_table(principal: float, years_req: int, age_now: int):
                 base_flat = base_flat_rate
                 add_flat = 0.0
                 m_flat = monthly_payment(principal, base_flat + add_flat, y_flat)
-                row.append({"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat})
+                row.append(
+                    {"rate": base_flat + add_flat, "monthly": m_flat, "years": y_flat}
+                )
                 vals.append((col_idx, m_flat))
         else:
             row.append({"rate": None, "monthly": None, "years": None})
@@ -473,6 +475,7 @@ def build_table(principal: float, years_req: int, age_now: int):
             for idx, v in vals:
                 if abs(v - mv) < 0.5:
                     mins.add(idx)
+
         table_rows_local.append(row)
         highlights_local.append(mins)
 
@@ -480,49 +483,49 @@ def build_table(principal: float, years_req: int, age_now: int):
     row50_local = []
     vals50 = []
     for col_idx, bank in enumerate(BANKS):
-        # --- 銀行ごとの条件チェック ---
         if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
-        if principal > limits.get(bank, float('inf')):
+        if principal > limits.get(bank, float("inf")):
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
         if bank not in rates:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        # ✅ 年齢に応じた完済上限（79歳）
         max_allowed = max(1, 79 - age_now)
-        y50 = min(years_req, max_allowed)  # スライダー値と完済上限の小さい方
+        y50 = min(years_req, max_allowed)
 
         try:
             base_percent_saved = float(rates[bank])
-        except:
+        except Exception:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        # ✅ 銀行別金利上乗せ
         if bank == "住信SBI銀行":
             eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
             base = eff_pct / 100.0
         else:
             base = base_percent_saved / 100.0
             if bank in ["PayPay銀行", "じぶん銀行"] and y50 > 35:
-                base += 0.10 / 100.0  # 35年超 +0.1%
+                base += 0.10 / 100.0
 
-        # --- 団信上乗せ ---
         add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
-
-        # --- 月々返済額計算 ---
         m50 = monthly_payment(principal, base + add, y50)
 
-        # --- 結果格納 ---
-        row50_local.append({
-            "rate": base + add,
-            "monthly": m50,
-            "years": y50
-        })
+        row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
         vals50.append((col_idx, m50))
+
+    row50_local.append({"rate": None, "monthly": None, "years": None})
+
+    mins50 = set()
+    if vals50:
+        mv50 = min(v for _, v in vals50)
+        for idx, v in vals50:
+            if abs(v - mv50) < 0.5:
+                mins50.add(idx)
+
+    return table_rows_local, highlights_local, row50_local, mins50
     # --- フラット35は50年ローンなし ---
     row50_local.append({"rate": None, "monthly": None, "years": None})
 
