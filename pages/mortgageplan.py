@@ -211,25 +211,24 @@ def monthly_payment(principal: float, annual_rate: float, years: int, bank_name:
         return principal / n
     return principal * r / (1 - (1 + r) ** (-n))
 
-def sbi_effective_percent(base_percent: float, ltv: float, years: int) -> float:
-    # base_percent はパーセント表記（例: 0.389）
-    rate = float(base_percent)
-    if ltv <= 0.80:
-        rate += -0.09
-    elif ltv > 1.00:
-        rate += 0.07
-    if 36 <= years <= 40:
-        rate += 0.07
-    elif years >= 41:
-        rate += 0.15
-    return rate # 返り値はパーセント表記
+def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int, years: int = 35, bank_name: str = "") -> int:
+    """年収・審査金利・返済比率・年齢・銀行別に借入上限額を算出"""
+    # 完済年齢79歳を上限
+    max_exam_years = max(1, 79 - age_now)
 
-def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int) -> int:
-    exam_years = min(35, 79 - age_now)
+    # 銀行別上限ルール
+    if bank_name in ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"]:
+        exam_years = min(35, max_exam_years)
+    elif bank_name in ["PayPay銀行", "じぶん銀行"]:
+        exam_years = min(years, max_exam_years)  # スライダー値を優先
+    else:
+        exam_years = min(35, max_exam_years)
+
     annual = income * ratio
     m = annual / 12
     r = exam_rate / 12
     n = exam_years * 12
+
     raw = (m * n) if r == 0 else (m * (1 - (1 + r) ** -n) / r)
     return int(raw // 100000 * 100000)
 
