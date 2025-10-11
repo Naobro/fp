@@ -536,7 +536,6 @@ def build_table(principal: float, years_req: int, age_now: int):
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
-
 # --- フラット35は50年ローンなし ---
 row50_local.append({"rate": None, "monthly": None, "years": None})
 
