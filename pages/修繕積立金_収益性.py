@@ -184,39 +184,38 @@ def mech_add_psqm(unit_type:str, slots:int, total_private_area:float)->int:
 st.set_page_config(page_title="修繕積立｜結論PDF＋長期表（横）", layout="wide")
 st.title("修繕積立｜妥当性・次回大規模・安心ライン・収益性（＋長期表/横）")
 
+st.header("入力（整数）")
 
-    st.header("入力（整数）")
+# 現状の積立：psqmが0なら「住戸月額÷専有」で自動
+my_monthly_now   = st.number_input("あなたの修繕積立金（月額・円）", min_value=0, value=15_000, step=1_000)
+my_private_area  = st.number_input("専有面積（㎡）", min_value=0, value=70, step=1)
+current_psqm_in  = st.number_input("現状の修繕積立金（円/㎡・月）※未入力=0で自動計算", min_value=0, value=0, step=1)
 
-    # 現状の積立：psqmが0なら「住戸月額÷専有」で自動
-    my_monthly_now   = st.number_input("あなたの修繕積立金（月額・円）", min_value=0, value=15_000, step=1_000)
-    my_private_area  = st.number_input("専有面積（㎡）", min_value=0, value=70, step=1)
-    current_psqm_in  = st.number_input("現状の修繕積立金（円/㎡・月）※未入力=0で自動計算", min_value=0, value=0, step=1)
+# 建物条件
+total_floor_area = st.number_input("延べ床面積（㎡）", min_value=0, value=8_000, step=100)
+units            = st.number_input("戸数（戸）", min_value=0, value=100, step=1)
+built_year       = st.number_input("築年（西暦）", min_value=0, max_value=9999, value=2000, step=1)
+floors           = st.number_input("階数（階）", min_value=0, value=10, step=1)
+ev_count         = st.number_input("EV台数（基）", min_value=0, value=1, step=1)
 
-    # 建物条件
-    total_floor_area = st.number_input("延べ床面積（㎡）", min_value=0, value=8_000, step=100)
-    units            = st.number_input("戸数（戸）", min_value=0, value=100, step=1)
-    built_year       = st.number_input("築年（西暦）", min_value=0, max_value=9999, value=2000, step=1)
-    floors           = st.number_input("階数（階）", min_value=0, value=10, step=1)
-    ev_count         = st.number_input("EV台数（基）", min_value=0, value=1, step=1)
+# 機械式駐車場
+mech_park_slots  = st.number_input("機械式駐車場 区画数（基）", min_value=0, value=0, step=1)
+mech_park_type   = st.selectbox("機械式の形式（妥当性加算）", list(MECH_PARK_UNIT_YEN.keys()), index=0)
 
-    # 機械式駐車場
-    mech_park_slots  = st.number_input("機械式駐車場 区画数（基）", min_value=0, value=0, step=1)
-    mech_park_type   = st.selectbox("機械式の形式（妥当性加算）", list(MECH_PARK_UNIT_YEN.keys()), index=0)
+st.divider()
+# 収益性（周辺家賃・購入価格）
+rent_psqm     = st.number_input("周辺家賃相場（円/㎡・月）", min_value=0, value=4_000, step=1_000)
+price_million = st.number_input("購入価格（万円）", min_value=0, value=7_000, step=100)
 
-    st.divider()
-    # 収益性（周辺家賃・購入価格）
-    rent_psqm     = st.number_input("周辺家賃相場（円/㎡・月）", min_value=0, value=4_000, step=1_000)
-    price_million = st.number_input("購入価格（万円）", min_value=0, value=7_000, step=100)
+st.divider()
+# PDF：安心係数S（次回大規模×S%）
+safe_ratio_pct = st.number_input("安心係数 S（％）", min_value=10, value=30, step=5)
 
-    st.divider()
-    # PDF：安心係数S（次回大規模×S%）
-    safe_ratio_pct = st.number_input("安心係数 S（％）", min_value=10, value=30, step=5)
-
-    st.divider()
-    # 長期表関連
-    current_balance_total = st.number_input("現在の修繕積立金残高（全体・円）", min_value=0, value=0, step=100_000)
-    invest_share_pct      = st.number_input("（長期表）運用に回す割合（積立の％）", min_value=0, max_value=100, value=30, step=5)
-    invest_rate_pct       = st.number_input("（長期表）運用利回り（年％・複利）", min_value=0, max_value=20, value=5, step=1)
+st.divider()
+# 長期表関連
+current_balance_total = st.number_input("現在の修繕積立金残高（全体・円）", min_value=0, value=0, step=100_000)
+invest_share_pct      = st.number_input("（長期表）運用に回す割合（積立の％）", min_value=0, max_value=100, value=30, step=5)
+invest_rate_pct       = st.number_input("（長期表）運用利回り（年％・複利）", min_value=0, max_value=20, value=5, step=1)
 
 # 年レンジ（横展開）
 start_year = dt.date.today().year
