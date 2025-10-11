@@ -113,6 +113,16 @@ def future_price_man(price_now_man: float, growth_pct_per_year: float, years_wai
 # Streamlit UI
 # =========================
 st.set_page_config(page_title="購入時期の比較シミュレーション", layout="wide")
+st.markdown("""
+<style>
+section[data-testid='stSidebar'] {display: none !important;}
+button[kind="header"] {display: none !important;}
+[data-testid="stHeader"] {visibility: hidden !important;}
+[data-testid="stToolbar"] {display: none !important;}
+div.block-container {padding-top: 1rem !important; max-width: 100% !important;}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🏠 購入時期シミュレーション（今 vs 何年後）")
 
 colL, colR = st.columns(2)
