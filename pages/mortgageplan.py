@@ -402,10 +402,10 @@ if _missing:
 def build_table(principal: float, years_req: int, age_now: int):
     def cap_years(bank_name: str, req: int, plan: str) -> int:
         """銀行・プラン別に返済年数を決定"""
-        # 一般団信 → 最大35年
+        # 一般団信 → 常に35年固定（スライダー値や年齢に関係なく）
         if plan == "一般団信":
-            return min(req, 35)
-        # がん・疾病系 → 79歳完済上限
+            return min(35, 79 - age_now)
+        # がん・疾病系 → スライダー値を尊重（ただし79歳完済上限）
         elif plan in ["がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]:
             return min(req, 79 - age_now)
         # フラット35 → 固定35年
