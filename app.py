@@ -622,3 +622,50 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+# ✅ 固定LINEバナー（@fudo3／公式QRコード／PC・スマホ共通で上にずらし済み）
+st.markdown("""
+<style>
+.line-banner-wrap {
+  position: fixed;
+  bottom: 100px;  /* 👈 Manage app と被らない高さ */
+  right: 18px;
+  z-index: 9999;
+}
+.line-banner {
+  background: #06C755;
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  font-size: 15px;
+  text-align: center;
+  transition: transform .25s ease, background .25s ease;
+}
+.line-banner:hover { transform: scale(1.04); background: #05b34d; }
+.line-banner .ttl { font-size: 17px; font-weight: 700; line-height: 1.4; }
+.line-banner .id  { font-size: 19px; font-weight: 800; margin: 6px 0 4px; }
+.line-banner img  {
+  width: 130px; display: block; margin: 8px auto 10px;
+  border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.line-banner .cta {
+  display: inline-block; font-weight: 700; text-decoration: underline; color: #fff;
+}
+@media (max-width: 768px){  /* 👈 スマホも同じ位置 */
+  .line-banner-wrap { bottom: 100px; right: 14px; }
+  .line-banner { padding: 12px 14px; }
+  .line-banner img { width: 110px; }
+}
+</style>
+
+<div class="line-banner-wrap">
+  <a href="https://lin.ee/m40HEqN" target="_blank" rel="noopener" style="text-decoration:none;">
+    <div class="line-banner" role="button" aria-label="LINE公式アカウントを開く">
+      <div class="ttl">📲 シミュレーション利用は<br>LINEで簡単・不動産相談！</div>
+      <div class="id">LINE ID：@fudo3</div>
+      <img src="https://qr-official.line.me/gs/M_277qthwd_GW.png?oat_content=qr" alt="LINE公式QRコード">
+      <span class="cta">▶ 公式LINEで相談する</span>
+    </div>
+  </a>
+</div>
+""", unsafe_allow_html=True)
