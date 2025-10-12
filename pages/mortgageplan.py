@@ -673,30 +673,33 @@ for bank, info in banks_exam.items():
 
 
 st.subheader("💰 年収からの借入上限額")
-st.markdown(
-    "<style>.blimit th, .blimit td {border:1.2px solid #aaa; padding:12px; font-size:18px;} .blimit th{background:#F2F6FA;} .blimit{border-collapse:collapse; width:480px; margin-bottom:20px;}</style>",
-    unsafe_allow_html=True
-)
-tbl = "<table class='blimit'><thead><tr><th style='width:250px;text-align:center'>銀行名</th><th style='width:230px;text-align:center'>借入上限額</th></tr></thead><tbody>"
-url_map = {
-    "SBI新生銀行": "https://naokifp.streamlit.app/SBI_Shinssei",
-    "三菱UFJ銀行": "https://naokifp.streamlit.app/MUFG",
-    "PayPay銀行": "https://naokifp.streamlit.app/PayPay",
-    "じぶん銀行": "https://naokifp.streamlit.app/Jibun",
-    "住信SBI銀行": "https://naokifp.streamlit.app/SumishinSBI",
-}
-for bank, val in rows_limit_html:
-    # フラット35のみ公式サイトリンクを付与
-    if bank == "フラット35":
-        url = "https://www.sbiaruhi.co.jp/product/flat35/"
-    else:
-        url = url_map.get(bank, "#")
-    
-    tbl += f"<tr><td align='center'><a href='{url}' target='_blank' style='color:#226BB3;text-decoration:none;font-weight:bold;'>{bank}</a></td><td align='right'>{val}</td></tr>"
 
-tbl += "</tbody></table>"
-st.markdown(tbl, unsafe_allow_html=True)
-st.markdown("<div style='font-size:13px;color:#666;margin-top:6px;'>※フラット35※1人上限8,000万円</div>", unsafe_allow_html=True)
+# ✅ ダイナミック描画領域を確保
+limit_area = st.empty()
+
+def render_limit_table():
+    st.markdown(
+        "<style>.blimit th, .blimit td {border:1.2px solid #aaa; padding:12px; font-size:18px;} .blimit th{background:#F2F6FA;} .blimit{border-collapse:collapse; width:480px; margin-bottom:20px;}</style>",
+        unsafe_allow_html=True
+    )
+    tbl = "<table class='blimit'><thead><tr><th style='width:250px;text-align:center'>銀行名</th><th style='width:230px;text-align:center'>借入上限額</th></tr></thead><tbody>"
+    url_map = {
+        "SBI新生銀行": "https://naokifp.streamlit.app/SBI_Shinssei",
+        "三菱UFJ銀行": "https://naokifp.streamlit.app/MUFG",
+        "PayPay銀行": "https://naokifp.streamlit.app/PayPay",
+        "じぶん銀行": "https://naokifp.streamlit.app/Jibun",
+        "住信SBI銀行": "https://naokifp.streamlit.app/SumishinSBI",
+    }
+    for bank, val in rows_limit_html:
+        url = "https://www.sbiaruhi.co.jp/product/flat35/" if bank == "フラット35" else url_map.get(bank, "#")
+        tbl += f"<tr><td align='center'><a href='{url}' target='_blank' style='color:#226BB3;text-decoration:none;font-weight:bold;'>{bank}</a></td><td align='right'>{val}</td></tr>"
+    tbl += "</tbody></table>"
+    st.markdown(tbl, unsafe_allow_html=True)
+    st.markdown("<div style='font-size:13px;color:#666;margin-top:6px;'>※フラット35※1人上限8,000万円</div>", unsafe_allow_html=True)
+
+# ✅ スライダー値（years）や年収が変わるたびに再描画
+with limit_area.container():
+    render_limit_table()
 
 
 # ===== 返済額テーブル計算 + 描画付き（再実行） =====
