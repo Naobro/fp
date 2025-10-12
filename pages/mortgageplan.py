@@ -359,23 +359,63 @@ property_price_init = principal_init + self_fund_init if principal_init + self_f
 
 # ===== 入力欄（物件・自己資金・諸費用・年齢） =====
 col1, col2, col3, col4, col5 = st.columns(5)
+
 with col1:
-    property_price_input = st.number_input("物件価格 (万円)", min_value=500, max_value=200000,
-                                           value=int(property_price_init / 10000), key="inp_property") * 10000
-with col2:
-    # デフォルトは物件価格の7%を自動反映（手動修正も可能）
+    property_price_input = st.number_input(
+        "物件価格 (万円)",
+        min_value=500, max_value=200000,
+        value=int(property_price_init / 10000),
+        key="inp_property"
+    ) * 10000
+
+# 🔁 物件価格変更検知＆諸費用自動再計算
+if "prev_property_price" not in st.session_state:
+    st.session_state.prev_property_price = property_price_input
+if "manual_cost_edit" not in st.session_state:
+    st.session_state.manual_cost_edit = False
+
+property_changed = property_price_input != st.session_state.prev_property_price
+if property_changed:
     default_costs = int(property_price_input * 0.07)
-    extra_costs = st.number_input("諸費用 (万円)自動計算 7%", min_value=0, max_value=10000,
-                                  value=int(default_costs / 10000), step=10, key="inp_costs") * 10000
+    st.session_state.manual_cost_edit = False
+else:
+    default_costs = int(property_price_input * 0.07) if not st.session_state.manual_cost_edit else st.session_state.get("manual_cost_val", int(property_price_input * 0.07))
+
+with col2:
+    extra_costs = st.number_input(
+        "諸費用 (万円) 自動計算 7%",
+        min_value=0, max_value=10000,
+        value=int(default_costs / 10000),
+        step=10, key="inp_costs"
+    ) * 10000
+    st.session_state.manual_cost_edit = True
+    st.session_state.manual_cost_val = extra_costs
+
+st.session_state.prev_property_price = property_price_input
+
 with col3:
-    self_fund = st.number_input("自己資金 (万円)", min_value=0, max_value=100000,
-                                value=int(self_fund_init / 10000), step=10, key="inp_self_fund") * 10000
+    self_fund = st.number_input(
+        "自己資金 (万円)",
+        min_value=0, max_value=100000,
+        value=int(self_fund_init / 10000),
+        step=10, key="inp_self_fund"
+    ) * 10000
+
 with col4:
-    annual_income = st.number_input("年収 (万円)", min_value=100, max_value=10000,
-                                    value=int(annual_income_init / 10000), key="inp_income") * 10000
+    annual_income = st.number_input(
+        "年収 (万円)",
+        min_value=100, max_value=10000,
+        value=int(annual_income_init / 10000),
+        key="inp_income"
+    ) * 10000
+
 with col5:
-    age = st.number_input("年齢", min_value=18, max_value=80,
-                          value=age_init, key="inp_age")
+    age = st.number_input(
+        "年齢",
+        min_value=18, max_value=80,
+        value=age_init,
+        key="inp_age"
+    )
 
 # ===== 借入額の自動計算 =====
 total_price = property_price_input + extra_costs
