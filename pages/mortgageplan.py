@@ -368,7 +368,8 @@ col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
     property_price_input = st.number_input(
         "物件価格 (万円)",
-        min_value=500, max_value=200000,
+        min_value=500,
+        max_value=200000,
         value=int(property_price_init / 10000),
         key="inp_property"
     ) * 10000
@@ -387,7 +388,8 @@ if property_price_input != st.session_state.prev_property_price:
 with col2:
     extra_costs_man = st.number_input(
         "諸費用 (万円) 自動計算 7%",
-        min_value=0, max_value=10000,
+        min_value=0,
+        max_value=10000,
         value=st.session_state.get("inp_costs", int(property_price_input * 0.07 / 10000)),
         step=10,
         key="inp_costs"
@@ -400,15 +402,18 @@ extra_costs = st.session_state.manual_cost_val
 with col3:
     self_fund = st.number_input(
         "自己資金 (万円)",
-        min_value=0, max_value=100000,
+        min_value=0,
+        max_value=100000,
         value=int(self_fund_init / 10000),
-        step=10, key="inp_self_fund"
+        step=10,
+        key="inp_self_fund"
     ) * 10000
 
 with col4:
     annual_income = st.number_input(
         "年収 (万円)",
-        min_value=100, max_value=10000,
+        min_value=100,
+        max_value=10000,
         value=int(annual_income_init / 10000),
         key="inp_income"
     ) * 10000
@@ -416,7 +421,8 @@ with col4:
 with col5:
     age = st.number_input(
         "年齢",
-        min_value=18, max_value=80,
+        min_value=18,
+        max_value=80,
         value=age_init,
         key="inp_age"
     )
@@ -425,6 +431,8 @@ with col5:
 total_price = property_price_input + extra_costs
 principal = total_price - self_fund
 principal = max(0, principal)
+
+# =====  =====
 max_year = min(79 - int(age), 50)
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(years_init, max_year), key="inp_years")
 # --- 入力条件の保存ボタン処理 ---
