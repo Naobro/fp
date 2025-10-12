@@ -507,7 +507,7 @@ def build_table(principal: float, years_req: int, age_now: int):
     table_rows_local = []
     highlights_local = []
 
-    # ===== 各プラン行（一般団信〜疾病系） =====
+       # ===== 各プラン行（一般団信〜疾病系） =====
     for plan in PLANS:
         row = []
         vals = []
@@ -518,7 +518,8 @@ def build_table(principal: float, years_req: int, age_now: int):
             if bank not in rates:
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
-                        # --- 非対応銀行をスキップ（ただし三菱UFJ・住信SBIは除外して計算対象にする）
+
+            # --- 非対応銀行をスキップ（ただし三菱UFJ・住信SBIは除外して計算対象にする）
             if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
                 if bank not in ["三菱UFJ銀行", "住信SBI銀行"]:
                     row.append({"rate": None, "monthly": None, "years": None})
@@ -541,17 +542,18 @@ def build_table(principal: float, years_req: int, age_now: int):
                 base = base_percent_saved / 100.0
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
-                    
-add_rate = extra_rate_percent(bank, plan, age_now)
-if add_rate is None:
-    # 非対応（例：住信SBIのがん100）→空欄セルとしてスキップ
-    row.append({"rate": None, "monthly": None, "years": None})
-    continue
 
-add = add_rate / 100.0
-m = monthly_payment(principal, base + add, y)
-row.append({"rate": base + add, "monthly": m, "years": y})
-vals.append((col_idx, m))
+            # ✅ 上乗せ金利の判定と月々返済計算
+            add_rate = extra_rate_percent(bank, plan, age_now)
+            if add_rate is None:
+                # 非対応（例：住信SBIのがん100）→空欄セルとしてスキップ
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
+
+            add = add_rate / 100.0
+            m = monthly_payment(principal, base + add, y)
+            row.append({"rate": base + add, "monthly": m, "years": y})
+            vals.append((col_idx, m))
 
         # ===== フラット35列 =====
         col_idx = len(BANKS)
