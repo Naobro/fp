@@ -628,19 +628,23 @@ def build_table(principal: float, years_req: int, age_now: int):
 
     return table_rows_local, highlights_local, row50_local, mins50
 
+# 借入上限額の再計算ロジック（修正版）
+
+BANKS_35_YEAR_MAX = ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"]
+
 # --- 借入上限額表示の再計算 ---
 banks_exam = {
-    "SBI新生銀行": {"審査金利": 0.03,    "返済比率": 0.40},
+    "SBI新生銀行": {"審査金利": 0.03, "返済比率": 0.40},
     "三菱UFJ銀行": {"審査金利": 0.0354, "返済比率": 0.35},
-    "PayPay銀行":  {"審査金利": 0.03,    "返済比率": 0.40},
-    "じぶん銀行":  {"審査金利": 0.0257, "返済比率": 0.35},
+    "PayPay銀行": {"審査金利": 0.03, "返済比率": 0.40},
+    "じぶん銀行": {"審査金利": 0.0257, "返済比率": 0.35},
     "住信SBI銀行": {"審査金利": 0.0325, "返済比率": 0.35},
-    "フラット35":    {"審査金利": 0.035,  "返済比率": None}, 
+    "フラット35": {"審査金利": 0.035, "返済比率": None},
 }
 limits = {}
 rows_limit_html = []
 
-# フラット35 の返済比率を年収に応じて設定
+# フラット35 の返済比率設定
 for bank, info in banks_exam.items():
     if bank == "フラット35":
         info["返済比率"] = 0.30 if annual_income < 4_000_000 else 0.35
@@ -650,22 +654,24 @@ for bank, info in banks_exam.items():
     if bank == "フラット35":
         y_exam = 35
     elif bank in ["PayPay銀行", "じぶん銀行"]:
-        # 50年までスライダー通り
         y_exam = years
-    else:
-        # 35年上限
+    elif bank in BANKS_35_YEAR_MAX:
         y_exam = min(years, 35)
+    else:
+        y_exam = years
 
     lim = borrowing_limit(
         annual_income,
         info["審査金利"],
         info["返済比率"],
-        int(age),   # ← 年齢は形式的に渡すが使われない
+        int(age),
         int(y_exam),
         bank
     )
     limits[bank] = lim
     rows_limit_html.append((bank, f"{int(lim // 10000):,} 万円"))
+
+
 st.subheader("💰 年収からの借入上限額")
 st.markdown(
     "<style>.blimit th, .blimit td {border:1.2px solid #aaa; padding:12px; font-size:18px;} .blimit th{background:#F2F6FA;} .blimit{border-collapse:collapse; width:480px; margin-bottom:20px;}</style>",
