@@ -265,11 +265,14 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int,
     # 完済年齢79歳を上限
     max_exam_years = max(1, 79 - age_now)
 
-    # 銀行別上限ルール
+        # 銀行別上限ルール
     if bank_name in ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"]:
-        exam_years = min(35, max_exam_years)
+        # ✅ スライダー値が35年以下ならそのまま、36年以上なら35年に固定
+        exam_years = min(years, 35, max_exam_years)
     elif bank_name in ["PayPay銀行", "じぶん銀行"]:
-        exam_years = min(years, max_exam_years)  # スライダー値を優先
+        # ✅ スライダー値そのまま（最長50年）
+        exam_years = min(years, max_exam_years)
+    exam_years = min(years, max_exam_years)
     else:
         exam_years = min(35, max_exam_years)
 
