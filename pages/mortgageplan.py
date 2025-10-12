@@ -272,7 +272,9 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int,
     elif bank_name in ["PayPay銀行", "じぶん銀行"]:
         # ✅ スライダー値そのまま（最長50年）
         exam_years = min(years, max_exam_years)
-    exam_years = min(years, max_exam_years)
+
+
+ # --- ここまで ---   
     else:
         exam_years = min(35, max_exam_years)
 
