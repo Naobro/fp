@@ -67,7 +67,7 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
         return 0.1 if plan == "がん100" else 0.0
 
     # --- 三菱UFJ銀行 ---
-           if bank == "三菱UFJ銀行":
+    if bank == "三菱UFJ銀行":
         # がん50・がん100 → 非対応（空欄表示にするため None を返す）
         if plan in ["がん50", "がん100"]:
             return None
