@@ -373,30 +373,29 @@ with col1:
         key="inp_property"
     ) * 10000
 
-# 🔁 物件価格変更検知＆諸費用自動再計算
+# 🔁 諸費用自動計算：物件価格変更時に再反映
 if "prev_property_price" not in st.session_state:
     st.session_state.prev_property_price = property_price_input
-if "manual_cost_edit" not in st.session_state:
-    st.session_state.manual_cost_edit = False
+if "manual_cost_val" not in st.session_state:
+    st.session_state.manual_cost_val = int(property_price_input * 0.07)
 
-property_changed = property_price_input != st.session_state.prev_property_price
-if property_changed:
-    default_costs = int(property_price_input * 0.07)
-    st.session_state.manual_cost_edit = False
-else:
-    default_costs = int(property_price_input * 0.07) if not st.session_state.manual_cost_edit else st.session_state.get("manual_cost_val", int(property_price_input * 0.07))
+if property_price_input != st.session_state.prev_property_price:
+    # 物件価格が変更された場合 → 7%で再計算＆再セット
+    st.session_state.manual_cost_val = int(property_price_input * 0.07)
+    st.session_state["inp_costs"] = int(st.session_state.manual_cost_val / 10000)
 
 with col2:
-    extra_costs = st.number_input(
+    extra_costs_man = st.number_input(
         "諸費用 (万円) 自動計算 7%",
         min_value=0, max_value=10000,
-        value=int(default_costs / 10000),
-        step=10, key="inp_costs"
-    ) * 10000
-    st.session_state.manual_cost_edit = True
-    st.session_state.manual_cost_val = extra_costs
+        value=st.session_state.get("inp_costs", int(property_price_input * 0.07 / 10000)),
+        step=10,
+        key="inp_costs"
+    )
+    st.session_state.manual_cost_val = extra_costs_man * 10000
 
 st.session_state.prev_property_price = property_price_input
+extra_costs = st.session_state.manual_cost_val
 
 with col3:
     self_fund = st.number_input(
@@ -426,7 +425,6 @@ with col5:
 total_price = property_price_input + extra_costs
 principal = total_price - self_fund
 principal = max(0, principal)
-
 max_year = min(79 - int(age), 50)
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(years_init, max_year), key="inp_years")
 # --- 入力条件の保存ボタン処理 ---
@@ -536,8 +534,13 @@ def build_table(principal: float, years_req: int, age_now: int):
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
 
-            add = extra_rate_percent(bank, plan, age_now) / 100.0
-            m = monthly_payment(principal, base + add, y)
+            add_rate = extra_rate_percent(bank, plan, age_now)
+if add_rate is None:
+    # 非対応（例：住信SBIのがん100）→空欄セルとしてスキップ
+    row.append({"rate": None, "monthly": None, "years": None})
+    continue
+add = add_rate / 100.0
+m = monthly_payment(principal, base + add, y)
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((col_idx, m))
 
