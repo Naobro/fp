@@ -383,8 +383,6 @@ if "manual_cost_val" not in st.session_state:
 if property_price_input != st.session_state.prev_property_price:
     # 物件価格が変更された場合 → 7%で再計算＆再セット
     st.session_state.manual_cost_val = int(property_price_input * 0.07)
-    st.session_state["inp_costs"] = int(st.session_state.manual_cost_val / 10000)
-
 with col2:
     extra_costs_man = st.number_input(
         "諸費用 (万円) 自動計算 7%",
