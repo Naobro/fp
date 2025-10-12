@@ -365,11 +365,12 @@ property_price_init = principal_init + self_fund_init if principal_init + self_f
 # ===== 入力欄（物件・自己資金・諸費用・年齢） =====
 col1, col2, col3, col4, col5 = st.columns(5)
 
-# --- 物件価格 ---
+# --- 物件価格入力 ---
 with col1:
     property_price_input = st.number_input(
         "物件価格 (万円)",
-        min_value=500, max_value=200000,
+        min_value=500,
+        max_value=200000,
         value=int(property_price_init / 10000),
         key="inp_property"
     ) * 10000
@@ -382,32 +383,31 @@ if "manual_cost_edit" not in st.session_state:
 if "manual_cost_val" not in st.session_state:
     st.session_state.manual_cost_val = int(property_price_input * 0.07)
 
-# --- 物件価格変更チェック ---
+# --- 物件価格変更を検知 ---
 property_changed = property_price_input != st.session_state.prev_property_price
 
 if property_changed:
-    # 価格変更 → 自動再計算（7%）
-    st.session_state.manual_cost_val = int(property_price_input * 0.07)
+    # 価格変更 → 7%で再計算＆反映
+    new_auto_cost = int(property_price_input * 0.07)
+    st.session_state.manual_cost_val = new_auto_cost
     st.session_state.manual_cost_edit = False
-else:
-    # 変更なし → 手動編集値を保持
-    pass
 
-# --- 諸費用 ---
+# --- 諸費用入力欄（常にセッション値を表示）---
 with col2:
     extra_costs_input = st.number_input(
         "諸費用 (万円) 自動計算 7%",
-        min_value=0, max_value=10000,
+        min_value=0,
+        max_value=10000,
         value=int(st.session_state.manual_cost_val / 10000),
         step=10,
-        key="inp_costs"
+        key=None  # ← keyを外す（SessionState競合を防ぐ）
     )
-    # 手動修正が入ったときだけ記録
+    # 手動変更を検知
     if extra_costs_input * 10000 != st.session_state.manual_cost_val:
         st.session_state.manual_cost_val = extra_costs_input * 10000
         st.session_state.manual_cost_edit = True
 
-# --- 状態更新 ---
+# --- セッション更新 ---
 st.session_state.prev_property_price = property_price_input
 extra_costs = st.session_state.manual_cost_val
 
