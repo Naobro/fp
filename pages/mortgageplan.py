@@ -541,16 +541,17 @@ def build_table(principal: float, years_req: int, age_now: int):
                 base = base_percent_saved / 100.0
                 if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
                     base += 0.10 / 100.0
-
-            add_rate = extra_rate_percent(bank, plan, age_now)
+                    
+add_rate = extra_rate_percent(bank, plan, age_now)
 if add_rate is None:
     # 非対応（例：住信SBIのがん100）→空欄セルとしてスキップ
     row.append({"rate": None, "monthly": None, "years": None})
     continue
+
 add = add_rate / 100.0
 m = monthly_payment(principal, base + add, y)
-            row.append({"rate": base + add, "monthly": m, "years": y})
-            vals.append((col_idx, m))
+row.append({"rate": base + add, "monthly": m, "years": y})
+vals.append((col_idx, m))
 
         # ===== フラット35列 =====
         col_idx = len(BANKS)
