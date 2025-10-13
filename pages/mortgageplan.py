@@ -441,6 +441,12 @@ with col5:
 total_price = property_price_input + extra_costs
 principal = total_price - self_fund
 principal = max(0, principal)
+
+# 💰 借入金額を万円単位で表示
+st.markdown(
+    f"<div style='margin-top:10px; font-size:20px; font-weight:bold;'>💰 借入金額：{int(principal // 10000):,} 万円</div>",
+    unsafe_allow_html=True
+)
 # =====  =====
 max_year = min(79 - int(age), 50)
 years = st.slider("返済期間 (年)", min_value=1, max_value=max_year, value=min(years_init, max_year), key="inp_years")
