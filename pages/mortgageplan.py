@@ -587,7 +587,7 @@ def build_table(principal: float, years_req: int, age_now: int):
                     if "flat35_100" in rates and rates["flat35_100"] is not None:
                         base_flat_rate = float(rates["flat35_100"])
                 base_flat = base_flat_rate
-                m_flat = monthly_payment(principal, base_flat, y_flat)
+                m_flat = monthly_payment(principal, base_flat/ 100, y_flat)
                 row.append({"rate": base_flat, "monthly": m_flat, "years": y_flat})
                 vals.append((col_idx, m_flat))
         else:
