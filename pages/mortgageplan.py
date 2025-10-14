@@ -90,7 +90,7 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
 
     # --- じぶん銀行 ---
     if bank == "じぶん銀行":
-        return {"がん100": 0.054, "7大疾病": 0.10}.get(plan, 0.0)
+        return {"がん100": 0.054, "7大疾病": 0.154}.get(plan, 0.0)
 
    # --- 住信SBI銀行 ---
     if bank == "住信SBI銀行":
