@@ -733,12 +733,14 @@ def render_limit_table():
     )
     tbl = "<table class='blimit'><thead><tr><th style='width:250px;text-align:center'>銀行名</th><th style='width:230px;text-align:center'>借入上限額</th></tr></thead><tbody>"
     url_map = {
-        "SBI新生銀行": "https://naokifp.streamlit.app/SBI_Shinssei",
-        "三菱UFJ銀行": "https://naokifp.streamlit.app/MUFG",
-        "PayPay銀行": "https://naokifp.streamlit.app/PayPay",
-        "じぶん銀行": "https://naokifp.streamlit.app/Jibun",
-        "住信SBI銀行": "https://naokifp.streamlit.app/SumishinSBI",
-    }
+    "SBI新生銀行": "https://naokifp.streamlit.app/SBI_Shinssei",
+    "三菱UFJ銀行": "https://naokifp.streamlit.app/MUFG",
+    "PayPay銀行": "https://naokifp.streamlit.app/PayPay",
+    "じぶん銀行": "#",
+    "住信SBI銀行": "https://naokifp.streamlit.app/SumishinSBI",
+    "りそな銀行": "#",
+    "UI銀行": "#",
+}
     for bank, val in rows_limit_html:
         url = "https://www.sbiaruhi.co.jp/product/flat35/" if bank == "フラット35" else url_map.get(bank, "#")
         tbl += f"<tr><td align='center'><a href='{url}' target='_blank' style='color:#226BB3;text-decoration:none;font-weight:bold;'>{bank}</a></td><td align='right'>{val}</td></tr>"
