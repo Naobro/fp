@@ -65,7 +65,7 @@ def webhook():
 
                 # 🔁 LステップにもWebhook転送（新規登録トリガー用）
                 try:
-                    lst_webhook = "https://api.lstep.app/v1/webhook/<あなたのLステップWebhookトークン>"
+                    lst_webhook = "https://rcv.linestep.net/v3/call/2000010853"
                     res = requests.post(lst_webhook, json=event)
                     print("LステップWebhook転送結果:", res.status_code, res.text)
                 except Exception as e:
