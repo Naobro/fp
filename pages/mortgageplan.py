@@ -1024,6 +1024,6 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
             if ok:
                 st.success("✅ 金利を保存しました（上部の表にも反映されます）")
                 # 成功した場合はUIを再描画して最新の金利をロード
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.info("ℹ️ 入力に変更がなかったため保存していません")
