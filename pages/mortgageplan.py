@@ -288,11 +288,9 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int,
     else:
         exam_years = min(35, max_exam_years)
 
-    # ✅ すべての銀行の金利は％表記（例: 1.89＝1.89%）として処理
-    true_rate = exam_rate / 100
-
-    # ✅ 返済比率は小数（例: 0.35＝35%）で扱う
-    annual = income * ratio
+    # ✅ すべての銀行：金利・返済比率ともに％入力、計算時のみ小数化
+    true_rate = exam_rate / 100      # 金利を％→小数へ
+    annual = income * (ratio / 100)  # 返済比率を％→小数へ
     m = annual / 12
     r = true_rate / 12
     n = exam_years * 12
@@ -656,39 +654,38 @@ def build_table(principal: float, years_req: int, age_now: int):
 
 BANKS_35_YEAR_MAX = ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"]
 
-# --- 借入上限額表示の再計算 ---
 banks_exam = {
     "SBI新生銀行": {
         "審査金利": 3.00,
-        "返済比率": 0.40  # 一律40%
+        "返済比率": 40  # 一律40%
     },
     "三菱UFJ銀行": {
         "審査金利": 3.54,
-        "返済比率": 0.35 if annual_income < 4_000_000 else 0.40
+        "返済比率": 35 if annual_income < 4_000_000 else 40
     },
     "PayPay銀行": {
         "審査金利": 3.00,
-        "返済比率": 0.35 if annual_income < 4_000_000 else 0.40
+        "返済比率": 35 if annual_income < 4_000_000 else 40
     },
     "じぶん銀行": {
         "審査金利": 2.57,
-        "返済比率": 0.30 if annual_income < 4_000_000 else 0.35
+        "返済比率": 30 if annual_income < 4_000_000 else 35
     },
     "住信SBI銀行": {
         "審査金利": 3.25,
-        "返済比率": 0.35
+        "返済比率": 35
     },
     "りそな銀行": {
         "審査金利": 3.00,
-        "返済比率": 0.35
+        "返済比率": 35
     },
     "UI銀行": {
         "審査金利": 2.88,
-        "返済比率": 0.30 if annual_income < 4_000_000 else (0.35 if annual_income < 7_500_000 else 0.40)
+        "返済比率": 30 if annual_income < 4_000_000 else (35 if annual_income < 7_500_000 else 40)
     },
     "フラット35": {
         "審査金利": 1.89,
-        "返済比率": 0.30 if annual_income < 4_000_000 else 0.35
+        "返済比率": 30 if annual_income < 4_000_000 else 35
     },
 }
 limits = {}
