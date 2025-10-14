@@ -288,11 +288,8 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int,
     else:
         exam_years = min(35, max_exam_years)
 
-    # ✅ フラット35のみ小数表記（例: 0.0189）、他行はパーセント（例: 0.389）なので補正
-    if "フラット" in bank_name:
-        true_rate = exam_rate
-    else:
-        true_rate = exam_rate / 100
+    # ✅ すべての銀行の金利は小数表記（例: 0.0189＝1.89%）として処理
+    true_rate = exam_rate
 
     annual = income * ratio
     m = annual / 12
