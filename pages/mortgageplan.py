@@ -660,15 +660,21 @@ banks_exam = {
     "PayPay銀行": {"審査金利": 0.03, "返済比率": 0.40},
     "じぶん銀行": {"審査金利": 0.0257, "返済比率": 0.35},
     "住信SBI銀行": {"審査金利": 0.0325, "返済比率": 0.35},
-    "フラット35": {"審査金利": 0.035, "返済比率": None},
+   "フラット35": {"審査金利": None, "返済比率": None},
 }
 limits = {}
 rows_limit_html = []
 
-# フラット35 の返済比率設定
-for bank, info in banks_exam.items():
-    if bank == "フラット35":
-        info["返済比率"] = 0.30 if annual_income < 4_000_000 else 0.35
+# ✅ フラット35：今月の実行金利をそのまま審査金利に採用
+ltv_ratio = principal / property_price_input if property_price_input else 1.0
+if ltv_ratio <= 0.90:
+    flat_exam_rate = float(rates.get("flat35_90") or 0.0189)
+else:
+    flat_exam_rate = float(rates.get("flat35_100") or 0.0189)
+banks_exam["フラット35"]["審査金利"] = flat_exam_rate
+
+# ✅ 年収400万円以下：返済比率30%、それ以上：35%
+banks_exam["フラット35"]["返済比率"] = 0.30 if annual_income <= 4_000_000 else 0.35
 
 # ✅ 各銀行の借入上限額を計算（年齢無視・スライダー基準）
 for bank, info in banks_exam.items():
