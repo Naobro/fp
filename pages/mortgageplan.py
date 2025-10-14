@@ -674,7 +674,7 @@ else:
 banks_exam["フラット35"]["審査金利"] = flat_exam_rate
 
 # ✅ 年収400万円以下：返済比率30%、それ以上：35%
-banks_exam["フラット35"]["返済比率"] = 0.30 if annual_income <= 4_000_0000 else 0.35  # ✅ 円単位に修正（400万円＝4,000,000円×10）
+banks_exam["フラット35"]["返済比率"] = 0.30 if annual_income <= 400 else 0.35  
 # ✅ 各銀行の借入上限額を計算（年齢無視・スライダー基準）
 for bank, info in banks_exam.items():
     if bank == "フラット35":
