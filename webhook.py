@@ -55,7 +55,6 @@ def webhook():
     body = request.json
     print("Webhook body:", body)
 
-    # タイムアウト防止のため即レスポンスを返す
     def handle_event(events):
         for event in events:
             if event.get("type") == "follow":  # 新規友だち追加時
@@ -63,6 +62,14 @@ def webhook():
                 pw = get_or_create_current_password()
                 message = f"ログインパスワード\n👉 今月のパスワードは {pw}"
                 notify_line(user_id, message)
+
+                # 🔁 LステップにもWebhook転送（新規登録トリガー用）
+                try:
+                    lst_webhook = "https://api.lstep.app/v1/webhook/<あなたのLステップWebhookトークン>"
+                    res = requests.post(lst_webhook, json=event)
+                    print("LステップWebhook転送結果:", res.status_code, res.text)
+                except Exception as e:
+                    print("LステップWebhook転送エラー:", e)
 
     events = body.get("events", [])
     Thread(target=handle_event, args=(events,)).start()
