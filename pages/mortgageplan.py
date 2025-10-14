@@ -571,7 +571,7 @@ def build_table(principal: float, years_req: int, age_now: int):
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((col_idx, m))
 
-        # ===== フラット35列 =====
+                # ===== フラット35列 =====
         col_idx = len(BANKS)
         if plan == "一般団信":
             if principal > 8000 * 10000:
@@ -579,13 +579,18 @@ def build_table(principal: float, years_req: int, age_now: int):
             else:
                 borrowing_ratio = principal / property_price_input
                 y_flat = 35
-                # ✅ フラット35：Supabase入力値を％として読み込み、計算時のみ小数化
+
+                # ✅ Supabaseの値のみを使用（常に存在前提）
                 if borrowing_ratio <= 0.90:
-                    base_flat_rate = float(rates.get("flat35_90", 1.89))
+                    base_flat_rate_percent = float(rates["flat35_90"])
                 else:
-                    base_flat_rate = float(rates.get("flat35_100", 1.89))
-                base_flat = base_flat_rate / 100
-                m_flat = monthly_payment(principal, base_flat, y_flat)
+                    base_flat_rate_percent = float(rates["flat35_100"])
+
+                # 計算用に小数化
+                base_flat_rate = base_flat_rate_percent / 100
+                m_flat = monthly_payment(principal, base_flat_rate, y_flat)
+
+                # 表示・計算整合（％→小数）
                 row.append({"rate": base_flat_rate, "monthly": m_flat, "years": y_flat})
                 vals.append((col_idx, m_flat))
         else:
