@@ -987,13 +987,12 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
                     new_rates_dict[bank] = float(s) if s.strip() != "" else None
                 except Exception:
                     new_rates_dict[bank] = None
-
-        # フラット35 用 90%、100% の金利入力欄を追加
+        # フラット35 用 90%、100% の金利入力欄を追加（全て％表記で統一）
         col90, col100 = st.columns(2)
         with col90:
-            # 初期値は小数で保存されているので、パーセントに戻して表示
+            # 初期値も Supabase に保存された％をそのまま表示
             init_val = current_saved.get('flat35_90')
-            init_str = "" if init_val is None else f"{float(init_val) * 100.0:.3f}"
+            init_str = "" if init_val is None else f"{float(init_val):.3f}"
             s90 = st.text_input(
                 "フラット35（90%用 年利％）",
                 value=init_str,
@@ -1001,15 +1000,14 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
                 placeholder="例: 1.234"
             )
             try:
-                # 修正: 入力されたパーセントを小数（0.0XX）に変換して保存
-                new_rates_dict["flat35_90"] = float(s90) / 100.0 if s90.strip() != "" else None
+                new_rates_dict["flat35_90"] = float(s90) if s90.strip() != "" else None
             except:
                 new_rates_dict["flat35_90"] = None
 
         with col100:
-            # 初期値は小数で保存されているので、パーセントに戻して表示
+            # 初期値も Supabase に保存された％をそのまま表示
             init_val = current_saved.get('flat35_100')
-            init_str = "" if init_val is None else f"{float(init_val) * 100.0:.3f}"
+            init_str = "" if init_val is None else f"{float(init_val):.3f}"
             s100 = st.text_input(
                 "フラット35（100%用 年利％）",
                 value=init_str,
@@ -1017,11 +1015,9 @@ with st.expander("🔧 金利を修正する（営業担当専用）", expanded=
                 placeholder="例: 1.567"
             )
             try:
-                # 修正: 入力されたパーセントを小数（0.0XX）に変換して保存
-                new_rates_dict["flat35_100"] = float(s100) / 100.0 if s100.strip() != "" else None
+                new_rates_dict["flat35_100"] = float(s100) if s100.strip() != "" else None
             except:
                 new_rates_dict["flat35_100"] = None
-
         st.markdown("")
         if st.button("💾 金利を保存", type="primary", key="btn_rates_save"):
             ok = save_manual_rates(new_rates_dict)
