@@ -288,13 +288,14 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int,
     else:
         exam_years = min(35, max_exam_years)
 
-    # ✅ すべての銀行の金利は小数表記（例: 0.0189＝1.89%）として処理
-    true_rate = exam_rate
+    # ✅ すべての銀行の金利は％表記（例: 1.89＝1.89%）として処理
+    true_rate = exam_rate / 100
 
-    annual = income * (ratio * 100)
-m = annual / 12
-r = true_rate / 12
-n = exam_years * 12
+    # ✅ 返済比率は小数（例: 0.35＝35%）で扱う
+    annual = income * ratio
+    m = annual / 12
+    r = true_rate / 12
+    n = exam_years * 12
 
     raw = (m * n) if r == 0 else (m * (1 - (1 + r) ** -n) / r)
     return int(raw // 100000 * 100000)
