@@ -284,18 +284,23 @@ def borrowing_limit(income: float, exam_rate: float, ratio: float, age_now: int,
         exam_years = min(years, max_exam_years)
 
 
- # --- ここまで ---   
+# --- ここまで ---   
     else:
         exam_years = min(35, max_exam_years)
 
+    # ✅ フラット35のみ小数表記（例: 0.0189）、他行はパーセント（例: 0.389）なので補正
+    if "フラット" in bank_name:
+        true_rate = exam_rate
+    else:
+        true_rate = exam_rate / 100
+
     annual = income * ratio
     m = annual / 12
-    r = exam_rate / 12
+    r = true_rate / 12
     n = exam_years * 12
 
     raw = (m * n) if r == 0 else (m * (1 - (1 + r) ** -n) / r)
     return int(raw // 100000 * 100000)
-
 # --- DBから過去保存データを読み込み ---
 def load_saved_mortgage(client_id: str):
     try:
