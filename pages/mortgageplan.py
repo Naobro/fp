@@ -694,9 +694,9 @@ rows_limit_html = []
 # ✅ フラット35：今月の実行金利をそのまま審査金利に採用
 ltv_ratio = principal / property_price_input if property_price_input else 1.0
 if ltv_ratio <= 0.90:
-    flat_exam_rate = float(rates.get("flat35_90") or 0.0189)
+    flat_exam_rate = float(rates.get("flat35_90") or 0.0189) * 100  # 小数→％単位に変換
 else:
-    flat_exam_rate = float(rates.get("flat35_100") or 0.0189)
+    flat_exam_rate = float(rates.get("flat35_100") or 0.0189) * 100  # 小数→％単位に変換
 banks_exam["フラット35"]["審査金利"] = flat_exam_rate
 
 # ✅ 年収400万円以下：返済比率30%、それ以上：35%
