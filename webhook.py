@@ -67,26 +67,22 @@ def webhook():
                 try:
                     lst_webhook = "https://rcv.linestep.net/v3/call/2000010853"
 
-                    # ✅ Lステップが期待するJSON形式（最小構成）
-                    lst_payload = {
-                        "userId": user_id
-                    }
+                    # ✅ Lステップが要求するJSON形式（userIdのみ）
+                    lst_payload = {"userId": user_id}
 
-                    # --- デバッグ用ログ出力 ---
+                    # デバッグログ追加
                     print("Lステップ転送ペイロード:", lst_payload)
 
                     res = requests.post(lst_webhook, json=lst_payload)
 
-                    # --- 結果をログに出力 ---
+                    # 結果を確認
                     print("LステップWebhook転送結果:", res.status_code, res.text)
 
                 except Exception as e:
                     print("LステップWebhook転送エラー:", e)
 
-    # イベントを別スレッドで処理
     events = body.get("events", [])
     Thread(target=handle_event, args=(events,)).start()
-
     return jsonify({"status": "ok"})
 
 if __name__ == "__main__":
