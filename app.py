@@ -565,10 +565,11 @@ st.info("これらの項目を一緒に整理して、理想の住まい探し�
 st.divider()
 st.subheader("📩 お問い合わせ")
 st.link_button(
-    "お問い合わせはこちら",
-    "https://docs.google.com/forms/d/e/1FAIpQLSdbG6xqziJWaKf9fBK8uvsrHBMKibCaRadE7qShR3Nl6Cv8Kg/viewform?usp=pp_url",
+    "LINEで相談する（公式アカウント）",
+    "https://lin.ee/m40HEqN",
     type="primary",
 )
+
 
 st.divider()
 st.subheader("便利ツールへジャンプ")
