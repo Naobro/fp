@@ -196,8 +196,10 @@ for i, tab in enumerate(tabs):
     with tab:
         p = props[i]
         p["name"] = st.text_input(
-            "物件名", value=p.get("name", f"物件{i+1}"), key=f"name_{i}"
-        )
+    "物件名",
+    value=p.get("name", f"物件{i+1}"),
+    key=f"name_{i}_{p.get('id', str(i))}"
+)
         if "scores" not in p:
             p["scores"] = {}
         if "comments" not in p:
