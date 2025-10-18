@@ -281,12 +281,13 @@ if st.button("📄 PDFを生成・ダウンロード"):
     pdf.add_page()
 
     # ---- フォント設定 ----
+    # 正常に日本語フォントが登録できた場合、生の日本語文字列を使用できる
     if font_path:
         try:
             pdf.add_font("JP", "", font_path, uni=True)
             pdf.set_font("JP", "", 12)
         except Exception as e:
-            st.warning(f"⚠️ フォント登録エラー ({e}) → Helveticaに切替")
+            st.warning(f"⚠️ フォント登録エラー ({e}) → Helveticaに切替。日本語は表示されない可能性があります。")
             pdf.set_font("Helvetica", "", 12)
     else:
         st.warning("⚠️ 日本語フォントが見つかりません。/fonts に ipaexg.ttf を配置してください。")
@@ -295,8 +296,10 @@ if st.button("📄 PDFを生成・ダウンロード"):
     # ---- タイトル ----
     title_text = f"{p['name']}（{prop_type}）内見チェックリスト"
     try:
+        # 日本語フォントがあれば日本語を直接出力
         pdf.cell(0, 10, title_text, ln=True)
     except Exception:
+        # フォントエラーの際は、表示可能な文字にフォールバック（例: 英数字のみ）
         pdf.cell(0, 10, "Checklist", ln=True)
     pdf.ln(5)
 
@@ -312,23 +315,23 @@ if st.button("📄 PDFを生成・ダウンロード"):
         score = str(p["scores"].get(feat, ""))
         comment = p["comments"].get(feat, "")
 
-        # FPDFのlatin1制約回避：日本語は安全変換
-        safe_feat = feat.encode("latin1", "replace").decode("latin1")
-        safe_comment = comment.encode("latin1", "replace").decode("latin1")
-
-        pdf.cell(60, 8, safe_feat, border=1)
+        # 日本語フォント (uni=True) を利用するため、生の日本語文字列を渡す
+        pdf.cell(60, 8, feat, border=1)
         pdf.cell(20, 8, score, border=1, align="C")
-        pdf.cell(0, 8, safe_comment, border=1)
+        pdf.cell(0, 8, comment, border=1)
         pdf.ln(8)
 
     # ---- PDFをバイナリ出力 ----
-    pdf_bytes = pdf.output(dest="S").encode("latin1", "ignore")
+    # dest="S" は PDF をバイト文字列 (bytes) として返すため、.encode() は削除します。
+    pdf_bytes = pdf.output(dest="S")
     st.download_button(
         label="📥 PDFダウンロード",
         data=pdf_bytes,
         file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
         mime="application/pdf"
-    )                # ---------------- 物件入力タブ（続き） ----------------
+    )
+
+# ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
 
 for i, tab in enumerate(tabs):
@@ -342,7 +345,7 @@ for i, tab in enumerate(tabs):
         if "comments" not in p:
             p["comments"] = {}
 
-       # ================= 基本情報 =================
+        # ================= 基本情報 =================
 st.subheader("基本情報")
 for feat in [
     "価格","専有面積","建物面積","土地面積","坪単価",
@@ -365,7 +368,6 @@ for feat in [
             value=p["comments"].get(feat, ""),
             key=f"{feat}_comment_{i}_{p.get('id', str(i))}"
         )
-     
 
         # ================= マンション専用 =================
 st.subheader("マンション専用チェック")
