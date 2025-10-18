@@ -269,8 +269,12 @@ import io
 if st.button("📄 PDFを生成・ダウンロード"):
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("Noto", "", "NotoSansJP-Regular.ttf", uni=True)
-    pdf.set_font("Noto", "", 12)
+    font_path = os.path.join("fonts", "ipaexg.ttf")
+if os.path.exists(font_path):
+    pdf.add_font("IPAexGothic", "", font_path, uni=True)
+    pdf.set_font("IPAexGothic", "", 12)
+else:
+    pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 10, f"{p['name']} {prop_type} 内見チェックリスト", ln=True)
 
     for feat in check_items:
