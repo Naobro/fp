@@ -311,15 +311,24 @@ if st.button("📄 PDFを生成・ダウンロード"):
         pdf.ln(8)
 
     # ---- PDF出力 ----
-    pdf_data = pdf.output(dest="S")
-    pdf_bytes = pdf_data.encode("latin1", "ignore") if isinstance(pdf_data, str) else pdf_data
+pdf_data = pdf.output(dest="S")
 
-    st.download_button(
-        label="📥 PDFダウンロード",
-        data=pdf_bytes,
-        file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
-        mime="application/pdf"
-    )
+# fpdf2 は環境により str を返すことがあるため bytes に統一変換
+if isinstance(pdf_data, str):
+    pdf_bytes = pdf_data.encode("latin1", "ignore")
+else:
+    try:
+        pdf_bytes = bytes(pdf_data)
+    except Exception:
+        import io
+        pdf_bytes = io.BytesIO(pdf_data).getvalue()
+
+st.download_button(
+    label="📥 PDFダウンロード",
+    data=pdf_bytes,
+    file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
+    mime="application/pdf"
+)
 # ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
 
