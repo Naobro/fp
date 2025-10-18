@@ -264,8 +264,6 @@ for feat in check_items:
 # ================= PDF出力 =================
 st.markdown("### 🖨️ チェックリストPDF出力")
 from fpdf import FPDF
-from fpdf.ttfonts import TTFont
-from fpdf.pdfmetrics import register_font
 import io, os
 
 if st.button("📄 PDFを生成・ダウンロード"):
@@ -282,58 +280,55 @@ if st.button("📄 PDFを生成・ダウンロード"):
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
 
+    # ---- フォント設定 ----
     if font_path:
         try:
             pdf.add_font("JP", "", font_path, uni=True)
             pdf.set_font("JP", "", 12)
         except Exception as e:
-            st.warning(f"フォント登録エラー（{e}）→ Helveticaに切替")
+            st.warning(f"⚠️ フォント登録エラー ({e}) → Helveticaに切替")
             pdf.set_font("Helvetica", "", 12)
     else:
-        st.warning("⚠️ 日本語フォントが見つかりません。/fonts に ipaexg.ttf を置いてください。")
+        st.warning("⚠️ 日本語フォントが見つかりません。/fonts に ipaexg.ttf を配置してください。")
         pdf.set_font("Helvetica", "", 12)
 
-    # ---- 見出し ----
+    # ---- タイトル ----
     title_text = f"{p['name']}（{prop_type}）内見チェックリスト"
     try:
-        pdf.cell(0, 10, title_text.encode('latin1', 'replace').decode('latin1'), ln=True)
+        pdf.cell(0, 10, title_text, ln=True)
     except Exception:
         pdf.cell(0, 10, "Checklist", ln=True)
-    pdf.ln(4)
+    pdf.ln(5)
 
-    # ---- 表見出し ----
+    # ---- テーブルヘッダー ----
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(60, 8, "項目", border=1, fill=True)
     pdf.cell(20, 8, "点数", border=1, fill=True, align="C")
-    pdf.cell(0, 8, "コメント", border=1, fill=True, align="L")
+    pdf.cell(0, 8, "コメント", border=1, fill=True)
     pdf.ln(8)
 
-    # ---- 各項目 ----
+    # ---- 各項目行 ----
     for feat in check_items:
         score = str(p["scores"].get(feat, ""))
         comment = p["comments"].get(feat, "")
 
-        # 日本語→Latin1互換変換（安全化）
-        feat_enc = feat.encode('latin1', 'replace').decode('latin1')
-        comm_enc = comment.encode('latin1', 'replace').decode('latin1')
+        # FPDFのlatin1制約回避：日本語は安全変換
+        safe_feat = feat.encode("latin1", "replace").decode("latin1")
+        safe_comment = comment.encode("latin1", "replace").decode("latin1")
 
-        pdf.cell(60, 8, feat_enc, border=1)
+        pdf.cell(60, 8, safe_feat, border=1)
         pdf.cell(20, 8, score, border=1, align="C")
-        pdf.cell(0, 8, comm_enc, border=1)
+        pdf.cell(0, 8, safe_comment, border=1)
         pdf.ln(8)
 
-    # ---- 出力 ----
-    pdf_output = io.BytesIO()
-    pdf.output(pdf_output)
-    pdf_output.seek(0)
-
+    # ---- PDFをバイナリ出力 ----
+    pdf_bytes = pdf.output(dest="S").encode("latin1", "ignore")
     st.download_button(
         label="📥 PDFダウンロード",
-        data=pdf_output.getvalue(),
+        data=pdf_bytes,
         file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
         mime="application/pdf"
-    )
-                # ---------------- 物件入力タブ（続き） ----------------
+    )                # ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
 
 for i, tab in enumerate(tabs):
