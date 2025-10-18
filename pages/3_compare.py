@@ -283,8 +283,8 @@ for feat in [
             value=p["comments"].get(feat, ""),
             key=f"{feat}_comment_{i}_{p.get('id', str(i))}"
         )
-        # ================= 内見チェックリスト =================
-st.subheader("内見チェックリスト")
+      # ================= 内見チェックリスト =================
+st.subheader("内見チェックリスト（詳細）")
 for feat in [
     "浴室","キッチン","洗面台","トイレ","クロス",
     "フローリング","建具","ガラス・サッシ","音・排ガス",
@@ -297,13 +297,13 @@ for feat in [
             min_value=0,
             max_value=5,
             value=int(p["scores"].get(feat, 0)),
-            key=f"insp_{feat}_score_{i}_{p.get('id', str(i))}"
+            key=f"insp2_{feat}_score_{i}_{p.get('id', str(i))}"
         )
     with col2:
         p["comments"][feat] = st.text_input(
             f"{feat} コメント",
             value=p["comments"].get(feat, ""),
-            key=f"insp_{feat}_comment_{i}_{p.get('id', str(i))}"
+            key=f"insp2_{feat}_comment_{i}_{p.get('id', str(i))}"
         )
 
         # ================= マンション専用 =================
