@@ -224,25 +224,28 @@ for i, tab in enumerate(tabs):
                     value=p["comments"].get(feat, ""), key=f"{feat}_comment_{i}"
                 )
 
-        # ---------------- 内見チェックリスト ----------------
-        st.markdown("### 内見チェックリスト")
-        for feat in [
-            "外壁","屋根","雨樋・排水溝","擁壁・基礎","外構・境界",
-            "ゴミ置き場","エントランス・共用部","天井・壁","床","建具",
-            "水回り","給排水管","換気・断熱・気密性","臭い・音",
-            "家事動線","家具配置","カーテンサイズ","眺望・前建"
-        ]:
-            col1, col2 = st.columns([1,3])
-            with col1:
-                p["scores"][feat] = st.number_input(
-                    f"{feat} 点数 (0〜5)", min_value=0, max_value=5,
-                    value=int(p["scores"].get(feat, 0)), key=f"insp_{feat}_score_{i}"
-                )
-            with col2:
-                p["comments"][feat] = st.text_input(
-                    f"{feat} コメント",
-                    value=p["comments"].get(feat, ""), key=f"insp_{feat}_comment_{i}"
-                )
+        # ================= 内見チェックリスト =================
+st.subheader("内見チェックリスト")
+for feat in [
+    "浴室","キッチン","洗面台","トイレ","クロス",
+    "フローリング","建具","ガラス・サッシ","音・排ガス",
+    "家具配置","収納","家事動線","防音性能","断熱性能"
+]:
+    col1, col2 = st.columns([1,3])
+    with col1:
+        p["scores"][feat] = st.number_input(
+            f"{feat} 点数 (0〜5)",
+            min_value=0,
+            max_value=5,
+            value=int(p["scores"].get(feat, 0)),
+            key=f"insp_{feat}_score_{i}_{p.get('id', str(i))}"
+        )
+    with col2:
+        p["comments"][feat] = st.text_input(
+            f"{feat} コメント",
+            value=p["comments"].get(feat, ""),
+            key=f"insp_{feat}_comment_{i}_{p.get('id', str(i))}"
+        )
                 # ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
 
