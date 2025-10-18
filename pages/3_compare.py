@@ -286,26 +286,27 @@ for feat in [
      
 
         # ================= マンション専用 =================
-        st.subheader("マンション専用チェック")
-        for feat in [
-            "エレベーター台数","共用施設","宅配ボックス","管理人常駐",
-            "セキュリティ","耐震性能","免震・制震","タワーマンション",
-            "ブランド力","管理体制","長期修繕計画","資産価値"
-        ]:
-            col1, col2 = st.columns([1,3])
-            with col1:
-                p["scores"][feat] = st.number_input(
-                    f"{feat} 点数 (0〜5)",
-                    min_value=0, max_value=5,
-                    value=int(p["scores"].get(feat, 0)),
-                    key=f"mans_{feat}_score_{i}"
-                )
-            with col2:
-                p["comments"][feat] = st.text_input(
-                    f"{feat} コメント",
-                    value=p["comments"].get(feat, ""),
-                    key=f"mans_{feat}_comment_{i}"
-                )
+st.subheader("マンション専用チェック")
+for feat in [
+    "エレベーター台数","共用施設","宅配ボックス","管理人常駐",
+    "セキュリティ","耐震性能","免震・制震","タワーマンション",
+    "ブランド力","管理体制","長期修繕計画","資産価値"
+]:
+    col1, col2 = st.columns([1,3])
+    with col1:
+        p["scores"][feat] = st.number_input(
+            f"{feat} 点数 (0〜5)",
+            min_value=0,
+            max_value=5,
+            value=int(p["scores"].get(feat, 0)),
+            key=f"mans_{feat}_score_{i}_{p.get('id', str(i))}"
+        )
+    with col2:
+        p["comments"][feat] = st.text_input(
+            f"{feat} コメント",
+            value=p["comments"].get(feat, ""),
+            key=f"mans_{feat}_comment_{i}_{p.get('id', str(i))}"
+        )
 
         # ================= 戸建て専用 =================
         st.subheader("戸建て専用チェック")
