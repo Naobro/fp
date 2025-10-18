@@ -5,6 +5,8 @@ import streamlit as st
 import json, os, datetime, hashlib, sqlite3
 from typing import Dict, Any, List
 from contextlib import contextmanager
+from fpdf import FPDF  # ← これを追加
+import io  # ← PDF出力時に使用するのでここで読み込む
 
 # ---------------- グローバル設定 ----------------
 st.set_page_config(
