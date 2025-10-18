@@ -273,9 +273,61 @@ if st.button("📄 PDFを生成・ダウンロード"):
     ]
     font_path = next((p for p in candidate_fonts if os.path.exists(p)), None)
 
+    # ---- PDFインスタンス生成 ----
+    from fpdf import FPDF
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
+
+    # ---- フォント設定 ----
+    if font_path:
+        try:
+            pdf.add_font("JP", "", font_path, uni=True)
+            pdf.set_font("JP", "", 12)
+        except Exception as e:
+            st.warning(f"⚠️ フォント登録エラー ({e}) → Helveticaに切替。日本語非対応。")
+            pdf.set_font("Helvetica", "", 12)
+    else:
+        st.warning("⚠️ 日本語フォントが見つかりません。/fonts に ipaexg.ttf を配置してください。")
+        pdf.set_font("Helvetica", "", 12)
+
+    # ---- タイトル ----
+    title_text = f"{p['name']}（{prop_type}）内見チェックリスト"
+    pdf.cell(0, 10, title_text, ln=True)
+    pdf.ln(5)
+
+    # ---- テーブルヘッダー ----
+    pdf.set_fill_color(230, 230, 230)
+    pdf.cell(60, 8, "項目", border=1, fill=True)
+    pdf.cell(20, 8, "点数", border=1, fill=True, align="C")
+    pdf.cell(0, 8, "コメント", border=1, fill=True)
+    pdf.ln(8)
+
+    # ---- 各項目 ----
+    for feat in check_items:
+        score = str(p["scores"].get(feat, ""))
+        comment = p["comments"].get(feat, "")
+        pdf.cell(60, 8, feat, border=1)
+        pdf.cell(20, 8, score, border=1, align="C")
+        pdf.cell(0, 8, comment, border=1)
+        pdf.ln(8)
+
+    # ---- PDF出力（100% 安定版）----
+    try:
+        pdf_data = pdf.output(dest="S").encode("latin1", "ignore")
+    except Exception:
+        import io
+        pdf_output = io.BytesIO()
+        pdf.output(pdf_output)
+        pdf_output.seek(0)
+        pdf_data = pdf_output.read()
+
+    st.download_button(
+        label="📥 PDFダウンロード",
+        data=pdf_data,
+        file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
+        mime="application/pdf"
+    )
 
     # ---- フォント設定 ----
     if font_path:
