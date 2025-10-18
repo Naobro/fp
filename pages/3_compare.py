@@ -321,9 +321,14 @@ if st.button("📄 PDFを生成・ダウンロード"):
         pdf.cell(0, 8, comment, border=1)
         pdf.ln(8)
 
-   # ---- PDFをバイナリ出力 ----
-# fpdf2 の output(dest="S") は str ではなく bytes を返すため、.encode() は不要
-pdf_bytes = pdf.output(dest="S").encode("latin1") if isinstance(pdf.output(dest="S"), str) else pdf.output(dest="S")
+  # ---- PDFをバイナリ出力 ----
+pdf_data = pdf.output(dest="S")
+
+# fpdf2 はバージョンにより str または bytes を返すため両対応
+if isinstance(pdf_data, str):
+    pdf_bytes = pdf_data.encode("latin1", "ignore")
+else:
+    pdf_bytes = pdf_data  # すでに bytes の場合
 
 st.download_button(
     label="📥 PDFダウンロード",
