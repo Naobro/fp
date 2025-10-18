@@ -264,26 +264,33 @@ for feat in check_items:
 # ================= PDF出力 =================
 st.markdown("### 🖨️ チェックリストPDF出力")
 from fpdf import FPDF
-import io
+import io, os
 
 if st.button("📄 PDFを生成・ダウンロード"):
     pdf = FPDF()
     pdf.add_page()
-    font_path = os.path.join("fonts", "ipaexg.ttf")
-if os.path.exists(font_path):
-    pdf.add_font("IPAexGothic", "", font_path, uni=True)
-    pdf.set_font("IPAexGothic", "", 12)
-else:
-    pdf.set_font("Helvetica", "", 12)
-    pdf.cell(0, 10, f"{p['name']} {prop_type} 内見チェックリスト", ln=True)
 
+    # ---- フォント設定 ----
+    font_path = os.path.join("fonts", "ipaexg.ttf")
+    if os.path.exists(font_path):
+        pdf.add_font("IPAexGothic", "", font_path, uni=True)
+        pdf.set_font("IPAexGothic", "", 12)
+    else:
+        pdf.set_font("Helvetica", "", 12)
+
+    pdf.cell(0, 10, f"{p['name']} {prop_type} 内見チェックリスト", ln=True)
+    pdf.ln(4)
+
+    # ---- 各項目 ----
     for feat in check_items:
         score = p["scores"].get(feat, "")
         comment = p["comments"].get(feat, "")
         pdf.multi_cell(0, 8, f"{feat}：{score}点　{comment}")
 
+    # ---- 出力 ----
     pdf_output = io.BytesIO()
     pdf.output(pdf_output)
+    pdf_output.seek(0)
     st.download_button(
         label="📥 PDFダウンロード",
         data=pdf_output.getvalue(),
