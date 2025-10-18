@@ -261,11 +261,6 @@ for feat in check_items:
             key=f"insp_{prop_type}_{feat}_comment_{i}_{p.get('id', str(i))}"
         )
 
-# ================= PDF出力 =================
-st.markdown("### 🖨️ チェックリストPDF出力")
-from fpdf import FPDF
-import io, os
-
 if st.button("📄 PDFを生成・ダウンロード"):
     # ---- フォント探索 ----
     candidate_fonts = [
@@ -281,13 +276,12 @@ if st.button("📄 PDFを生成・ダウンロード"):
     pdf.add_page()
 
     # ---- フォント設定 ----
-    # 正常に日本語フォントが登録できた場合、生の日本語文字列を使用できる
     if font_path:
         try:
             pdf.add_font("JP", "", font_path, uni=True)
             pdf.set_font("JP", "", 12)
         except Exception as e:
-            st.warning(f"⚠️ フォント登録エラー ({e}) → Helveticaに切替。日本語は表示されない可能性があります。")
+            st.warning(f"⚠️ フォント登録エラー ({e}) → Helveticaに切替。日本語非対応。")
             pdf.set_font("Helvetica", "", 12)
     else:
         st.warning("⚠️ 日本語フォントが見つかりません。/fonts に ipaexg.ttf を配置してください。")
@@ -295,12 +289,7 @@ if st.button("📄 PDFを生成・ダウンロード"):
 
     # ---- タイトル ----
     title_text = f"{p['name']}（{prop_type}）内見チェックリスト"
-    try:
-        # 日本語フォントがあれば日本語を直接出力
-        pdf.cell(0, 10, title_text, ln=True)
-    except Exception:
-        # フォントエラーの際は、表示可能な文字にフォールバック（例: 英数字のみ）
-        pdf.cell(0, 10, "Checklist", ln=True)
+    pdf.cell(0, 10, title_text, ln=True)
     pdf.ln(5)
 
     # ---- テーブルヘッダー ----
@@ -310,33 +299,25 @@ if st.button("📄 PDFを生成・ダウンロード"):
     pdf.cell(0, 8, "コメント", border=1, fill=True)
     pdf.ln(8)
 
-    # ---- 各項目行 ----
+    # ---- 各項目 ----
     for feat in check_items:
         score = str(p["scores"].get(feat, ""))
         comment = p["comments"].get(feat, "")
-
-        # 日本語フォント (uni=True) を利用するため、生の日本語文字列を渡す
         pdf.cell(60, 8, feat, border=1)
         pdf.cell(20, 8, score, border=1, align="C")
         pdf.cell(0, 8, comment, border=1)
         pdf.ln(8)
 
-  # ---- PDFをバイナリ出力 ----
-pdf_data = pdf.output(dest="S")
+    # ---- PDF出力 ----
+    pdf_data = pdf.output(dest="S")
+    pdf_bytes = pdf_data.encode("latin1", "ignore") if isinstance(pdf_data, str) else pdf_data
 
-# fpdf2 はバージョンにより str または bytes を返すため両対応
-if isinstance(pdf_data, str):
-    pdf_bytes = pdf_data.encode("latin1", "ignore")
-else:
-    pdf_bytes = pdf_data  # すでに bytes の場合
-
-st.download_button(
-    label="📥 PDFダウンロード",
-    data=pdf_bytes,
-    file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
-    mime="application/pdf"
-)
-
+    st.download_button(
+        label="📥 PDFダウンロード",
+        data=pdf_bytes,
+        file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
+        mime="application/pdf"
+    )
 # ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
 
