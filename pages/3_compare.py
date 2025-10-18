@@ -257,29 +257,29 @@ for i, tab in enumerate(tabs):
         if "comments" not in p:
             p["comments"] = {}
 
-        # ================= 基本情報 =================
-        st.subheader("基本情報")
-        for feat in [
-            "価格","専有面積","建物面積","土地面積","坪単価",
-            "間取り","築年数","所在階","総戸数","バルコニー向き",
-            "駅徒歩","勤務先アクセス","周辺環境","子育て支援",
-            "管理費","修繕積立金","戸数","眺望","角部屋","日当たり"
-        ]:
-            col1, col2 = st.columns([1,3])
-            with col1:
-                p["scores"][feat] = st.number_input(
-                    f"{feat} 点数 (0〜5)",
-                    min_value=0, max_value=5,
-                    value=int(p["scores"].get(feat, 0)),
-                    key=f"{feat}_score_{i}"
-                )
-            with col2:
-                p["comments"][feat] = st.text_input(
-                    f"{feat} コメント",
-                    value=p["comments"].get(feat, ""),
-                    key=f"{feat}_comment_{i}"
-                )
-
+       # ================= 基本情報 =================
+st.subheader("基本情報")
+for feat in [
+    "価格","専有面積","建物面積","土地面積","坪単価",
+    "間取り","築年数","所在階","総戸数","バルコニー向き",
+    "駅徒歩","勤務先アクセス","周辺環境","子育て支援",
+    "管理費","修繕積立金","戸数","眺望","角部屋","日当たり"
+]:
+    col1, col2 = st.columns([1,3])
+    with col1:
+        p["scores"][feat] = st.number_input(
+            f"{feat} 点数 (0〜5)",
+            min_value=0,
+            max_value=5,
+            value=int(p["scores"].get(feat, 0)),
+            key=f"{feat}_score_{i}_{p.get('id', str(i))}"
+        )
+    with col2:
+        p["comments"][feat] = st.text_input(
+            f"{feat} コメント",
+            value=p["comments"].get(feat, ""),
+            key=f"{feat}_comment_{i}_{p.get('id', str(i))}"
+        )
         # ================= 内見チェックリスト =================
         st.subheader("内見チェックリスト")
         for feat in [
