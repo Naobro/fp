@@ -266,37 +266,74 @@ st.markdown("### 🖨️ チェックリストPDF出力")
 from fpdf import FPDF
 import io, os
 
+# 日本語TTFフォントを必須化（なければエラー表示して実行しない）
 if st.button("📄 PDFを生成・ダウンロード"):
-    pdf = FPDF()
-    pdf.add_page()
+    # フォント探索（いずれか1つが存在すればOK）
+    candidate_fonts = [
+        os.path.join("fonts", "ipaexg.ttf"),
+        os.path.join("fonts", "NotoSansJP-Regular.ttf"),
+        "ipaexg.ttf",
+        "NotoSansJP-Regular.ttf",
+    ]
+    font_path = next((p for p in candidate_fonts if os.path.exists(p)), None)
 
-    # ---- フォント設定 ----
-    font_path = os.path.join("fonts", "ipaexg.ttf")
-    if os.path.exists(font_path):
-        pdf.add_font("IPAexGothic", "", font_path, uni=True)
-        pdf.set_font("IPAexGothic", "", 12)
+    if not font_path:
+        st.error("日本語フォント（ipaexg.ttf もしくは NotoSansJP-Regular.ttf）が見つかりません。/fonts 配下に配置してください。")
     else:
-        pdf.set_font("Helvetica", "", 12)
+        pdf = FPDF(orientation="P", unit="mm", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=12)
+        pdf.add_page()
 
-    pdf.cell(0, 10, f"{p['name']} {prop_type} 内見チェックリスト", ln=True)
-    pdf.ln(4)
+        # 日本語フォント登録＆適用（Unicode必須）
+        pdf.add_font("JP", "", font_path, uni=True)
+        pdf.set_font("JP", "", 14)
 
-    # ---- 各項目 ----
-    for feat in check_items:
-        score = p["scores"].get(feat, "")
-        comment = p["comments"].get(feat, "")
-        pdf.multi_cell(0, 8, f"{feat}：{score}点　{comment}")
+        # 見出し
+        title_text = f"{p['name']}（{prop_type}）内見チェックリスト"
+        pdf.cell(0, 10, title_text, ln=True)
+        pdf.ln(2)
 
-    # ---- 出力 ----
-    pdf_output = io.BytesIO()
-    pdf.output(pdf_output)
-    pdf_output.seek(0)
-    st.download_button(
-        label="📥 PDFダウンロード",
-        data=pdf_output.getvalue(),
-        file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
-        mime="application/pdf"
-    )
+        # 表形式見出し
+        pdf.set_font("JP", "", 11)
+        pdf.set_fill_color(230, 230, 230)
+        pdf.cell(60, 8, "項目", border=1, fill=True)
+        pdf.cell(20, 8, "点数", border=1, fill=True, align="C")
+        pdf.cell(0,  8, "コメント", border=1, fill=True, align="L")
+        pdf.ln(8)
+
+        # 各行（横長テーブル：項目 / 点数 / コメント）
+        for feat in check_items:
+            score = str(p["scores"].get(feat, ""))
+            comment = p["comments"].get(feat, "")
+
+            # 項目セル（固定幅）
+            y_before = pdf.get_y()
+            x_before = pdf.get_x()
+            pdf.multi_cell(60, 8, feat, border=1)
+            row_height = pdf.get_y() - y_before
+            # 点数セル（同じ行高に整える）
+            pdf.set_xy(x_before + 60, y_before)
+            pdf.multi_cell(20, 8, score, border=1, align="C")
+            # コメントセル（残幅で同じ行高に整える）
+            x_after = x_before + 80
+            pdf.set_xy(x_after, y_before)
+            # コメントは行高を揃えるため、開始Yを保持してmulti_cell後に高さ差分を吸収
+            y_comment_start = pdf.get_y()
+            pdf.multi_cell(0, 8, comment, border=1)
+            y_comment_end = pdf.get_y()
+            # 一番背の高いセルに合わせてYを調整
+            max_h = max(row_height, y_comment_end - y_comment_start, 8)
+            if (y_before + max_h) > pdf.get_y():
+                pdf.set_y(y_before + max_h)
+
+        # PDFバイナリを出力（fpdf2は 'S' で文字列を返すため bytes へ）
+        pdf_bytes = pdf.output(dest="S").encode("latin1")
+        st.download_button(
+            label="📥 PDFダウンロード",
+            data=pdf_bytes,
+            file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
+            mime="application/pdf"
+        )
                 # ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
 
