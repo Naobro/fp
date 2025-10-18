@@ -226,43 +226,103 @@ for i, tab in enumerate(tabs):
                     value=p["comments"].get(feat, ""), key=f"{feat}_comment_{i}"
                 )
 
-       # ================= 内見チェックリスト =================
-st.subheader("内見チェックリスト")
+              # ================= 内見チェックリスト =================
+        st.subheader("内見チェックリスト")
 
-# タイプ選択：マンション / 戸建・土地
-prop_type = st.radio("🏘️ 種別を選択", ["マンション", "戸建・土地"], key=f"type_select_{i}")
+        # タイプ選択：マンション / 戸建・土地
+        prop_type = st.radio("🏘️ 種別を選択", ["マンション", "戸建・土地"], key=f"type_select_{i}")
 
-if prop_type == "マンション":
-    check_items = [
-        "外壁・共用廊下","エントランス・管理体制","宅配ボックス","エレベーター",
-        "セキュリティ","耐震性能","共用施設","騒音・振動","管理人常駐","ゴミ出し動線",
-        "長期修繕計画","資産価値","眺望","通風","日当たり"
-    ]
-else:
-    check_items = [
-        "外壁・屋根","基礎・擁壁","排水溝・雨樋","越境・境界","駐車場","庭・外構",
-        "前面道路幅員","前面道路方位","地型","断熱性能","防音性能",
-        "上下水・ガス・電気設備","太陽光・オール電化","耐震性能","眺望・採光"
-    ]
+        if prop_type == "マンション":
+            check_items = [
+                "外壁・共用廊下","エントランス・管理体制","宅配ボックス","エレベーター",
+                "セキュリティ","耐震性能","共用施設","騒音・振動","管理人常駐","ゴミ出し動線",
+                "長期修繕計画","資産価値","眺望","通風","日当たり"
+            ]
+        else:
+            check_items = [
+                "外壁・屋根","基礎・擁壁","排水溝・雨樋","越境・境界","駐車場","庭・外構",
+                "前面道路幅員","前面道路方位","地型","断熱性能","防音性能",
+                "上下水・ガス・電気設備","太陽光・オール電化","耐震性能","眺望・採光"
+            ]
 
-# 表示
-for feat in check_items:
-    col1, col2 = st.columns([1,3])
-    with col1:
-        p["scores"][feat] = st.number_input(
-            f"{feat} 点数 (0〜5)",
-            min_value=0,
-            max_value=5,
-            value=int(p["scores"].get(feat, 0)),
-            key=f"insp_{prop_type}_{feat}_score_{i}_{p.get('id', str(i))}"
-        )
-    with col2:
-        p["comments"][feat] = st.text_input(
-            f"{feat} コメント",
-            value=p["comments"].get(feat, ""),
-            key=f"insp_{prop_type}_{feat}_comment_{i}_{p.get('id', str(i))}"
-        )
+        for feat in check_items:
+            col1, col2 = st.columns([1,3])
+            with col1:
+                p["scores"][feat] = st.number_input(
+                    f"{feat} 点数 (0〜5)",
+                    min_value=0, max_value=5,
+                    value=int(p["scores"].get(feat, 0)),
+                    key=f"insp_{prop_type}_{feat}_score_{i}_{p.get('id', str(i))}"
+                )
+            with col2:
+                p["comments"][feat] = st.text_input(
+                    f"{feat} コメント",
+                    value=p["comments"].get(feat, ""),
+                    key=f"insp_{prop_type}_{feat}_comment_{i}_{p.get('id', str(i))}"
+                )
 
+        # ================= PDF出力 =================
+        if st.button(f"📄 {p['name']} のPDFを生成・ダウンロード", key=f"pdf_btn_{i}"):
+            # フォント探索
+            candidate_fonts = [
+                os.path.join("fonts", "ipaexg.ttf"),
+                os.path.join("fonts", "NotoSansJP-Regular.ttf"),
+                "ipaexg.ttf",
+                "NotoSansJP-Regular.ttf"
+            ]
+            font_path = next((p for p in candidate_fonts if os.path.exists(p)), None)
+
+            # PDF生成
+            pdf = FPDF(orientation="P", unit="mm", format="A4")
+            pdf.set_auto_page_break(auto=True, margin=12)
+            pdf.add_page()
+
+            # フォント設定
+            if font_path:
+                try:
+                    pdf.add_font("JP", "", font_path, uni=True)
+                    pdf.set_font("JP", "", 12)
+                except Exception:
+                    pdf.set_font("Helvetica", "", 12)
+            else:
+                pdf.set_font("Helvetica", "", 12)
+
+            # タイトル
+            pdf.cell(0, 10, f"{p['name']}（{prop_type}）内見チェックリスト", ln=True)
+            pdf.ln(5)
+
+            # テーブルヘッダー
+            pdf.set_fill_color(230, 230, 230)
+            pdf.cell(60, 8, "項目", border=1, fill=True)
+            pdf.cell(20, 8, "点数", border=1, fill=True, align="C")
+            pdf.cell(0, 8, "コメント", border=1, fill=True)
+            pdf.ln(8)
+
+            # 各項目
+            for feat in check_items:
+                score = str(p["scores"].get(feat, ""))
+                comment = p["comments"].get(feat, "")
+                pdf.cell(60, 8, feat, border=1)
+                pdf.cell(20, 8, score, border=1, align="C")
+                pdf.cell(0, 8, comment, border=1)
+                pdf.ln(8)
+
+            # バイナリ出力（安定版）
+            try:
+                pdf_data = pdf.output(dest="S").encode("latin1", "ignore")
+            except Exception:
+                pdf_buffer = io.BytesIO()
+                pdf.output(pdf_buffer)
+                pdf_buffer.seek(0)
+                pdf_data = pdf_buffer.read()
+
+            st.download_button(
+                label="📥 PDFダウンロード",
+                data=pdf_data,
+                file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
+                mime="application/pdf",
+                key=f"dl_btn_{i}"
+            )
 if st.button("📄 PDFを生成・ダウンロード"):
     # ---- フォント探索 ----
     candidate_fonts = [
