@@ -321,15 +321,16 @@ if st.button("📄 PDFを生成・ダウンロード"):
         pdf.cell(0, 8, comment, border=1)
         pdf.ln(8)
 
-    # ---- PDFをバイナリ出力 ----
-    # dest="S" は PDF をバイト文字列 (bytes) として返すため、.encode() は削除します。
-    pdf_bytes = pdf.output(dest="S")
-    st.download_button(
-        label="📥 PDFダウンロード",
-        data=pdf_bytes,
-        file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
-        mime="application/pdf"
-    )
+   # ---- PDFをバイナリ出力 ----
+# fpdf2 の output(dest="S") は str ではなく bytes を返すため、.encode() は不要
+pdf_bytes = pdf.output(dest="S").encode("latin1") if isinstance(pdf.output(dest="S"), str) else pdf.output(dest="S")
+
+st.download_button(
+    label="📥 PDFダウンロード",
+    data=pdf_bytes,
+    file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
+    mime="application/pdf"
+)
 
 # ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
