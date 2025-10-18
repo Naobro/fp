@@ -224,14 +224,27 @@ for i, tab in enumerate(tabs):
                     value=p["comments"].get(feat, ""), key=f"{feat}_comment_{i}"
                 )
 
-        # ================= 内見チェックリスト =================
+       # ================= 内見チェックリスト =================
 st.subheader("内見チェックリスト")
-for feat in [
-    "外壁","屋根","雨樋・排水溝","擁壁・基礎","外構・境界",
-    "ゴミ置き場","エントランス・共用部","天井・壁","床","建具",
-    "水回り","給排水管","換気・断熱・気密性","臭い・音",
-    "家事動線","家具配置","カーテンサイズ","眺望・前建"
-]:
+
+# タイプ選択：マンション / 戸建・土地
+prop_type = st.radio("🏘️ 種別を選択", ["マンション", "戸建・土地"], key=f"type_select_{i}")
+
+if prop_type == "マンション":
+    check_items = [
+        "外壁・共用廊下","エントランス・管理体制","宅配ボックス","エレベーター",
+        "セキュリティ","耐震性能","共用施設","騒音・振動","管理人常駐","ゴミ出し動線",
+        "長期修繕計画","資産価値","眺望","通風","日当たり"
+    ]
+else:
+    check_items = [
+        "外壁・屋根","基礎・擁壁","排水溝・雨樋","越境・境界","駐車場","庭・外構",
+        "前面道路幅員","前面道路方位","地型","断熱性能","防音性能",
+        "上下水・ガス・電気設備","太陽光・オール電化","耐震性能","眺望・採光"
+    ]
+
+# 表示
+for feat in check_items:
     col1, col2 = st.columns([1,3])
     with col1:
         p["scores"][feat] = st.number_input(
@@ -239,14 +252,40 @@ for feat in [
             min_value=0,
             max_value=5,
             value=int(p["scores"].get(feat, 0)),
-            key=f"insp_{feat}_score_{i}_{p.get('id', str(i))}"
+            key=f"insp_{prop_type}_{feat}_score_{i}_{p.get('id', str(i))}"
         )
     with col2:
         p["comments"][feat] = st.text_input(
             f"{feat} コメント",
             value=p["comments"].get(feat, ""),
-            key=f"insp_{feat}_comment_{i}_{p.get('id', str(i))}"
+            key=f"insp_{prop_type}_{feat}_comment_{i}_{p.get('id', str(i))}"
         )
+
+# ================= PDF出力 =================
+st.markdown("### 🖨️ チェックリストPDF出力")
+from fpdf import FPDF
+import io
+
+if st.button("📄 PDFを生成・ダウンロード"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.add_font("Noto", "", "NotoSansJP-Regular.ttf", uni=True)
+    pdf.set_font("Noto", "", 12)
+    pdf.cell(0, 10, f"{p['name']} {prop_type} 内見チェックリスト", ln=True)
+
+    for feat in check_items:
+        score = p["scores"].get(feat, "")
+        comment = p["comments"].get(feat, "")
+        pdf.multi_cell(0, 8, f"{feat}：{score}点　{comment}")
+
+    pdf_output = io.BytesIO()
+    pdf.output(pdf_output)
+    st.download_button(
+        label="📥 PDFダウンロード",
+        data=pdf_output.getvalue(),
+        file_name=f"{p['name']}_{prop_type}_内見チェックリスト.pdf",
+        mime="application/pdf"
+    )
                 # ---------------- 物件入力タブ（続き） ----------------
 tabs = st.tabs([p["name"] for p in props])
 
