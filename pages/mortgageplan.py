@@ -44,6 +44,35 @@ st.markdown(
 )
 
 st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
+
+# ✅ 入力欄・ボタン・警告枠の色も見やすく修正
+st.markdown(
+    """
+    <style>
+    input, textarea {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+    .stButton>button {
+        background-color: #1A73E8 !important;
+        color: white !important;
+        border-radius: 6px !important;
+        border: none !important;
+        font-weight: bold !important;
+    }
+    .stButton>button:hover {
+        background-color: #1558b0 !important;
+    }
+    div[data-testid="stAlert"] {
+        color: #000000 !important;
+        background-color: #FFF9C4 !important;
+        border: 1px solid #E0E0E0 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 authenticated = login_ui()
 if not authenticated:
     st.warning("🔑 このシミュレーターを利用するにはLINE登録とログインが必要です。")
