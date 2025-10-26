@@ -21,6 +21,28 @@ from supabase import create_client # create_client は supabase から直接イ�
 # ✅ ページ設定とサイドバー削除（最初の3行）
 import streamlit as st
 st.set_page_config(page_title="住宅ローン提案", layout="wide", initial_sidebar_state="collapsed")
+
+# ✅ ダークモード対策（白背景×黒文字を強制）
+import streamlit as st
+st.markdown(
+    """
+    <style>
+    body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+    [data-testid="stMarkdownContainer"] h1, h2, h3, h4, h5, h6, p, div, span {
+        color: #000000 !important;
+    }
+    [data-testid="stTable"], table, th, td {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 st.markdown("<style>section[data-testid='stSidebar']{display:none;}</style>", unsafe_allow_html=True)
 authenticated = login_ui()
 if not authenticated:
