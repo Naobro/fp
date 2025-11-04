@@ -280,3 +280,5 @@ with st.expander("🔧 データベース管理（デバッグ用）"):
                 file_name=f"clients_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json"
             )
+from auth import admin_send_ui
+admin_send_ui()
