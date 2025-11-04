@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 from supabase import create_client
-from datetime import date, datetime
+from datetime import date, datetime, time
 import random, string, requests
 
 # --------------------------
@@ -15,18 +15,17 @@ supabase = create_client(url, key)
 # LINE設定
 # --------------------------
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", st.secrets.get("LINE_CHANNEL_ACCESS_TOKEN"))
-LINE_USER_ID = os.environ.get("LINE_USER_ID", st.secrets.get("LINE_USER_ID"))
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", st.secrets.get("ADMIN_PASSWORD", "naoki2480"))
 
 # 本番用 LINE 友だち追加URL & QRコード
 LINE_FRIEND_ADD_URL = "https://lin.ee/V1bwuO8"
 LINE_FRIEND_QR = "https://qr-official.line.me/gs/M_277qthwd_GW.png?oat_content=qr"
 
-# --------------------------
-# LINE 通知関数
-# --------------------------
+# =========================================================
+# 📩 LINE 送信 関数群
+# =========================================================
 def notify_line(user_id: str, message: str):
-    """特定ユーザーにLINE送信"""
+    """指定ユーザーにLINE送信"""
     url = "https://api.line.me/v2/bot/message/push"
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
     payload = {"to": user_id, "messages": [{"type": "text", "text": message}]}
@@ -37,52 +36,96 @@ def notify_line(user_id: str, message: str):
         st.error(f"LINE送信エラー: {e}")
         return None
 
-def notify_all_members(message: str):
-    """全員（固定1ID）に送信"""
-    if LINE_USER_ID:
-        notify_line(LINE_USER_ID, message)
-    else:
-        st.warning("環境変数 LINE_USER_ID が設定されていません。")
 
-# --------------------------
-# パスワード管理
-# --------------------------
+def notify_all_members(message: str):
+    """全LINE登録者へ送信（Supabase: line_subscribers テーブル）"""
+    try:
+        res = supabase.table("line_subscribers").select("user_id").execute()
+        users = [r["user_id"] for r in res.data if "user_id" in r]
+    except Exception as e:
+        users = []
+        st.warning(f"line_subscribers 読み込みエラー: {e}")
+
+    if not users:
+        st.error("⚠️ Supabaseの line_subscribers に登録者がいません。")
+        return
+
+    success, failed = 0, 0
+    for uid in users:
+        code = notify_line(uid, message)
+        if code == 200:
+            success += 1
+        else:
+            failed += 1
+    st.success(f"✅ 送信完了（成功: {success}件 / 失敗: {failed}件）")
+
+
+# =========================================================
+# 🔑 パスワード管理
+# =========================================================
 def generate_password(length: int = 10) -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
+
 def get_or_create_current_password():
-    """今月のパスワードを取得。なければ生成→Supabase保存→LINE通知"""
+    """今月のパスワード取得 or 作成＋自動送信"""
     month_key = date.today().strftime("%Y-%m")
-    today = datetime.now()
+    now = datetime.now()
 
     res = supabase.table("monthly_passwords").select("month, password").eq("month", month_key).execute()
 
+    # --- 今月分が存在する ---
     if res.data and len(res.data) > 0:
         pw = res.data[0]["password"].strip()
-        # 毎月1日8:00〜8:59に再送
-        if today.day == 1 and 8 <= today.hour < 9:
-            notify_all_members(f"🔑 今月({month_key})のパスワードは: {pw}")
+
+        # 毎月1日 8:30 ±5分 の間なら全員に再送
+        if now.day == 1 and (now.hour == 8 and 25 <= now.minute <= 35):
+            msg = f"🔑 今月({month_key})の住宅ローンサイトのパスワードは『{pw}』です。"
+            notify_all_members(msg)
+
         return pw
 
-    # パスワード未作成なら新規生成
+    # --- 新規作成 ---
     new_pw = generate_password()
+
     # 古いレコード削除
     old = supabase.table("monthly_passwords").select("month").neq("month", month_key).execute()
     if old.data:
         for rec in old.data:
             supabase.table("monthly_passwords").delete().eq("month", rec["month"]).execute()
-    # 新規挿入
+
+    # 今月分を登録
     supabase.table("monthly_passwords").insert({"month": month_key, "password": new_pw}).execute()
-    notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
+
+    # 全員に送信
+    notify_all_members(f"🔑 今月({month_key})の住宅ローンサイトのパスワードは『{new_pw}』です。")
+
     return new_pw
 
-# --------------------------
-# 管理者ログイン
-# --------------------------
+
+# =========================================================
+# 👋 新規登録者への自動送信
+# =========================================================
+def send_welcome_message(user_id: str):
+    """LINE新規登録者への初回メッセージ（パスワード付き）"""
+    pw = get_or_create_current_password()
+    message = (
+        "🎉 ご登録ありがとうございます！\n\n"
+        "🔑 今月の住宅ローンサイトパスワードはこちら👇\n"
+        f"【{pw}】\n\n"
+        "以下のリンクからログインできます。\n"
+        "https://naokifp.streamlit.app/"
+    )
+    notify_line(user_id, message)
+
+
+# =========================================================
+# 👑 管理画面ログイン
+# =========================================================
 def check_admin():
-    """管理者ログイン"""
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
+
     if not st.session_state["admin_authenticated"]:
         st.markdown("### 👑 管理者ログイン")
         pwd = st.text_input("管理者パスワード", type="password", key="admin_pw")
@@ -96,27 +139,15 @@ def check_admin():
         st.stop()
     return True
 
-# --------------------------
-# 今月のパスワードを全員に送信
-# --------------------------
-def send_password_to_all():
-    """今月のパスワードをLINE登録者全員に送信"""
-    month_key = date.today().strftime("%Y-%m")
-    res = supabase.table("monthly_passwords").select("password").eq("month", month_key).execute()
-    if not res.data:
-        pw = get_or_create_current_password()
-    else:
-        pw = res.data[0]["password"].strip()
-    message = f"🔑 今月({month_key})の住宅ローンサイトのパスワードは『{pw}』です。"
-    notify_all_members(message)
-    st.success("LINE登録者全員に送信しました。")
 
-# --------------------------
-# 管理画面UI
-# --------------------------
+# =========================================================
+# 🧭 管理画面UI（手動一斉送信用）
+# =========================================================
 def admin_send_ui():
-    """管理者用UI"""
     check_admin()
-    st.markdown("### 📤 今月のパスワードをLINE登録者に一斉送信")
+    st.markdown("### 📤 今月のパスワードを全LINE登録者に一斉送信")
     if st.button("送信する"):
-        send_password_to_all()
+        month_key = date.today().strftime("%Y-%m")
+        pw = get_or_create_current_password()
+        msg = f"🔑 今月({month_key})の住宅ローンサイトのパスワードは『{pw}』です。"
+        notify_all_members(msg)
