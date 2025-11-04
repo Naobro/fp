@@ -3,6 +3,8 @@ import streamlit as st
 from supabase import create_client
 from datetime import date, datetime, time
 import random, string, requests
+import json
+from fastapi import FastAPI, Request
 
 # --------------------------
 # Supabase クライアント
@@ -59,7 +61,7 @@ def get_or_create_current_password():
     if res.data and len(res.data) > 0:
         pw = res.data[0]["password"].strip()
 
-        # 毎月1日8:00に再送（8:00〜8:05の間に起動すれば送信される）
+        # 毎月1日8:00に再送（8:00〜8:59の間に起動すれば送信される）
         if today.day == 1 and 8 <= today.hour < 9:
             notify_all_members(f"🔑 今月({month_key})のパスワードは: {pw}")
 
@@ -117,18 +119,14 @@ def login_ui():
 # 管理者専用ログイン
 # --------------------------
 def check_admin():
-    import streamlit as st
-    import os
-
+    """管理者ログインUI"""
     ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", st.secrets.get("ADMIN_PASSWORD", "naoki2480"))
-
     if "admin_authenticated" not in st.session_state:
         st.session_state["admin_authenticated"] = False
 
     if not st.session_state["admin_authenticated"]:
         st.markdown("### 👑 管理者ログイン")
         pwd = st.text_input("管理者パスワードを入力してください", type="password", key="admin_pw")
-
         if st.button("ログイン"):
             if pwd == ADMIN_PASSWORD and pwd != "":
                 st.session_state["admin_authenticated"] = True
@@ -136,7 +134,53 @@ def check_admin():
                 st.rerun()
             else:
                 st.error("パスワードが違います")
-
         st.stop()
-
     return True
+
+# ==========================
+# Lステップ用 Webhook エンドポイント
+# ==========================
+app = FastAPI()
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    """LステップからのWebhookでパスワード返信"""
+    body = await request.json()
+    try:
+        user_id = body["events"][0]["source"]["userId"]
+        text = body["events"][0]["message"]["text"].strip()
+    except Exception:
+        return {"status": "error", "reason": "invalid payload"}
+
+    if text in ["パスワード", "password", "PASS", "パス"]:
+        current_pw = get_or_create_current_password()
+        message = f"🔑 今月の住宅ローンサイトのパスワードは『{current_pw}』です。"
+        notify_line(user_id, message)
+        return {"status": "ok", "reply": "password sent"}
+
+    return {"status": "ignored"}
+
+# ==========================
+# 管理者が今月のパスワードを一斉送信する関数
+# ==========================
+def send_password_to_all():
+    """今月のパスワードをLINE登録者全員に送信"""
+    month_key = date.today().strftime("%Y-%m")
+    res = supabase.table("monthly_passwords").select("password").eq("month", month_key).execute()
+    if not res.data:
+        pw = get_or_create_current_password()
+    else:
+        pw = res.data[0]["password"].strip()
+    message = f"🔑 今月({month_key})の住宅ローンサイトのパスワードは『{pw}』です。"
+    notify_all_members(message)
+    st.success("LINE登録者全員に送信しました。")
+
+# ==========================
+# 管理画面にボタンを表示
+# ==========================
+def admin_send_ui():
+    """管理者用UIから一斉送信ボタン"""
+    check_admin()
+    st.markdown("### 📤 今月のパスワードをLINE登録者に一斉送信")
+    if st.button("送信する"):
+        send_password_to_all()
