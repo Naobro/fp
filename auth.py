@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 from supabase import create_client
-from datetime import date
+from datetime import date, datetime, time
 import random, string, requests
 
 # --------------------------
@@ -26,12 +26,14 @@ LINE_FRIEND_QR = "https://qr-official.line.me/gs/M_277qthwd_GW.png?oat_content=q
 # LINE 通知関数
 # --------------------------
 def notify_line(user_id: str, message: str):
+    """特定ユーザーにLINE送信"""
     url = "https://api.line.me/v2/bot/message/push"
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
     payload = {"to": user_id, "messages": [{"type": "text", "text": message}]}
     return requests.post(url, headers=headers, json=payload)
 
 def notify_all_members(message: str):
+    """全員（固定1ID）に送信"""
     if LINE_USER_ID:
         notify_line(LINE_USER_ID, message)
 
@@ -42,22 +44,44 @@ def generate_password(length: int = 10) -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def get_or_create_current_password():
-    """今月のパスワードを取得。無ければ生成→Supabase保存→LINE通知"""
+    """今月のパスワードを取得。なければ生成→Supabase保存→LINE通知
+       さらに毎月1日 8:00 にも再送する
+    """
     month_key = date.today().strftime("%Y-%m")
+    today = datetime.now()
+
+    # 今月のレコード取得
     res = supabase.table("monthly_passwords").select("month, password").eq("month", month_key).execute()
+
+    # --------------------------
+    # 既に存在する場合
+    # --------------------------
     if res.data and len(res.data) > 0:
-        return res.data[0]["password"].strip()
-    else:
-        new_pw = generate_password()
-        # 古いレコード削除
-        old = supabase.table("monthly_passwords").select("month").neq("month", month_key).execute()
-        if old.data:
-            for rec in old.data:
-                supabase.table("monthly_passwords").delete().eq("month", rec["month"]).execute()
-        # 新規挿入
-        supabase.table("monthly_passwords").insert({"month": month_key, "password": new_pw}).execute()
-        notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
-        return new_pw
+        pw = res.data[0]["password"].strip()
+
+        # 毎月1日8:00に再送（8:00〜8:05の間に起動すれば送信される）
+        if today.day == 1 and 8 <= today.hour < 9:
+            notify_all_members(f"🔑 今月({month_key})のパスワードは: {pw}")
+
+        return pw
+
+    # --------------------------
+    # 存在しない場合 → 新規生成＆通知
+    # --------------------------
+    new_pw = generate_password()
+
+    # 古いレコード削除
+    old = supabase.table("monthly_passwords").select("month").neq("month", month_key).execute()
+    if old.data:
+        for rec in old.data:
+            supabase.table("monthly_passwords").delete().eq("month", rec["month"]).execute()
+
+    # 新規挿入
+    supabase.table("monthly_passwords").insert({"month": month_key, "password": new_pw}).execute()
+
+    # LINE通知
+    notify_all_members(f"🔑 今月({month_key})のパスワードは: {new_pw}")
+    return new_pw
 
 # --------------------------
 # 認証処理（利用者用）
@@ -96,8 +120,6 @@ def check_admin():
     import streamlit as st
     import os
 
-    # ✅ Streamlit Cloud / Render 両対応
-    # secrets または 環境変数から取得、どちらも無ければ "naoki2480" を使用
     ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", st.secrets.get("ADMIN_PASSWORD", "naoki2480"))
 
     if "admin_authenticated" not in st.session_state:
@@ -115,8 +137,6 @@ def check_admin():
             else:
                 st.error("パスワードが違います")
 
-        # 未ログイン時はここで停止（管理画面を見せない）
         st.stop()
 
-    # ログイン済みの場合のみ処理を継続
     return True
