@@ -485,9 +485,17 @@ def save_to_state(key, value):
 # ----------------------------
 # 入力エリア（基本情報）
 # ----------------------------
-st.session_state["customer_name"] = st.text_input("お客様名", st.session_state.get("customer_name", ""))
-st.session_state["property_name"] = st.text_input("物件名", st.session_state.get("property_name", ""))
-
+# 🔧 DuplicateElementId防止のため、keyを明示して識別子を固定
+st.session_state["customer_name"] = st.text_input(
+    "お客様名",
+    st.session_state.get("customer_name", ""),
+    key="input_customer_name"
+)
+st.session_state["property_name"] = st.text_input(
+    "物件名",
+    st.session_state.get("property_name", ""),
+    key="input_property_name"
+)
 col1, col2, col3 = st.columns(3)
 with col1:
     prop_type = st.selectbox("物件種別", ["マンション", "戸建て"],
