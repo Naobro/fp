@@ -13,6 +13,7 @@ from typing import Dict, Any
 
 import streamlit as st
 from fpdf import FPDF
+from supabase import create_client  # ✅ Supabase金利保存用（復活）
 # from client_portal import db_insert_record, now_iso # 未使用なのでコメントアウト
 
 # ===== 画面設定 =====
