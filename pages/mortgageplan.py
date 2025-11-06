@@ -211,13 +211,16 @@ TABLE_RECORDS  = st.secrets.get("SUPABASE_TABLE_RECORDS", "client_portal_records
 
 @st.cache_resource(show_spinner=False)
 def get_sb():
-    # 接続情報がない場合はここでエラー
+    """Supabaseクライアント（最新データを毎回確実に取得）"""
     if "SUPABASE_URL" not in st.secrets or "SUPABASE_ANON_KEY" not in st.secrets:
         st.error("🚨 Supabase接続情報がst.secretsに見つかりません。")
         st.stop()
-    url  = st.secrets["SUPABASE_URL"]
-    key  = st.secrets["SUPABASE_ANON_KEY"]
-    return create_client(url, key)
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_ANON_KEY"]
+    client = create_client(url, key)
+    # 💡 キャッシュを使わず毎回新しい接続で最新データを取得
+    client.postgrest.session.headers["Cache-Control"] = "no-cache"
+    return client
 
 def load_manual_rates() -> dict:
     """
