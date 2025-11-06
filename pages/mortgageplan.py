@@ -73,9 +73,18 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-authenticated = login_ui()
+# auth.pyを使わず、固定パスワードでログイン認証
+st.markdown("### 🔑 ログインが必要です")
+pwd = st.text_input("パスワードを入力してください", type="password", key="pwd_login")
+
+if pwd == "terassnishiyama":
+    authenticated = True
+    st.success("✅ ログイン成功！")
+else:
+    authenticated = False
+    st.warning("パスワードが一致しません。")
+
 if not authenticated:
-    st.warning("🔑 このシミュレーターを利用するにはLINE登録とログインが必要です。")
     st.stop()
 
 
