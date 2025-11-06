@@ -777,7 +777,8 @@ limits = {}
 rows_limit_html = []
 
 # ✅ フラット35：審査金利は常に flat35_90（金利入力値）を採用（毎月更新される）
-flat_exam_rate = float(rates["flat35_90"])
+# ✅ flat35_90 が未登録でも安全に処理
+flat_exam_rate = float(rates.get("flat35_90", 1.89))
 banks_exam["フラット35"]["審査金利"] = flat_exam_rate
 
 # ✅ 年収400万円以下：返済比率30%、それ以上：35%
