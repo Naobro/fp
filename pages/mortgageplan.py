@@ -14,8 +14,6 @@ from typing import Dict, Any
 import streamlit as st
 from fpdf import FPDF
 # from client_portal import db_insert_record, now_iso # 未使用なのでコメントアウト
-from auth import login_ui
-from supabase import create_client # create_client は supabase から直接インポート
 
 # ===== 画面設定 =====
 # ✅ ページ設定とサイドバー削除（最初の3行）
