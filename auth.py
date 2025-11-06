@@ -68,40 +68,8 @@ def generate_password(length: int = 10) -> str:
 
 
 def get_or_create_current_password():
-    """今月のパスワード取得 or 作成＋自動送信"""
-    month_key = date.today().strftime("%Y-%m")
-    now = datetime.now()
-
-    res = supabase.table("monthly_passwords").select("month, password").eq("month", month_key).execute()
-
-    # --- 今月分が存在する ---
-    if res.data and len(res.data) > 0:
-        pw = res.data[0]["password"].strip()
-
-        # 毎月1日 8:30 ±5分 の間なら全員に再送
-        if now.day == 1 and (now.hour == 8 and 25 <= now.minute <= 35):
-            msg = f"🔑 今月({month_key})の住宅ローンサイトのパスワードは『{pw}』です。"
-            notify_all_members(msg)
-
-        return pw
-
-    # --- 新規作成 ---
-    new_pw = generate_password()
-
-    # 古いレコード削除
-    old = supabase.table("monthly_passwords").select("month").neq("month", month_key).execute()
-    if old.data:
-        for rec in old.data:
-            supabase.table("monthly_passwords").delete().eq("month", rec["month"]).execute()
-
-    # 今月分を登録
-    supabase.table("monthly_passwords").insert({"month": month_key, "password": new_pw}).execute()
-
-    # 全員に送信
-    notify_all_members(f"🔑 今月({month_key})の住宅ローンサイトのパスワードは『{new_pw}』です。")
-
-    return new_pw
-
+    """固定パスワードを返す（自動生成・更新を停止）"""
+    return "terassnishiyama"
 
 # =========================================================
 # 👋 新規登録者への自動送信
