@@ -71,16 +71,42 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# auth.pyを使わず、固定パスワードでログイン認証
-st.markdown("### 🔑 ログインが必要です")
-pwd = st.text_input("パスワードを入力してください", type="password", key="pwd_login")
+# ✅ LINE登録案内＋パスワード認証を統合
+st.markdown("### 🔑 住宅ローンシミュレーター ログイン")
+
+st.info(
+    """
+    このシミュレーターを利用するには **LINE登録** が必要です。  
+    登録すると、今月のパスワードが自動でLINEに届きます。
+    """
+)
+
+LINE_FRIEND_ADD_URL = "https://lin.ee/V1bwuO8"
+LINE_FRIEND_QR = "https://qr-official.line.me/gs/M_277qthwd_GW.png?oat_content=qr"
+
+col1, col2 = st.columns([1, 1.5])
+with col1:
+    st.image(LINE_FRIEND_QR, width=180)
+with col2:
+    st.markdown(
+        f"""
+        <a href="{LINE_FRIEND_ADD_URL}" target="_blank"
+           style="display:inline-block;background-color:#06C755;color:white;
+                  font-weight:bold;padding:10px 20px;border-radius:6px;
+                  text-decoration:none;font-size:18px;">💬 LINEで友だち追加</a>
+        """,
+        unsafe_allow_html=True
+    )
+
+pwd = st.text_input("📩 LINEで届いたパスワードを入力してください", type="password", key="pwd_login")
 
 if pwd == "terassnishiyama":
     authenticated = True
-    st.success("✅ ログイン成功！")
+    st.success("✅ ログイン成功！ようこそ。")
 else:
     authenticated = False
-    st.warning("パスワードが一致しません。")
+    if pwd:
+        st.warning("パスワードが一致しません。LINEで届いたものを確認してください。")
 
 if not authenticated:
     st.stop()
