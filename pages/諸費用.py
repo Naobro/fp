@@ -433,12 +433,38 @@ contract_funds = int(deposit + stamp_fee + broker_contract)
 settlement_funds = int((property_price - deposit) + regist_fee + tax_clear + broker_settlement + loan_fee)
 
 # --- 諸費用合計 ---
-# 再計算（上で定義済みだが、安全のため再確認）
 total_expenses = int(
     regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
     tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
 )
 total = property_price + total_expenses
+
+# ================================
+# 🆕「目標総額」と「現在総額」と「差額」のリアルタイム表
+# ================================
+st.markdown("### 🎯 目標総額と現在の差額（リアルタイム）")
+
+target_total = st.number_input(
+    "目標の総額（円）を入力してください",
+    min_value=0,
+    value=round(total / 100000) * 100000,  # 現在の総額を初期値にする
+    step=100000
+)
+
+difference = target_total - total
+
+st.table({
+    "項目": [
+        "🏁 目標総額（あなたが設定）",
+        "📌 現在の総額（物件＋諸費用）",
+        "🔻 差額（目標 − 現在）"
+    ],
+    "金額（円）": [
+        f"{target_total:,}",
+        f"{total:,}",
+        f"{difference:,}"
+    ]
+})
 
 
 # ----------------------------
