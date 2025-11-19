@@ -432,32 +432,37 @@ mB = monthly_payment(loanB, yearB, rateB)
 contract_funds = int(deposit + stamp_fee + broker_contract)
 settlement_funds = int((property_price - deposit) + regist_fee + tax_clear + broker_settlement + loan_fee)
 
-# --- 諸費用合計 ---
-total_expenses = int(
-    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
-    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
-)
-total = property_price + total_expenses
-
-# ================================
-# 🆕「目標総額」と「現在総額」と「差額」のリアルタイム表
-# ================================
 total_expenses = int(
     regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
     tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
 )
 
 # ================================
-# 🆕 諸費用のみの差額チェック（物件価格の7%が目標）
+# 🆕 諸費用 目標設定（初期値7%・自由入力）
+# ================================
+col_t1, col_t2 = st.columns([1,1])
+with col_t1:
+    target_percent = st.number_input(
+        "目標諸費用（物件価格に対する % ）",
+        min_value=0.0,
+        max_value=100.0,
+        value=float(st.session_state.get("target_percent", 7.0)),
+        step=0.1,
+        format="%.1f"
+    )
+    st.session_state["target_percent"] = target_percent
+
+# 物件価格（円） × % で目標諸費用を計算
+target_expenses = int(property_price * (target_percent / 100))
+
+# ================================
+# 🆕 諸費用の現在値と目標値の差額
 # ================================
 st.markdown("### 💰 諸費用の現在値と目標値の差額（リアルタイム）")
 
-# 物件価格（円）の 7%
-target_expenses = int(property_price * 0.07)
-
 st.table({
     "項目": [
-        "🎯 目標の諸費用（物件価格の7%）",
+        f"🎯 目標諸費用（物件価格×{target_percent:.1f}%）",
         "📌 現在の諸費用（入力合計）",
         "🔻 差額（目標 − 現在）"
     ],
@@ -469,7 +474,6 @@ st.table({
 })
 
 total = property_price + total_expenses
-
 # ----------------------------
 # PDF 生成関数
 # ----------------------------
