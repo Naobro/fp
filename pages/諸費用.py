@@ -631,7 +631,7 @@ if st.button("💾 諸費用データを保存"):
         final_payload["client_id"] = client_id
         final_payload["saved_at"] = now_iso()
         
-        # SB.table("fees_detail").upsert(final_payload, on_conflict="client_id").execute()
+        SB.table("fees_detail").upsert(final_payload, on_conflict="client_id").execute()
         st.success("保存しました ✅") # 👈 実際にはDB接続が必要
     except Exception as e:
         st.error(f"保存中にエラー: {e}")
