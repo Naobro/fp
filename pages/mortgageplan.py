@@ -663,7 +663,7 @@ if _missing:
             row.append({"rate": base + add, "monthly": m, "years": y})
             vals.append((col_idx, m))
 
-                       # ===== フラット35列 =====
+        # ===== フラット35列 =====
         col_idx = len(BANKS)
         if plan == "一般団信":
             if principal > 8000 * 10000:
