@@ -593,80 +593,72 @@ if _missing:
 # ===== 借入上限額（省略） =====
 
 # ===== 返済額テーブル計算 + 描画付き =====
-def cap_years(bank_name: str, req: int, plan: str) -> int:
-    """銀行・プラン別の返済年数制限"""
-    # フラット35 → 常に35年固定
-    if bank_name == "フラット35":
-        return 35
-    # 銀行固有制限（新生35/50、三菱35）
-    elif bank_name in ["三菱UFJ銀行"]:
-        return min(req, 35)
-    elif bank_name in ["SBI新生銀行"]:
-        return min(req, 50)
-    # 一般団信 → スライダー値と79歳完済の両方を考慮
-    elif plan == "一般団信":
-        return min(req, 35, 79 - age_now)
-    # がん・疾病系 → スライダー値尊重（79歳完済）
-    elif plan in ["がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]:
-        return min(req, 79 - age_now)
-    # その他
-    else:
-        return req
+def build_table(principal: float, years_req: int, age_now: int):
 
-table_rows_local = []
-highlights_local = []
+    def cap_years(bank_name: str, req: int, plan: str) -> int:
+        """銀行・プラン別の返済年数制限"""
+        if bank_name == "フラット35":
+            return 35
+        elif bank_name in ["三菱UFJ銀行"]:
+            return min(req, 35)
+        elif bank_name in ["SBI新生銀行"]:
+            return min(req, 50)
+        elif plan == "一般団信":
+            return min(req, 35, 79 - age_now)
+        elif plan in ["がん50", "がん100", "三大疾病", "7大疾病", "全疾病"]:
+            return min(req, 79 - age_now)
+        else:
+            return req
 
-# ===== 各プラン行（一般団信〜疾病系） =====
-for plan in PLANS:
-    row = []
-    vals = []
-    for col_idx, bank in enumerate(BANKS):
+    table_rows_local = []
+    highlights_local = []
 
-        # 借入上限チェック
-        if principal > limits.get(bank, float("inf")):
-            row.append({"rate": None, "monthly": None, "years": None})
-            continue
+    # ===== 各プラン行（一般団信〜疾病系） =====
+    for plan in PLANS:
+        row = []
+        vals = []
+        for col_idx, bank in enumerate(BANKS):
 
-        if bank not in rates:
-            row.append({"rate": None, "monthly": None, "years": None})
-            continue
-
-        # 非対応銀行（ただし三菱UFJ・住信SBIは例外で計算する）
-        if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
-            if bank not in ["三菱UFJ銀行", "住信SBI銀行"]:
+            if principal > limits.get(bank, float("inf")):
                 row.append({"rate": None, "monthly": None, "years": None})
                 continue
 
-        # 年数決定
-        y = cap_years(bank, years_req, plan)
+            if bank not in rates:
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
 
-        try:
-            base_percent_saved = float(rates[bank])
-        except Exception:
-            row.append({"rate": None, "monthly": None, "years": None})
-            continue
+            if plan != "一般団信" and extra_rate_percent(bank, plan, age_now) == 0.0:
+                if bank not in ["三菱UFJ銀行", "住信SBI銀行"]:
+                    row.append({"rate": None, "monthly": None, "years": None})
+                    continue
 
-        # 銀行別金利補正
-        if bank == "住信SBI銀行":
-            eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
-            base = eff_pct / 100.0
-        else:
-            base = base_percent_saved / 100.0
-            if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
-                base += 0.10 / 100.0
+            y = cap_years(bank, years_req, plan)
 
-        # 上乗せ金利
-        add_rate = extra_rate_percent(bank, plan, age_now)
-        if add_rate is None:
-            row.append({"rate": None, "monthly": None, "years": None})
-            continue
+            try:
+                base_percent_saved = float(rates[bank])
+            except Exception:
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
 
-        add = add_rate / 100.0
-        m = monthly_payment(principal, base + add, y)
-        row.append({"rate": base + add, "monthly": m, "years": y})
-        vals.append((col_idx, m))
+            if bank == "住信SBI銀行":
+                eff_pct = sbi_effective_percent(base_percent_saved, ltv, y)
+                base = eff_pct / 100.0
+            else:
+                base = base_percent_saved / 100.0
+                if bank in ["PayPay銀行", "じぶん銀行"] and y > 35:
+                    base += 0.10 / 100.0
 
-# ===== フラット35列 =====
+            add_rate = extra_rate_percent(bank, plan, age_now)
+            if add_rate is None:
+                row.append({"rate": None, "monthly": None, "years": None})
+                continue
+
+            add = add_rate / 100.0
+            m = monthly_payment(principal, base + add, y)
+            row.append({"rate": base + add, "monthly": m, "years": y})
+            vals.append((col_idx, m))
+
+    # ===== フラット35列 =====
         col_idx = len(BANKS)
         if plan == "一般団信":
             if principal > 8000 * 10000:
