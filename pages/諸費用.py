@@ -442,30 +442,33 @@ total = property_price + total_expenses
 # ================================
 # 🆕「目標総額」と「現在総額」と「差額」のリアルタイム表
 # ================================
-st.markdown("### 🎯 目標総額と現在の差額（リアルタイム）")
-
-target_total = st.number_input(
-    "目標の総額（円）を入力してください",
-    min_value=0,
-    value=round(total / 100000) * 100000,  # 現在の総額を初期値にする
-    step=100000
+total_expenses = int(
+    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
+    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
 )
 
-difference = target_total - total
+# ================================
+# 🆕 諸費用のみの差額チェック（物件価格の7%が目標）
+# ================================
+st.markdown("### 💰 諸費用の現在値と目標値の差額（リアルタイム）")
+
+# 物件価格（円）の 7%
+target_expenses = int(property_price * 0.07)
 
 st.table({
     "項目": [
-        "🏁 目標総額（あなたが設定）",
-        "📌 現在の総額（物件＋諸費用）",
+        "🎯 目標の諸費用（物件価格の7%）",
+        "📌 現在の諸費用（入力合計）",
         "🔻 差額（目標 − 現在）"
     ],
     "金額（円）": [
-        f"{target_total:,}",
-        f"{total:,}",
-        f"{difference:,}"
+        f"{target_expenses:,}",
+        f"{total_expenses:,}",
+        f"{target_expenses - total_expenses:,}"
     ]
 })
 
+total = property_price + total_expenses
 
 # ----------------------------
 # PDF 生成関数
