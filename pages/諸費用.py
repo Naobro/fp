@@ -437,23 +437,26 @@ total_expenses = int(
     tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
 )
 
-# ================================
-# 🆕 諸費用 目標設定（初期値7%・自由入力）
-# ================================
-col_t1, col_t2 = st.columns([1,1])
-with col_t1:
-    target_percent = st.number_input(
-        "目標諸費用（物件価格に対する % ）",
-        min_value=0.0,
-        max_value=100.0,
-        value=float(st.session_state.get("target_percent", 7.0)),
-        step=0.1,
-        format="%.1f"
-    )
-    st.session_state["target_percent"] = target_percent
+total_expenses = int(
+    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
+    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
+)
 
-# 物件価格（円） × % で目標諸費用を計算
-target_expenses = int(property_price * (target_percent / 100))
+# ================================
+# 🆕 目標諸費用（円）を直接入力
+#    デフォルト値は「物件価格×7%」
+# ================================
+default_target = int(property_price * 0.07)  # 初期値：物件価格の7%
+
+target_expenses = st.number_input(
+    "目標諸費用（円）",
+    min_value=0,
+    max_value=100_000_000,
+    value=int(st.session_state.get("target_expenses", default_target)),
+    step=10_000,
+    format="%d"
+)
+st.session_state["target_expenses"] = target_expenses
 
 # ================================
 # 🆕 諸費用の現在値と目標値の差額
@@ -462,7 +465,7 @@ st.markdown("### 💰 諸費用の現在値と目標値の差額（リアルタ�
 
 st.table({
     "項目": [
-        f"🎯 目標諸費用（物件価格×{target_percent:.1f}%）",
+        "🎯 目標 諸費用（円）",
         "📌 現在の諸費用（入力合計）",
         "🔻 差額（目標 − 現在）"
     ],
