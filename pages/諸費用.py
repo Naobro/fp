@@ -240,17 +240,22 @@ stamp_fee = number_input_commas(
 save_to_state("stamp_fee", stamp_fee)
 
 
-# --- 借入金額入力 ---
+# --- 借入金額入力（None対策入り） ---
+loan_amount_man_raw = st.session_state.get("loan_amount_man", price_man)
+
+# None が混入した場合の完全ガード
+if loan_amount_man_raw is None:
+    loan_amount_man_raw = price_man
+
 loan_amount_man = st.number_input(
     "借入金額（万円）",
     min_value=0,
     max_value=200_000,
-    value=st.session_state.get("loan_amount_man", int(price_man)),
+    value=int(loan_amount_man_raw),
     step=10
 )
+
 save_to_state("loan_amount_man", loan_amount_man)
-
-
 # --- 銀行事務手数料（借入金額×2.2％を自動計算＋手動修正可） ---
 # 借入金額（円）の計算
 loan_amount = loan_amount_man * 10_000 # 👈 loan_amountをここで定義
