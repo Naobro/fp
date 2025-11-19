@@ -697,7 +697,7 @@ if _missing:
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-          # ===== 最長50年行（スライダー上限 or 79歳完済上限） =====
+    # ===== 最長50年行（スライダー上限 or 79歳完済上限） =====
     row50_local = []
     vals50 = []
     for col_idx, bank in enumerate(BANKS):
@@ -720,6 +720,7 @@ if _missing:
         except Exception:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
+
         # 銀行別金利補正
         if bank == "住信SBI銀行":
             # 住信SBIは専用ロジックで期間補正
@@ -731,16 +732,18 @@ if _missing:
             # PayPay・じぶん銀行・新生銀行は 35年超で +0.1%
             if bank in ["PayPay銀行", "じぶん銀行", "SBI新生銀行"] and y50 > 35:
                 base += 0.10 / 100.0
-    # プラン別上乗せ（一般団信）
-    add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
 
-    # 月返済額
-    m50 = monthly_payment(principal, base + add, y50)
+        # プラン別上乗せ（一般団信）
+        add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
 
-    row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
-    vals50.append((col_idx, m50))
-    # フラット35は空欄
-    row50_local.append({"rate": None, "monthly": None, "years": None})
+        # 月返済額
+        m50 = monthly_payment(principal, base + add, y50)
+
+        row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
+        vals50.append((col_idx, m50))
+
+        # フラット35は空欄
+        row50_local.append({"rate": None, "monthly": None, "years": None})
 
     # ✅ 最小返済額ハイライト
     mins50 = set()
@@ -751,7 +754,6 @@ if _missing:
                 mins50.add(idx)
 
     return table_rows_local, highlights_local, row50_local, mins50
-
 # 借入上限額の再計算ロジック（修正版）
 
 BANKS_35_YEAR_MAX = ["SBI新生銀行", "三菱UFJ銀行", "住信SBI銀行"]
