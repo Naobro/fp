@@ -338,15 +338,20 @@ def monthly_payment(principal: float, annual_rate: float, years: int, bank_name:
             base_rate += 0.001  # +0.1%
         # 期間50年まで対応
 
-    # --- ③ じぶん銀行 ---
+        # --- ③ じぶん銀行 ---
     if "じぶん" in bank_name:
         if plan in ["がん100", "7大疾病"]:
             base_rate += 0.001  # +0.1%
 
     # --- ④ 新生・三菱・フラット35 ---
-    if any(b in bank_name for b in ["新生", "三菱", "フラット"]):
-        years = min(years, 35)  # 35年超は不可
-
+    if "三菱" in bank_name or "フラット" in bank_name:
+        years = min(years, 35)
+    elif "新生" in bank_name:
+        # 50年対応（36年以上は +0.1%）
+        if years > 35:
+            annual_rate += 0.001  # +0.1%
+    else:
+        years = min(years, 35)
     # --- ⑤ 一般団信は期間延長しても上乗せなし ---
     if plan == "一般団信":
         pass  # 上乗せなし
@@ -588,16 +593,16 @@ if _missing:
 # ===== 借入上限額（省略） =====
 
 # ===== 返済額テーブル計算 + 描画付き =====
-# ※ sbi_effective_percent / borrowing_limit が上で定義されている必要があります
-def build_table(principal: float, years_req: int, age_now: int):
     def cap_years(bank_name: str, req: int, plan: str) -> int:
         """銀行・プラン別の返済年数制限"""
         # フラット35 → 常に35年固定
         if bank_name == "フラット35":
             return 35
         # 銀行固有制限（SBI新生銀行・三菱UFJ銀行）は最大35年
-        elif bank_name in ["SBI新生銀行", "三菱UFJ銀行"]:
+        elif bank_name in ["三菱UFJ銀行"]:
             return min(req, 35)
+        elif bank_name in ["SBI新生銀行"]:
+            return min(req, 50)
         # 一般団信 → スライダー値と79歳完済の両方を考慮（最大35年）
         elif plan == "一般団信":
             return min(req, 35, 79 - age_now)
@@ -610,7 +615,6 @@ def build_table(principal: float, years_req: int, age_now: int):
 
     table_rows_local = []
     highlights_local = []
-
        # ===== 各プラン行（一般団信〜疾病系） =====
     for plan in PLANS:
         row = []
@@ -693,39 +697,48 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # ===== 最長50年行（スライダー上限 or 79歳完済上限） =====
+          # ===== 最長50年行（スライダー上限 or 79歳完済上限） =====
     row50_local = []
     vals50 = []
     for col_idx, bank in enumerate(BANKS):
-        # 新生・三菱は35年まで
-        if bank in ["SBI新生銀行", "三菱UFJ銀行"]:
+
+        # 三菱UFJ銀行のみ 35年まで（新生は50年対応）
+        if bank in ["三菱UFJ銀行"]:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
+
+        # 金利未設定 or 借入上限オーバー
         if principal > limits.get(bank, float("inf")) or bank not in rates:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
 
-        # ✅ 年齢制限（79歳完済）を考慮
+        # 79歳完済制限を考慮した最長年数
         y50 = min(79 - age_now, 50)
+
         try:
             base_percent_saved = float(rates[bank])
         except Exception:
             row50_local.append({"rate": None, "monthly": None, "years": None})
             continue
+        # 銀行別金利補正
         if bank == "住信SBI銀行":
-            # ✅ 住信SBIネット銀行：期間補正は sbi_effective_percent に一本化
+            # 住信SBIは専用ロジックで期間補正
             eff_pct = sbi_effective_percent(base_percent_saved, ltv, y50)
             base = eff_pct / 100.0
         else:
             base = base_percent_saved / 100.0
-            if bank in ["PayPay銀行", "じぶん銀行"] and y50 > 35:
+
+            # PayPay・じぶん銀行・新生銀行は 35年超で +0.1%
+            if bank in ["PayPay銀行", "じぶん銀行", "SBI新生銀行"] and y50 > 35:
                 base += 0.10 / 100.0
+    # プラン別上乗せ（一般団信）
+    add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
 
-        add = extra_rate_percent(bank, "一般団信", age_now) / 100.0
-        m50 = monthly_payment(principal, base + add, y50)
-        row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
-        vals50.append((col_idx, m50))
+    # 月返済額
+    m50 = monthly_payment(principal, base + add, y50)
 
+    row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
+    vals50.append((col_idx, m50))
     # フラット35は空欄
     row50_local.append({"rate": None, "monthly": None, "years": None})
 
