@@ -615,7 +615,7 @@ if _missing:
 
     table_rows_local = []
     highlights_local = []
-       # ===== 各プラン行（一般団信〜疾病系） =====
+    # ===== 各プラン行（一般団信〜疾病系） =====
     for plan in PLANS:
         row = []
         vals = []
