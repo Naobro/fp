@@ -154,7 +154,13 @@ with left:
 
     st.markdown("<h3 style='font-size:22px;'>借入条件</h3>", unsafe_allow_html=True)
     loan_years = st.number_input("借入期間（年）", 1, 50, 35)
-    loan_rate = st.number_input("金利（年%）", 0.1, 5.0, 0.59) / 100
+   loan_rate = st.number_input(
+    "金利（年%）",
+    0.001, 5.000,
+    0.590,
+    step=0.001,
+    format="%.3f"
+) / 100
     funds = st.number_input("自己資金（万円）", 0, int(price), 500)
     if reno:
         reno_cost = st.number_input("リノベ費用（万円・不明なら自動計算）", 0, 3000, int(area * 10))
