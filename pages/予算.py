@@ -249,8 +249,9 @@ perf = st.selectbox("住宅性能区分", [
     "長期優良住宅・低炭素住宅", "ZEH水準省エネ住宅", "省エネ基準適合住宅", "その他の住宅"])
 is_kosodate = st.checkbox("子育て・若者世帯", value=False)
 
-# --- 住宅ローン控除 判定 ---
+# --- 住宅ローン控除 判定（物件種別を反映） ---
 if seller_type == "宅建業者・買取再販" and is_shinchiku:
+    # 新築・買取再販（新築扱い）
     if perf == "長期優良住宅・低炭素住宅":
         koujo_limit = 5000 if is_kosodate else 4500
         koujo_years = 13
@@ -261,15 +262,23 @@ if seller_type == "宅建業者・買取再販" and is_shinchiku:
         koujo_limit = 4000 if is_kosodate else 3000
         koujo_years = 13
     else:
+        # その他の住宅（新築扱いは控除なし）
         koujo_limit = 0
         koujo_years = 0
 else:
+    # 既存住宅（中古）
     if perf in ["長期優良住宅・低炭素住宅", "ZEH水準省エネ住宅", "省エネ基準適合住宅"]:
         koujo_limit = 3000
         koujo_years = 10
     else:
-        koujo_limit = 2000
-        koujo_years = 10
+        # その他の住宅：マンションのみ2,000万円、戸建ては0円
+        if property_type == "マンション":
+            koujo_limit = 2000
+            koujo_years = 10
+        else:
+            koujo_limit = 0
+            koujo_years = 0
+
 koujo_years = min(loan_years, koujo_years)
 
 koujo = []
@@ -279,8 +288,8 @@ for y in range(years):
         koujo.append(int(round(k, 0)))
     else:
         koujo.append(0)
-koujo_cumulative = [sum(koujo[:i + 1]) for i in range(years)]
 
+koujo_cumulative = [sum(koujo[:i + 1]) for i in range(years)]
 # --- 横持ち比較テーブル ---
 data = {
     "年齢": ages,
