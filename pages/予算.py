@@ -134,7 +134,9 @@ for i in range(years):
 
 # --- 購入プラン入力 ---
 st.markdown("<h3 style='font-size:22px;'>購入条件の入力</h3>", unsafe_allow_html=True)
+
 left, right = st.columns([2, 1])
+
 with left:
     st.markdown("<h3 style='font-size:22px;'>物件条件</h3>", unsafe_allow_html=True)
     property_type = st.radio("物件種別", ["マンション", "戸建て"])
@@ -142,6 +144,7 @@ with left:
     built_year = st.number_input("購入時点の築年数", 0, 100, 0)
     area = st.number_input("専有面積（㎡）", 10, 200, 70)
     reno = st.checkbox("リノベーション済み／予定")
+
     if property_type == "戸建て":
         land_area = st.number_input("土地面積（㎡）", 10, 500, 100)
         building_price = st.number_input("建物価格（万円）", 500, int(price), 1500)
@@ -149,21 +152,44 @@ with left:
     st.markdown("<h3 style='font-size:22px;'>売主区分</h3>", unsafe_allow_html=True)
     seller_type = st.radio("売主の種類", ["宅建業者・買取再販", "一般個人"], index=0)
     is_shinchiku = False
+
     if seller_type == "宅建業者・買取再販":
-        is_shinchiku = st.checkbox("工事完了後2年以内かつ未入居（新築扱い）", value=True)
+        is_shinchiku = st.checkbox(
+            "工事完了後2年以内かつ未入居（新築扱い）",
+            value=True
+        )
 
     st.markdown("<h3 style='font-size:22px;'>借入条件</h3>", unsafe_allow_html=True)
     loan_years = st.number_input("借入期間（年）", 1, 50, 35)
-   loan_rate = st.number_input("金利（年%）", min_value=0.001, max_value=5.000, value=0.590, step=0.001, format="%.3f") / 100
+    loan_rate = st.number_input(
+        "金利（年%）",
+        min_value=0.001,
+        max_value=5.000,
+        value=0.590,
+        step=0.001,
+        format="%.3f"
+    ) / 100
     funds = st.number_input("自己資金（万円）", 0, int(price), 500)
+
     if reno:
-        reno_cost = st.number_input("リノベ費用（万円・不明なら自動計算）", 0, 3000, int(area * 10))
-        reno_effect = st.slider("リノベ効果の資産価値反映率（目安0.6）", 0.0, 1.0, 0.6)
-        reno_timing = st.number_input("リノベ実施タイミング（年）", 0, years - 1, 0)
+        reno_cost = st.number_input(
+            "リノベ費用（万円・不明なら自動計算）",
+            0, 3000,
+            int(area * 10)
+        )
+        reno_effect = st.slider(
+            "リノベ効果の資産価値反映率（目安0.6）",
+            0.0, 1.0, 0.6
+        )
+        reno_timing = st.number_input(
+            "リノベ実施タイミング（年）",
+            0, years - 1, 0
+        )
     else:
         reno_cost = 0
         reno_effect = 0
         reno_timing = 100
+
     if property_type == "戸建て":
         land_price = price - building_price
 
