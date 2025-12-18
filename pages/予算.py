@@ -47,26 +47,50 @@ set_matplotlib_japanese_font()
 # -------------------------------
 st.markdown("<h3 style='font-size:22px;'>🏠 賃貸 vs 購入 住居費・資産価値シミュレーター</h3>", unsafe_allow_html=True)
 
-# --- 賃貸プラン入力 ---
+# --- 賃貸プラン入力（有効区分のみ採用・0行は無視） ---
 st.markdown("<h3 style='font-size:22px;'>年齢ごとの家賃設定（最大4区分・すべて万円単位/整数）</h3>", unsafe_allow_html=True)
+
 age_rent_list = []
+
 for i in range(4):
     c1, c2, c3 = st.columns([2, 2, 2])
-    with c1:
-        age_from = st.number_input(f"年齢（開始）", 0, 100,
-                                   30 if i == 0 else 40 if i == 1 else 60 if i == 2 else 70, key=f"age_from_{i}")
-    with c2:
-        age_to = st.number_input(f"年齢（終了）", 0, 100,
-                                 39 if i == 0 else 59 if i == 1 else 69 if i == 2 else 100, key=f"age_to_{i}")
-    with c3:
-        rent = st.number_input(f"家賃（万円）", 1, 100,
-                               10 if i == 0 else 13 if i == 1 else 9 if i == 2 else 7, key=f"rent_{i}")
-    age_rent_list.append((age_from, age_to, int(round(rent))))
-st.caption("※賃料上昇率は自動で2年ごと2%、引越し費用は家賃×6ヶ月分が自動加算")
 
+    with c1:
+        age_from = st.number_input(
+            "年齢（開始）",
+            0, 100,
+            30 if i == 0 else 0,
+            key=f"age_from_{i}"
+        )
+
+    with c2:
+        age_to = st.number_input(
+            "年齢（終了）",
+            0, 100,
+            85 if i == 0 else 0,
+            key=f"age_to_{i}"
+        )
+
+    with c3:
+        rent = st.number_input(
+            "家賃（万円）",
+            0, 100,
+            9 if i == 0 else 0,
+            key=f"rent_{i}"
+        )
+
+    # 0-0 行は完全に無視
+    if age_from == 0 and age_to == 0:
+        continue
+
+    age_rent_list.append((age_from, age_to, int(rent)))
+
+# 有効区分の開始年齢を基準にシミュレーション
 start_age = age_rent_list[0][0]
 years = 50
 ages = [start_age + i for i in range(years)]
+
+st.caption("※家賃は区分ごとに固定。自動上昇・自動引越し費用はありません")
 
 # --- 年間家賃計算 ---
 annual_rent = []
