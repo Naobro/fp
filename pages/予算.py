@@ -71,7 +71,7 @@ ages = [start_age + i for i in range(years)]
 # --- 年間家賃計算 ---
 annual_rent = []
 current_rent = None
-increase_rate = 0.02
+increase_rate = 0.00
 section_idx = 0
 section = age_rent_list[section_idx]
 section_start_idx = 0
