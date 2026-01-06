@@ -97,13 +97,13 @@ class KVStore:
             return False
 
     def all(self) -> dict:
-        if not self.sb:
-            return {}
-        res = self.sb.table(TABLE_NAME).select("*").execute()
-        out = {}
-        for row in res.data:
-            out[row["client_id"]] = row
-        return out
+    if not self.sb:
+        return {}
+    res = self.sb.table(TABLE_NAME).select("*").timeout(10).execute()
+    out = {}
+    for row in res.data:
+        out[row["client_id"]] = row
+    return out
 
     def count(self) -> int:
         return len(self.all())
