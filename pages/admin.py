@@ -97,12 +97,13 @@ class KVStore:
             return False
 
     def all(self) -> dict:
-    if not self.sb:
-        return {}
-    res = self.sb.table(TABLE_NAME).select("*").execute()
-    return {r["client_id"]: r for r in (res.data or [])}
-        return len(self.all())
+        if not self.sb:
+            return {}
+        res = self.sb.table(TABLE_NAME).select("*").execute()
+        return {r["client_id"]: r for r in (res.data or [])}
 
+    def count(self) -> int:
+        return len(self.all())
     def snapshot_bytes(self) -> bytes:
         buf = io.StringIO()
         json.dump({"clients": self.all()}, buf, ensure_ascii=False, indent=2)
