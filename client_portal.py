@@ -14,11 +14,15 @@ except Exception:
 置き換えコード
 # ---------------- Supabase接続 ----------------
 import os
+from datetime import datetime
 import streamlit as st
 from supabase import create_client, Client
 
+def now_iso() -> str:
+    """現在時刻をISO8601形式で返す（全ページ共通用）"""
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
 def get_sb() -> Client | None:
-    """Supabaseクライアント生成（secrets → 環境変数の順で取得）"""
     url = None
     key = None
 
