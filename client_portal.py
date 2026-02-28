@@ -11,7 +11,6 @@ except Exception:
     Client = None
 
 
-置き換えコード
 # ---------------- Supabase接続 ----------------
 import os
 from datetime import datetime
