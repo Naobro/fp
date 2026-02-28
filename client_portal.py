@@ -11,24 +11,38 @@ except Exception:
     Client = None
 
 
+置き換えコード
 # ---------------- Supabase接続 ----------------
+import os
 import streamlit as st
 from supabase import create_client, Client
 
 def get_sb() -> Client | None:
-    """Supabaseクライアントを生成して返す"""
+    """Supabaseクライアント生成（secrets → 環境変数の順で取得）"""
+    url = None
+    key = None
+
+    # secrets優先
+    if hasattr(st, "secrets"):
+        url = st.secrets.get("SUPABASE_URL")
+        key = st.secrets.get("SUPABASE_SERVICE_KEY")
+
+    # 環境変数 fallback
+    if not url:
+        url = os.getenv("SUPABASE_URL")
+    if not key:
+        key = os.getenv("SUPABASE_SERVICE_KEY")
+
+    if not url or not key:
+        return None
+
     try:
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_SERVICE_KEY"]
-        if not url or not key:
-            return None
         return create_client(url, key)
     except Exception as e:
-        st.error(f"Supabase接続失敗: {e}")
+        print("Supabase接続失敗:", e)
         return None
 
 SB = get_sb()
-
 # ----------- 外部リンク保存を profile 内に格納する -----------
 def upsert_links(client_id: str, links: list[Dict[str, str]]):
     if SB is None:
