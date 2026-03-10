@@ -172,12 +172,12 @@ for year in range(1, 61):
         rent_schedule.append(rent_phase3_amount)
 
 # ==========================================
-# 5. 変動金利プラン設定
+# 5. 変動金利プラン設定（60年完全テーブル版）
 # ==========================================
 st.markdown("---")
-st.markdown("## 📈 変動金利プラン設定")
+st.markdown("## 📈 変動金利プラン設定（60年完全テーブル）")
 
-col_var1, col_var2 = st.columns(2)
+col_var1, col_var2 = st.columns([1, 3])
 
 with col_var1:
     base_rate_variable = st.number_input(
@@ -197,32 +197,66 @@ with col_var1:
         st.info(f"36年以上のため+0.1% → 実際の基準金利：{actual_variable_base:.2f}%")
     else:
         actual_variable_base = base_rate_variable
+    
+    st.markdown("### 🛠 一括変更ツール")
+    change_year = st.number_input("○年目から", min_value=1, max_value=60, value=5)
+    change_rate = st.number_input("金利を○%にする", min_value=0.0, max_value=10.0, value=1.5, step=0.01)
+    
+    if st.button("一括変更実行", key="bulk_change"):
+        for i in range(change_year - 1, 60):
+            st.session_state.loan_table.at[i, "適用金利"] = change_rate
+        st.success(f"✅ {change_year}年目以降を{change_rate}%に変更")
+        st.rerun()
 
 with col_var2:
-    st.markdown("### 金利変動設定ツール")
-    change_year = st.number_input("○年目から", min_value=1, max_value=60, value=5, key="var_change_year")
-    change_rate = st.number_input("金利を○%にする", min_value=0.0, max_value=10.0, value=1.5, step=0.01, key="var_change_rate")
+    # 60年完全テーブルの初期化
+    if 'loan_table' not in st.session_state:
+        st.session_state.loan_table = pd.DataFrame({
+            "年目": list(range(1, 61)),
+            "適用金利": [actual_variable_base] * 60,
+            "ローン残債": [0.0] * 60,
+            "年間返済額": [0.0] * 60,
+            "うち元金": [0.0] * 60,
+            "うち利息": [0.0] * 60,
+            "物件価値": [0.0] * 60,
+            "純資産": [0.0] * 60,
+            "賃貸累計": [0.0] * 60,
+            "住宅ローン控除": [0.0] * 60
+        })
     
-    if st.button("金利一括変更（以降継続）", key="var_change_btn"):
-        if 'variable_rates' not in st.session_state:
-            st.session_state.variable_rates = [actual_variable_base] * 60
-        
-        for i in range(change_year - 1, 60):
-            st.session_state.variable_rates[i] = change_rate
-        st.success(f"{change_year}年目以降を{change_rate}%に変更")
-
-# 変動金利テーブル初期化
-if 'variable_rates' not in st.session_state:
-    st.session_state.variable_rates = [actual_variable_base] * 60
-
-# 変動金利テーブル表示（抜粋）
-st.markdown("### 変動金利スケジュール（抜粋表示）")
-display_years = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
-var_display_data = {
-    "年目": display_years,
-    "金利(%)": [st.session_state.variable_rates[y-1] for y in display_years]
-}
-st.dataframe(pd.DataFrame(var_display_data), hide_index=True)
+    st.markdown("### 📊 60年完全シミュレーションテーブル")
+    st.caption("💡 「適用金利」列のみ編集可能です。変更すると即座に全体が再計算されます。")
+    
+    # 編集可能テーブル
+    edited_table = st.data_editor(
+        st.session_state.loan_table,
+        column_config={
+            "年目": st.column_config.NumberColumn("年目", disabled=True, width="small"),
+            "適用金利": st.column_config.NumberColumn(
+                "適用金利(%)",
+                help="この列のみ編集可能",
+                min_value=0.0,
+                max_value=10.0,
+                format="%.2f",
+                width="medium"
+            ),
+            "ローン残債": st.column_config.NumberColumn("残債(万円)", disabled=True, format="%.1f"),
+            "年間返済額": st.column_config.NumberColumn("返済額(万円)", disabled=True, format="%.1f"),
+            "うち元金": st.column_config.NumberColumn("元金(万円)", disabled=True, format="%.1f"),
+            "うち利息": st.column_config.NumberColumn("利息(万円)", disabled=True, format="%.1f"),
+            "物件価値": st.column_config.NumberColumn("物件価値(万円)", disabled=True, format="%.0f"),
+            "純資産": st.column_config.NumberColumn("純資産(万円)", disabled=True, format="%.0f"),
+            "賃貸累計": st.column_config.NumberColumn("賃貸累計(万円)", disabled=True, format="%.0f"),
+            "住宅ローン控除": st.column_config.NumberColumn("ローン控除(万円)", disabled=True, format="%.1f")
+        },
+        hide_index=True,
+        use_container_width=True,
+        height=500,
+        key="loan_table_editor"
+    )
+    
+    # 編集内容をsession_stateに反映
+    st.session_state.loan_table = edited_table
 
 # ==========================================
 # 6. 固定金利プラン設定（フラット35）
