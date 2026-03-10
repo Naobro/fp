@@ -225,11 +225,23 @@ for year in range(1, 61):
         rent_schedule.append(rent_phase3_amount)
 
 # ==========================================
-# 5. 60年完全比較テーブル
+# 5. 60年完全比較テーブル（アライメント完全修正版）
 # ==========================================
 st.markdown("---")
 st.markdown("## 📊 60年完全比較テーブル（変動・固定・賃貸 統合表示）")
 
+# 子供人数変更検知（ズレ防止の核心機能）
+if 'last_children_count' not in st.session_state:
+    st.session_state.last_children_count = children_count
+
+if st.session_state.last_children_count != children_count:
+    # 子供人数が変わったら既存テーブルを強制削除
+    if 'complete_table' in st.session_state:
+        del st.session_state.complete_table
+    st.session_state.last_children_count = children_count
+    st.info(f"🔄 子供人数変更検知：テーブル構造を再構築しました")
+
+# 基準金利設定
 col_rate1, col_rate2, col_rate3 = st.columns(3)
 
 with col_rate1:
@@ -240,7 +252,7 @@ with col_rate1:
     )
     if loan_years >= 36:
         actual_variable_base = base_rate_variable + 0.1
-        st.warning(f"⚠️ **超長期ローン（{loan_years}年）全期間+0.10%**")
+        st.warning(f"⚠️ 超長期ローン（{loan_years}年）全期間+0.10%")
         st.info(f"実際の金利：**{actual_variable_base:.2f}%**")
     else:
         actual_variable_base = base_rate_variable
@@ -254,17 +266,17 @@ with col_rate2:
     )
     if loan_years >= 36:
         actual_flat_base = base_rate_flat + 0.1
-        st.warning(f"⚠️ **超長期ローン（{loan_years}年）全期間+0.10%**")
+        st.warning(f"⚠️ 超長期ローン（{loan_years}年）全期間+0.10%")
         st.info(f"実際の金利：**{actual_flat_base:.2f}%**")
     else:
         actual_flat_base = base_rate_flat
         st.success(f"✅ 基準金利：{actual_flat_base:.2f}%")
 
 with col_rate3:
-    # フラット35ポイント計算（修正版）
+    # フラット35ポイント計算
     current_children_under18 = 0
     for birth_year in children_birth_years:
-        if birth_year <= 0:  # 既に誕生済みの子供のみ
+        if birth_year <= 0:
             current_age = abs(birth_year)
             if current_age < 18:
                 current_children_under18 += 1
@@ -311,8 +323,9 @@ def generate_flat35_schedule(base_rate, total_points, loan_years):
 
 flat_rate_schedule = generate_flat35_schedule(actual_flat_base, total_flat_points, loan_years)
 
-# テーブル初期化
+# テーブル初期化（子供人数に応じた動的構造）
 if 'complete_table' not in st.session_state:
+    # 🔑 重要：子供人数に応じて動的に行を生成
     row_items = [
         "【家族構成】",
         "西暦",
@@ -320,6 +333,7 @@ if 'complete_table' not in st.session_state:
         "妻 年齢"
     ]
     
+    # 子供の人数だけ行を追加
     for i in range(children_count):
         row_items.append(f"第{i+1}子 年齢")
     
@@ -424,7 +438,24 @@ def calculate_complete_schedule(loan_amount_man, loan_years, rate_list):
 variable_schedule = calculate_complete_schedule(required_loan, loan_years, st.session_state.variable_rates)
 flat_schedule = calculate_complete_schedule(required_loan, loan_years, flat_rate_schedule)
 
-# テーブルデータ投入
+# 🔑 重要：項目名から正確な行インデックスを取得する関数
+def get_row_index(item_name, occurrence=0):
+    """
+    項目名から行インデックスを取得
+    occurrence: 同じ項目名が複数ある場合の出現順（0=1つ目、1=2つ目）
+    """
+    try:
+        matching_indices = st.session_state.complete_table[
+            st.session_state.complete_table["項目"] == item_name
+        ].index.tolist()
+        
+        if len(matching_indices) > occurrence:
+            return matching_indices[occurrence]
+        return None
+    except Exception as e:
+        return None
+
+# データ投入（項目名による確実な書き込み）
 for year in range(1, 61):
     col_name = f"{year}年目"
     
@@ -465,47 +496,95 @@ for year in range(1, 61):
     var_data = variable_schedule[year - 1]
     flat_data = flat_schedule[year - 1]
     
-    # データ書き込み
-    row_index = 0
-    st.session_state.complete_table.at[row_index, col_name] = ""; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = current_year_ad; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = husband_age_year; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = wife_age_year; row_index += 1
+    # 🔑 項目名による確実な書き込み（ズレが絶対に発生しない）
     
+    # 家族構成データ
+    idx = get_row_index("【家族構成】")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
+    
+    idx = get_row_index("西暦")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = current_year_ad
+    
+    idx = get_row_index("夫 年齢")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = husband_age_year
+    
+    idx = get_row_index("妻 年齢")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = wife_age_year
+    
+    # 各子供の年齢（動的に処理）
     for i in range(children_count):
-        if i < len(children_ages_year):
-            st.session_state.complete_table.at[row_index, col_name] = children_ages_year[i]
-        else:
-            st.session_state.complete_table.at[row_index, col_name] = "未誕生"
-        row_index += 1
+        idx = get_row_index(f"第{i+1}子 年齢")
+        if idx is not None:
+            if i < len(children_ages_year):
+                st.session_state.complete_table.at[idx, col_name] = children_ages_year[i]
+            else:
+                st.session_state.complete_table.at[idx, col_name] = "未誕生"
     
-    st.session_state.complete_table.at[row_index, col_name] = family_size; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = household_income; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = ""; row_index += 1
+    idx = get_row_index("家族人数")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = family_size
     
-    st.session_state.complete_table.at[row_index, col_name] = ""; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = var_data["rate"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = var_data["monthly_payment"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = var_data["annual_payment"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = var_data["annual_principal"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = var_data["annual_interest"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = var_data["balance"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = ""; row_index += 1
+    idx = get_row_index("世帯年収")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = household_income
     
-    st.session_state.complete_table.at[row_index, col_name] = ""; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = flat_data["rate"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = flat_data["monthly_payment"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = flat_data["annual_payment"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = flat_data["annual_principal"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = flat_data["annual_interest"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = flat_data["balance"]; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = ""; row_index += 1
+    # 変動金利データ（occurrence=0 で1つ目を指定）
+    idx = get_row_index("【変動金利】")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
-    st.session_state.complete_table.at[row_index, col_name] = ""; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = rent_monthly; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = rent_annual; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = renewal_cost; row_index += 1
-    st.session_state.complete_table.at[row_index, col_name] = rent_total
+    idx = get_row_index("適用金利(%)", 0)  # 1つ目の「適用金利(%)」
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_data["rate"]
+    
+    idx = get_row_index("月額返済(万円)", 0)  # 1つ目の「月額返済(万円)」
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_data["monthly_payment"]
+    
+    idx = get_row_index("年間返済(万円)", 0)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_data["annual_payment"]
+    
+    idx = get_row_index("うち元金(万円)", 0)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_data["annual_principal"]
+    
+    idx = get_row_index("うち利息(万円)", 0)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_data["annual_interest"]
+    
+    idx = get_row_index("ローン残債(万円)", 0)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_data["balance"]
+    
+    # 固定金利データ（occurrence=1 で2つ目を指定）
+    idx = get_row_index("【固定金利】")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
+    
+    idx = get_row_index("適用金利(%)", 1)  # 2つ目の「適用金利(%)」
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_data["rate"]
+    
+    idx = get_row_index("月額返済(万円)", 1)  # 2つ目の「月額返済(万円)」
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_data["monthly_payment"]
+    
+    idx = get_row_index("年間返済(万円)", 1)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_data["annual_payment"]
+    
+    idx = get_row_index("うち元金(万円)", 1)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_data["annual_principal"]
+    
+    idx = get_row_index("うち利息(万円)", 1)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_data["annual_interest"]
+    
+    idx = get_row_index("ローン残債(万円)", 1)
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_data["balance"]
+    
+    # 賃貸データ
+    idx = get_row_index("【賃貸】")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
+    
+    idx = get_row_index("月額家賃(万円)")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = rent_monthly
+    
+    idx = get_row_index("年間家賃(万円)")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = rent_annual
+    
+    idx = get_row_index("更新料等(万円)")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = renewal_cost
+    
+    idx = get_row_index("賃貸年間総額(万円)")
+    if idx is not None: st.session_state.complete_table.at[idx, col_name] = rent_total
 
 # 金利編集機能
 st.markdown("### 🛠 変動金利スケジュール編集")
@@ -573,45 +652,33 @@ st.caption("💡 横スクロールで家族年齢と住居費推移を同時確
 
 display_table = st.session_state.complete_table.copy()
 
-# 安全なフォーマット処理（型チェック + 例外処理）
-for col in display_table.columns[1:]:  # "項目"列以外
+for col in display_table.columns[1:]:
     for idx in display_table.index:
         try:
             value = display_table.at[idx, col]
             item_name = display_table.at[idx, "項目"]
             
-            # 🔑 重要：item_nameが文字列でない場合はスキップ
             if not isinstance(item_name, str):
                 continue
             
-            # 値が文字列の場合（"未誕生"、"18(独立)"など）はそのまま
             if isinstance(value, str):
                 continue
             
-            # ヘッダー行はそのまま
             if item_name in ["", "【家族構成】", "【変動金利】", "【固定金利】", "【賃貸】"]:
                 continue
             
-            # 数値の場合のフォーマット
             if isinstance(value, (int, float)):
-                # ゼロ値の処理（金利・年齢・西暦以外は空白に）
                 if value == 0 and "適用金利" not in item_name and "年齢" not in item_name and item_name != "西暦":
                     display_table.at[idx, col] = ""
-                # 金利：小数点第2位まで
                 elif "適用金利" in item_name:
                     display_table.at[idx, col] = f"{value:.2f}"
-                # 年齢・家族人数・西暦：整数
                 elif "年齢" in item_name or item_name in ["家族人数", "西暦"]:
                     display_table.at[idx, col] = f"{int(value)}" if value > 0 else ""
-                # 世帯年収：整数
                 elif item_name == "世帯年収":
                     display_table.at[idx, col] = f"{int(value)}"
-                # その他の金額：小数点第1位（桁区切りあり）
                 else:
                     display_table.at[idx, col] = f"{value:,.1f}" if value > 0 else ""
-        
-        except Exception as e:
-            # 予期しないエラーが発生してもアプリを継続（デバッグ用）
+        except:
             continue
 
 st.dataframe(
