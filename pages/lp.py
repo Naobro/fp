@@ -406,24 +406,58 @@ for year in range(1, 61):
 
 # 金利編集機能
 st.markdown("### 🛠 変動金利スケジュール編集")
-st.caption("以下で変動金利を年単位で編集できます。編集後、下のテーブルが自動更新されます。")
+st.caption("💡 **金利を変更すると、その年以降すべて同じ金利に自動変更されます（Excelのフィルダウンと同じ動作）**")
 
-# 金利編集テーブル（横長）
-rate_edit_df = pd.DataFrame([st.session_state.variable_rates], 
-                           columns=[f"{y}年目" for y in range(1, 61)],
-                           index=["変動金利(%)"])
+# 変動金利スケジュール初期化
+if 'variable_rates' not in st.session_state:
+    st.session_state.variable_rates = [actual_variable_base] * 60
+
+# 金利編集テーブル（小数点第2位まで表示）
+rate_edit_df = pd.DataFrame(
+    [st.session_state.variable_rates], 
+    columns=[f"{y}年目" for y in range(1, 61)],
+    index=["変動金利(%)"]
+)
 
 edited_rates = st.data_editor(
     rate_edit_df,
+    column_config={
+        f"{y}年目": st.column_config.NumberColumn(
+            f"{y}年目",
+            help=f"{y}年目の金利を変更すると{y}年目以降すべて同じ金利になります",
+            min_value=0.0,
+            max_value=10.0,
+            step=0.01,
+            format="%.2f"  # 小数点第2位まで強制表示
+        ) for y in range(1, 61)
+    },
     use_container_width=True,
     height=100,
     key="rate_editor"
 )
 
-# 編集内容を反映
+# 編集内容を反映（Excelライクな自動フィルダウン機能）
 if not edited_rates.equals(rate_edit_df):
-    st.session_state.variable_rates = edited_rates.iloc[0].tolist()
-    st.rerun()
+    new_rates = edited_rates.iloc[0].tolist()
+    old_rates = st.session_state.variable_rates
+    
+    # どの年が変更されたかを検出（浮動小数点誤差対策）
+    changed_year_index = None
+    for i in range(60):
+        if abs(new_rates[i] - old_rates[i]) > 1e-9:
+            changed_year_index = i
+            break
+    
+    # 変更された年以降をすべて同じ金利に（Excelのフィルダウン動作）
+    if changed_year_index is not None:
+        changed_rate = new_rates[changed_year_index]
+        # その年以降を全て同じ値で上書き
+        for i in range(changed_year_index, 60):
+            st.session_state.variable_rates[i] = changed_rate
+        
+        st.success(f"✅ {changed_year_index + 1}年目以降を {changed_rate:.2f}% に変更しました")
+        st.rerun()
+
 
 # 完全テーブル表示
 st.markdown("### 📊 60年完全比較テーブル")
