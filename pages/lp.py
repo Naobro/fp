@@ -573,28 +573,46 @@ st.caption("💡 横スクロールで家族年齢と住居費推移を同時確
 
 display_table = st.session_state.complete_table.copy()
 
-for col in display_table.columns[1:]:
+# 安全なフォーマット処理（型チェック + 例外処理）
+for col in display_table.columns[1:]:  # "項目"列以外
     for idx in display_table.index:
-        value = display_table.at[idx, col]
-        item_name = display_table.at[idx, "項目"]
+        try:
+            value = display_table.at[idx, col]
+            item_name = display_table.at[idx, "項目"]
+            
+            # 🔑 重要：item_nameが文字列でない場合はスキップ
+            if not isinstance(item_name, str):
+                continue
+            
+            # 値が文字列の場合（"未誕生"、"18(独立)"など）はそのまま
+            if isinstance(value, str):
+                continue
+            
+            # ヘッダー行はそのまま
+            if item_name in ["", "【家族構成】", "【変動金利】", "【固定金利】", "【賃貸】"]:
+                continue
+            
+            # 数値の場合のフォーマット
+            if isinstance(value, (int, float)):
+                # ゼロ値の処理（金利・年齢・西暦以外は空白に）
+                if value == 0 and "適用金利" not in item_name and "年齢" not in item_name and item_name != "西暦":
+                    display_table.at[idx, col] = ""
+                # 金利：小数点第2位まで
+                elif "適用金利" in item_name:
+                    display_table.at[idx, col] = f"{value:.2f}"
+                # 年齢・家族人数・西暦：整数
+                elif "年齢" in item_name or item_name in ["家族人数", "西暦"]:
+                    display_table.at[idx, col] = f"{int(value)}" if value > 0 else ""
+                # 世帯年収：整数
+                elif item_name == "世帯年収":
+                    display_table.at[idx, col] = f"{int(value)}"
+                # その他の金額：小数点第1位（桁区切りあり）
+                else:
+                    display_table.at[idx, col] = f"{value:,.1f}" if value > 0 else ""
         
-        if isinstance(value, str):
+        except Exception as e:
+            # 予期しないエラーが発生してもアプリを継続（デバッグ用）
             continue
-        
-        if item_name in ["", "【家族構成】", "【変動金利】", "【固定金利】", "【賃貸】"]:
-            continue
-        
-        if isinstance(value, (int, float)):
-            if value == 0 and "適用金利" not in item_name and "年齢" not in item_name and item_name != "西暦":
-                display_table.at[idx, col] = ""
-            elif "適用金利" in item_name:
-                display_table.at[idx, col] = f"{value:.2f}"
-            elif "年齢" in item_name or item_name in ["家族人数", "西暦"]:
-                display_table.at[idx, col] = f"{int(value)}" if value > 0 else ""
-            elif item_name == "世帯年収":
-                display_table.at[idx, col] = f"{int(value)}"
-            else:
-                display_table.at[idx, col] = f"{value:,.1f}" if value > 0 else ""
 
 st.dataframe(
     display_table,
