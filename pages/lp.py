@@ -51,23 +51,72 @@ with col3:
     st.metric("世帯年収", f"{household_income}万円")
     start_year = st.number_input("開始年", min_value=2020, max_value=2030, value=2025)
 
-# 子供情報（0-5人対応）
-st.markdown("### 👶 子供情報（0〜5人対応）")
-children_count = st.number_input("子供人数", min_value=0, max_value=5, value=2)
+# 子供情報（0-5人対応・将来の出産計画対応）
+st.markdown("### 👶 子供情報（0〜5人対応・将来の出産計画対応）")
+st.caption("💡 既に誕生している子供と将来の出産予定を分けて入力できます")
 
-children_ages = []
+children_count = st.number_input("子供人数（予定含む）", min_value=0, max_value=5, value=2, help="将来の予定も含めた合計人数")
+
+children_birth_years = []  # 出生年リスト（負の数=既に誕生、正の数=将来誕生）
+
 if children_count > 0:
     cols = st.columns(min(children_count, 5))
     for i in range(children_count):
         with cols[i]:
-            age = st.number_input(
-                f"第{i+1}子 現在年齢", 
-                min_value=0, 
-                max_value=25, 
-                value=2 if i == 0 else 0, 
-                key=f"child_{i}"
+            st.markdown(f"#### 第{i+1}子")
+            
+            # 既に誕生済みか将来予定かを選択
+            birth_status = st.radio(
+                "状況",
+                options=["既に誕生済み", "将来の予定"],
+                index=0 if i == 0 else 1,  # 第1子は既に誕生済み、第2子以降は将来予定をデフォルト
+                key=f"child_status_{i}",
+                label_visibility="collapsed"
             )
-            children_ages.append(age)
+            
+            if birth_status == "既に誕生済み":
+                # 現在の年齢を入力
+                current_age = st.number_input(
+                    "現在の年齢（歳）",
+                    min_value=0,
+                    max_value=25,
+                    value=2 if i == 0 else 0,
+                    key=f"child_age_{i}"
+                )
+                # 負の数で保存（何年前に誕生したか）
+                birth_year = -current_age
+                children_birth_years.append(birth_year)
+                st.success(f"✅ 現在{current_age}歳")
+                
+            else:  # 将来の予定
+                # 何年後に誕生予定かを入力
+                years_until_birth = st.number_input(
+                    "何年後に誕生予定？",
+                    min_value=1,
+                    max_value=20,
+                    value=2 if i == 1 else (2 * i),  # 第2子は2年後、第3子は4年後をデフォルト
+                    key=f"child_future_{i}"
+                )
+                children_birth_years.append(years_until_birth)
+                st.info(f"📅 {years_until_birth}年後に誕生予定")
+
+    # 入力内容の確認表示
+    st.markdown("---")
+    st.markdown("#### 📋 家族計画確認")
+    family_plan_text = []
+    for i, birth_year in enumerate(children_birth_years):
+        if birth_year <= 0:
+            age = abs(birth_year)
+            family_plan_text.append(f"第{i+1}子：既に誕生済み（現在{age}歳）")
+        else:
+            family_plan_text.append(f"第{i+1}子：{birth_year}年後に誕生予定")
+    
+    for text in family_plan_text:
+        st.write(f"• {text}")
+else:
+    st.info("💑 子供なし（DINKS）として計算します")
+    children_birth_years = []
+
 
 # ==========================================
 # 2. 借入可能額自動計算
