@@ -744,3 +744,6 @@ def render_line_banner():
     """, unsafe_allow_html=True)
 
 render_line_banner()
+plotly
+numpy-financial
+
