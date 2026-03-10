@@ -107,17 +107,34 @@ with col_loan3:
     st.metric("月額返済可能額", f"{monthly_repayment_capacity/10000:,.1f}万円")
 
 # ==========================================
-# 3. 物件・資金計画
+# 3. 物件・資金計画（修正版）
 # ==========================================
 st.markdown("---")
 st.markdown("## 🏠 物件・資金計画")
+
+def reset_loan_conditions():
+    """借入条件が変更された時の自動リセット関数"""
+    # 金利関連のセッション状態をクリア
+    keys_to_reset = ['variable_rates', 'complete_table', 'last_loan_years', 'last_base_rate']
+    for key in keys_to_reset:
+        if key in st.session_state:
+            del st.session_state[key]
 
 col_prop1, col_prop2 = st.columns(2)
 
 with col_prop1:
     property_price = st.number_input("物件価格（万円）", min_value=100, value=6000, step=100)
     self_funds = st.number_input("自己資金（万円）", min_value=0, value=500, step=50)
-    loan_years = st.number_input("希望借入年数", min_value=1, max_value=max_loan_years, value=min(35, max_loan_years))
+    
+    # 🔑 重要：on_changeコールバックを追加
+    loan_years = st.number_input(
+        "希望借入年数", 
+        min_value=1, 
+        max_value=max_loan_years, 
+        value=min(35, max_loan_years),
+        on_change=reset_loan_conditions,  # 年数変更時に自動リセット
+        help="年数を変更すると金利スケジュールが自動更新されます"
+    )
 
 with col_prop2:
     closing_costs = property_price * 0.07
@@ -128,7 +145,7 @@ with col_prop2:
     st.metric("必要総額", f"{total_cost:,.0f}万円")
     st.metric("必要借入額", f"{required_loan:,.0f}万円")
 
-# 借入可否判定
+# 借入可否判定（既存のまま）
 if required_loan <= max_loan_35:
     st.success(f"✅ 35年ローンで購入可能（余裕額：{(max_loan_35/10000 - required_loan):,.0f}万円）")
 elif required_loan <= max_loan_max:
@@ -136,6 +153,7 @@ elif required_loan <= max_loan_max:
 else:
     shortage = required_loan - max_loan_max
     st.error(f"❌ 借入不可（不足額：{shortage:,.0f}万円）")
+
 
 # ==========================================
 # 4. 賃貸プラン設定
@@ -183,27 +201,33 @@ col_rate1, col_rate2, col_rate3 = st.columns(3)
 with col_rate1:
     base_rate_variable = st.number_input(
         "変動金利 基準（%）", 
-        min_value=0.0, max_value=10.0, value=0.6, step=0.01, format="%.2f"
+        min_value=0.0, max_value=10.0, value=0.6, step=0.01, format="%.2f",
+        on_change=reset_loan_conditions  # 基準金利変更時もリセット
     )
     if loan_years >= 36:
         actual_variable_base = base_rate_variable + 0.1
-        st.info(f"36年以上 → {actual_variable_base:.2f}%")
+        st.warning(f"⚠️ **超長期ローン（{loan_years}年）のため全期間+0.10%適用**")
+        st.info(f"基準金利 {base_rate_variable:.2f}% → 実際の適用金利 **{actual_variable_base:.2f}%**")
     else:
         actual_variable_base = base_rate_variable
+        st.success(f"✅ 標準ローン（{loan_years}年）基準金利そのまま適用")
 
 with col_rate2:
     base_rate_flat = st.number_input(
         "固定金利 基準（%）", 
-        min_value=0.0, max_value=10.0, value=2.36, step=0.01, format="%.2f"
+        min_value=0.0, max_value=10.0, value=2.36, step=0.01, format="%.2f",
+        on_change=reset_loan_conditions  # 固定金利変更時もリセット
     )
     if loan_years >= 36:
         actual_flat_base = base_rate_flat + 0.1
-        st.info(f"36年以上 → {actual_flat_base:.2f}%")
+        st.warning(f"⚠️ **超長期ローン（{loan_years}年）のため全期間+0.10%適用**")
+        st.info(f"基準金利 {base_rate_flat:.2f}% → 実際の適用金利 **{actual_flat_base:.2f}%**")
     else:
         actual_flat_base = base_rate_flat
+        st.success(f"✅ 標準ローン（{loan_years}年）基準金利そのまま適用")
 
 with col_rate3:
-    # フラット35ポイント計算
+    # フラット35ポイント計算（既存のまま）
     current_children = sum(1 for age in children_ages if age >= 0 and age < 18)
     if current_children > 0:
         child_plus_points = current_children
@@ -215,6 +239,7 @@ with col_rate3:
     
     total_flat_points = child_plus_points
     st.metric("フラット35ポイント", f"{total_flat_points}pt")
+
 
 # フラット35金利スケジュール生成（既存関数を使用）
 def generate_flat35_schedule(base_rate, total_points, loan_years):
@@ -292,9 +317,96 @@ if 'complete_table' not in st.session_state:
     for col in year_columns[1:]:  # "項目"列以外
         st.session_state.complete_table[col] = 0.0
 
-# 変動金利スケジュール初期化
+# 変動金利スケジュール初期化（状態検証付き）
 if 'variable_rates' not in st.session_state:
     st.session_state.variable_rates = [actual_variable_base] * 60
+    st.session_state.last_loan_years = loan_years
+    st.session_state.last_base_rate = actual_variable_base
+
+# 追加の状態検証：コールバックで拾えなかった変更を検出
+if ('last_loan_years' not in st.session_state or 
+    st.session_state.last_loan_years != loan_years or
+    abs(st.session_state.last_base_rate - actual_variable_base) > 1e-9):
+    
+    # 金利スケジュールを新しい基準金利で再初期化
+    st.session_state.variable_rates = [actual_variable_base] * 60
+    st.session_state.last_loan_years = loan_years
+    st.session_state.last_base_rate = actual_variable_base
+    
+    st.success(f"🔄 **借入条件変更検知：金利スケジュールを {actual_variable_base:.2f}% で自動更新しました**")
+
+# 金利編集機能
+st.markdown("### 🛠 変動金利スケジュール編集")
+
+# 状況説明と手動リセット
+col_info, col_reset = st.columns([3, 1])
+with col_info:
+    if loan_years >= 36:
+        st.info(f"""
+        📌 **超長期ローン（{loan_years}年）の金利について**
+        - 借入期間が36年以上のため、基準金利に+0.10%が全期間適用されています
+        - 下記の金利は既に+0.10%加算済みの値です（1年目から{loan_years}年目まで）
+        - 現在の適用金利：**{actual_variable_base:.2f}%**（基準{base_rate_variable:.2f}% + 0.10%）
+        """)
+    else:
+        st.success(f"✅ 標準ローン（{loan_years}年）基準金利 **{actual_variable_base:.2f}%** をそのまま適用")
+
+with col_reset:
+    st.markdown("#### ")  # 高さ調整
+    if st.button("🔄 金利リセット", help=f"全期間を {actual_variable_base:.2f}% に戻します", use_container_width=True):
+        st.session_state.variable_rates = [actual_variable_base] * 60
+        st.success(f"✅ 全期間を {actual_variable_base:.2f}% にリセットしました")
+        st.rerun()
+
+st.caption("💡 **Excelライクな自動フィル：ある年の金利を変更すると、その年以降すべて同じ金利に自動変更されます**")
+
+# 金利編集テーブル（小数点第2位表示）
+rate_edit_df = pd.DataFrame(
+    [st.session_state.variable_rates], 
+    columns=[f"{y}年目" for y in range(1, 61)],
+    index=["変動金利(%)"]
+)
+
+edited_rates = st.data_editor(
+    rate_edit_df,
+    column_config={
+        f"{y}年目": st.column_config.NumberColumn(
+            f"{y}年目",
+            help=f"{y}年目を変更すると{y}年目以降すべて同じ金利になります",
+            min_value=0.0,
+            max_value=10.0,
+            step=0.01,
+            format="%.2f"  # 小数点第2位まで強制表示
+        ) for y in range(1, 61)
+    },
+    use_container_width=True,
+    height=120,
+    key="rate_editor"
+)
+
+# Excelライクな自動フィル機能
+if not edited_rates.equals(rate_edit_df):
+    new_rates = edited_rates.iloc[0].tolist()
+    old_rates = st.session_state.variable_rates
+    
+    # 変更された年を検出（浮動小数点誤差対策）
+    changed_year_index = None
+    for i in range(60):
+        if abs(new_rates[i] - old_rates[i]) > 1e-9:
+            changed_year_index = i
+            break
+    
+    # 変更された年以降をすべて同じ金利に（Excelのフィルダウン動作）
+    if changed_year_index is not None:
+        changed_rate = new_rates[changed_year_index]
+        # その年以降を全て同じ値で上書き
+        for i in range(changed_year_index, 60):
+            st.session_state.variable_rates[i] = changed_rate
+        
+        st.success(f"✅ **{changed_year_index + 1}年目以降を {changed_rate:.2f}% に一括変更しました**")
+        st.balloons()  # 視覚的フィードバック
+        st.rerun()
+
 
 # 厳密計算エンジン（既存を改良）
 def calculate_complete_schedule(loan_amount_man, loan_years, rate_list):
