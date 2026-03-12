@@ -953,7 +953,7 @@ if not edited_rates.equals(rate_edit_df):
         st.rerun()
 
 # テーブル表示（完全編集可能・0.0セル削除対応）
-st.markdown("### 📊 60年完全統合テーブル（Excelライク編集）")
+st.markdown("### 📊 60年 シミュレーション")
 st.caption("💡 **物件価値の変更は上の「不動産価値シミュレーション」で行ってください。下の表の「物件現在価値」は自動反映されます。**")
 
 display_table = st.session_state.complete_table.copy()
