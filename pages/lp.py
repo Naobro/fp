@@ -115,7 +115,7 @@ st.markdown("<h1 style='font-size:28px; text-align:center;'>📊 簡易ライフ
 st.markdown("<p style='text-align:center; color:#666;'>今後60年間の住居戦略完全比較</p>", unsafe_allow_html=True)
 
 # ==========================================
-# 1. 基本情報（修正①：現在年収入力欄追加）
+# 1. 基本情報（年収上昇率追加）
 # ==========================================
 st.markdown("## 👨‍👩‍👧 基本情報")
 
@@ -125,30 +125,36 @@ with col1:
     st.markdown("### ご主人")
     husband_age = st.number_input("現在年齢（歳）", min_value=20, max_value=70, value=32, key="husband_age")
     husband_salary = st.number_input("現在の年収（万円）", min_value=0, value=600, step=10, key="husband_salary")
+    husband_growth = st.number_input("年収上昇率（%）", min_value=0.0, max_value=10.0, value=2.0, step=0.1, key="husband_growth", help="例：5%なら毎年5%ずつ年収が上昇")
 
 with col2:
     st.markdown("### 奥様")
     wife_age = st.number_input("現在年齢（歳）", min_value=20, max_value=70, value=30, key="wife_age")
     wife_salary = st.number_input("現在の年収（万円）", min_value=0, value=200, step=10, key="wife_salary")
+    wife_growth = st.number_input("年収上昇率（%）", min_value=0.0, max_value=10.0, value=1.5, step=0.1, key="wife_growth")
 
 with col3:
     st.markdown("### その他・設定")
-    stock_income = st.number_input("株式配当・その他収入（年額・万円）", min_value=0, value=0, step=10, help="株式配当や不動産収入など、給与以外の継続収入")
-    # 修正②：開始年を2026年にデフォルト変更
+    stock_income = st.number_input("株式配当・その他収入（年額・万円）", min_value=0, value=0, step=10, help="※住宅ローンの借入計算には含まれません")
     start_year = st.number_input("シミュレーション開始年", min_value=2020, max_value=2030, value=2026)
 
-# 初年度世帯年収の計算
-first_year_total = husband_salary + wife_salary + stock_income
-st.metric("初年度 世帯年収", f"{first_year_total:,.0f}万円")
+# 借入計算用年収（その他収入を除外）
+loan_calculation_income = husband_salary + wife_salary
+total_household_income = loan_calculation_income + stock_income
+
+col_income1, col_income2 = st.columns(2)
+with col_income1:
+    st.metric("借入計算用年収（給与のみ）", f"{loan_calculation_income:,.0f}万円")
+with col_income2:
+    st.metric("実質世帯年収（その他含む）", f"{total_household_income:,.0f}万円")
 
 # ==========================================
 # 1-2. 子供情報（独立計画対応版）
 # ==========================================
 st.markdown("---")
 st.markdown("### 👶 子供情報（独立計画設定対応）")
-st.caption("💡 各子供の誕生時期と独立時期を詳細に設定できます")
 
-children_count = st.number_input("子供人数（予定含む）", min_value=0, max_value=5, value=2, help="将来の予定も含めた合計人数")
+children_count = st.number_input("子供人数（予定含む）", min_value=0, max_value=5, value=2)
 
 children_data = []
 
@@ -167,176 +173,165 @@ if children_count > 0:
             )
             
             if birth_status == "既に誕生済み":
-                current_age = st.number_input(
-                    "現在の年齢（歳）",
-                    min_value=0, max_value=30, 
-                    value=2 if i == 0 else 0, 
-                    key=f"child_age_{i}"
-                )
+                current_age = st.number_input("現在の年齢（歳）", min_value=0, max_value=30, value=2 if i == 0 else 0, key=f"child_age_{i}")
                 birth_year_offset = -current_age
-                st.success(f"✅ 現在{current_age}歳")
             else:
-                years_until_birth = st.number_input(
-                    "何年後に誕生予定？",
-                    min_value=1, max_value=20, 
-                    value=2 if i == 1 else (2 * i), 
-                    key=f"child_future_{i}"
-                )
+                years_until_birth = st.number_input("何年後に誕生予定？", min_value=1, max_value=20, value=2 if i == 1 else (2 * i), key=f"child_future_{i}")
                 birth_year_offset = years_until_birth
-                st.info(f"📅 {years_until_birth}年後に誕生予定")
             
-            st.markdown("---")
             st.markdown("**🏠 独立計画**")
             independence_option = st.selectbox(
                 "いつ家を出る？",
-                options=[
-                    "18歳（大学から一人暮らし）",
-                    "22歳（就職後すぐ独立）",
-                    "25歳（数年間は実家から通勤）", 
-                    "30歳（長期間同居）",
-                    "ずっと同居"
-                ],
+                options=["18歳", "22歳", "25歳", "30歳", "ずっと同居"],
                 index=1,
                 key=f"child_indep_{i}"
             )
             
-            if "18歳" in independence_option:
-                independence_age = 18
-                st.caption("🎓 大学から一人暮らし想定")
-            elif "22歳" in independence_option:
-                independence_age = 22
-                st.caption("💼 就職後すぐに独立")
-            elif "25歳" in independence_option:
-                independence_age = 25
-                st.caption("🏢 数年間実家から通勤")
-            elif "30歳" in independence_option:
-                independence_age = 30
-                st.caption("🏡 長期間同居")
-            else:
-                independence_age = 999
-                st.caption("👨‍👩‍👧‍👦 生涯同居想定")
+            if "18歳" in independence_option: independence_age = 18
+            elif "22歳" in independence_option: independence_age = 22
+            elif "25歳" in independence_option: independence_age = 25
+            elif "30歳" in independence_option: independence_age = 30
+            else: independence_age = 999
             
             children_data.append({
                 "birth_year_offset": birth_year_offset,
                 "independence_age": independence_age
             })
-
-    st.markdown("---")
-    st.markdown("#### 📋 家族計画サマリー")
-    summary_parts = []
-    for i, child in enumerate(children_data):
-        if child["birth_year_offset"] <= 0:
-            age = abs(child["birth_year_offset"])
-            status = f"現在{age}歳"
-        else:
-            status = f"{child['birth_year_offset']}年後誕生"
-        
-        if child["independence_age"] < 999:
-            indep_text = f"{child['independence_age']}歳独立"
-        else:
-            indep_text = "ずっと同居"
-        
-        summary_parts.append(f"第{i+1}子：{status}（{indep_text}）")
-    
-    st.write(" / ".join(summary_parts))
 else:
     st.info("💑 子供なし（DINKS）として計算します")
 
 # ==========================================
-# 修正③：収入内訳の編集テーブル（子供年齢参考表付き）
+# 産休・育休設定
 # ==========================================
 st.markdown("---")
-st.markdown("### 💰 収入シミュレーション（60年編集テーブル）")
-st.caption("💡 定年・年金移行、産休・パート、退職金・相続など、ライフイベントに合わせて自由に変更できます")
+st.markdown("### 🤱 産休・育休設定")
 
-# 子供の年齢早見表（実用的な参考情報）
 if children_count > 0:
-    st.markdown("#### 📅 参考：子供の年齢早見表")
-    st.caption("💡 収入計画を立てる際の参考にしてください（小学校入学、中学・高校・大学進学など）")
+    col_mat1, col_mat2 = st.columns(2)
     
-    age_cols = st.columns(6)
-    reference_years = [1, 5, 10, 15, 20, 25]  # 参考年
+    with col_mat1:
+        maternity_years = st.number_input("産休・育休期間（年）", min_value=0, max_value=5, value=1, help="子供誕生後、何年間収入が減るか")
     
-    for idx, year in enumerate(reference_years):
-        with age_cols[idx]:
-            st.markdown(f"**{year}年目**")
-            for i, child in enumerate(children_data):
-                offset = child["birth_year_offset"]
-                if offset <= 0:
-                    # 既に誕生済み
-                    child_age = abs(offset) + year - 1
-                else:
-                    # 将来誕生
-                    child_age = year - offset
-                
-                if child_age < 0:
-                    st.caption(f"第{i+1}子: 未誕生")
-                else:
-                    st.caption(f"第{i+1}子: {child_age}歳")
-
-# 収入スケジュール初期化
-if 'husband_income_schedule' not in st.session_state:
-    st.session_state.husband_income_schedule = [husband_salary] * 60
-if 'wife_income_schedule' not in st.session_state:
-    st.session_state.wife_income_schedule = [wife_salary] * 60
-if 'other_income_schedule' not in st.session_state:
-    st.session_state.other_income_schedule = [stock_income] * 60
-
-# 現在値が変更された場合、1年目を更新
-st.session_state.husband_income_schedule[0] = husband_salary
-st.session_state.wife_income_schedule[0] = wife_salary
-st.session_state.other_income_schedule[0] = stock_income
-
-def income_editor(label, key):
-    """収入編集テーブル（自動フィル機能付き）"""
-    df = pd.DataFrame(
-        [st.session_state[key]],
-        columns=[f"{y}年目" for y in range(1, 61)],
-        index=[label]
-    )
+    with col_mat2:
+        maternity_ratio = st.slider("産休・育休中の収入率（%）", 0, 100, 0, help="0%=収入なし、50%=時短勤務など")
     
-    edited = st.data_editor(
-        df,
-        column_config={
-            f"{y}年目": st.column_config.NumberColumn(
-                f"{y}年目",
-                min_value=0.0,
-                max_value=50000.0,
-                step=10.0,
-                format="%.0f万円"
-            ) for y in range(1, 61)
-        },
-        use_container_width=True,
-        height=80,
-        key=f"{key}_editor"
-    )
-    
-    # 自動フィル処理
-    if not edited.equals(df):
-        new_values = edited.iloc[0].tolist()
-        old_values = st.session_state[key]
-        changed_idx = None
-        for i in range(60):
-            if abs(new_values[i] - old_values[i]) > 1e-9:
-                changed_idx = i
-                break
-        if changed_idx is not None:
-            changed_value = new_values[changed_idx]
-            for i in range(changed_idx, 60):
-                st.session_state[key][i] = changed_value
-            st.success(f"✅ {label}：{changed_idx + 1}年目以降を {changed_value:.0f}万円に変更")
-            st.rerun()
-
-# 編集テーブル表示
-st.markdown("#### ✏️ 収入内訳の編集")
-st.caption("💡 セルをダブルクリックして数値を変更すると、それ以降の年も自動で同じ金額になります（Excelライク操作）")
-
-income_editor("ご主人 年収", "husband_income_schedule")
-income_editor("奥様 年収", "wife_income_schedule") 
-income_editor("株式配当・その他", "other_income_schedule")
+    st.info(f"📌 設定：各子供の誕生後{maternity_years}年間、奥様の年収が{maternity_ratio}%になります")
+else:
+    maternity_years = 0
+    maternity_ratio = 100
 
 # ==========================================
-# 2. 借入可能額自動計算
+# 年収スケジュール自動生成
+# ==========================================
+def generate_income_schedules():
+    """年収スケジュールを自動生成（上昇率＋産休・育休ロジック）"""
+    husband_schedule = []
+    wife_schedule = []
+    other_schedule = [stock_income] * 60
+    
+    for year in range(1, 61):
+        # ご主人の年収（単純な上昇率）
+        husband_income = husband_salary * ((1 + husband_growth / 100) ** (year - 1))
+        husband_schedule.append(int(husband_income))
+        
+        # 奥様の年収（産休・育休ロジック付き）
+        wife_base_income = wife_salary * ((1 + wife_growth / 100) ** (year - 1))
+        
+        # 産休・育休判定
+        is_maternity_period = False
+        for child in children_data:
+            birth_offset = child["birth_year_offset"]
+            
+            if birth_offset > 0:  # 将来誕生
+                birth_year = birth_offset
+                if birth_year <= year < birth_year + maternity_years:
+                    is_maternity_period = True
+            else:  # 既に誕生済み
+                child_current_age = abs(birth_offset)
+                child_age_in_year = child_current_age + (year - 1)
+                if child_age_in_year < maternity_years:
+                    is_maternity_period = True
+        
+        if is_maternity_period:
+            wife_income = wife_base_income * (maternity_ratio / 100)
+        else:
+            wife_income = wife_base_income
+        
+        wife_schedule.append(int(wife_income))
+    
+    return husband_schedule, wife_schedule, other_schedule
+
+# 初期計算または設定変更時の再計算
+if 'income_schedules_initialized' not in st.session_state:
+    h_sched, w_sched, o_sched = generate_income_schedules()
+    st.session_state.husband_income_schedule = h_sched
+    st.session_state.wife_income_schedule = w_sched
+    st.session_state.other_income_schedule = o_sched
+    st.session_state.income_schedules_initialized = True
+
+# 再計算ボタン
+if st.button("🔄 年収スケジュール再計算", help="上記の設定を反映して年収を再計算します"):
+    h_sched, w_sched, o_sched = generate_income_schedules()
+    st.session_state.husband_income_schedule = h_sched
+    st.session_state.wife_income_schedule = w_sched
+    st.session_state.other_income_schedule = o_sched
+    st.success("✅ 年収スケジュールを再計算しました")
+    st.rerun()
+
+# ==========================================
+# 年収テーブル（個別修正用）
+# ==========================================
+st.markdown("---")
+st.markdown("### ✏️ 年収テーブル（個別修正用）")
+st.caption("💡 自動計算された年収を、特定の年だけ変更したい場合に使用します")
+
+with st.expander("📊 年収編集テーブルを表示"):
+    def income_editor(label, key):
+        """収入編集テーブル（自動フィル機能付き）"""
+        df = pd.DataFrame(
+            [st.session_state[key]],
+            columns=[f"{y}年目" for y in range(1, 61)],
+            index=[label]
+        )
+        
+        edited = st.data_editor(
+            df,
+            column_config={
+                f"{y}年目": st.column_config.NumberColumn(
+                    f"{y}年目",
+                    min_value=0.0,
+                    max_value=50000.0,
+                    step=10.0,
+                    format="%.0f万円"
+                ) for y in range(1, 61)
+            },
+            use_container_width=True,
+            height=80,
+            key=f"{key}_editor"
+        )
+        
+        # 自動フィル処理（Excelライク）
+        if not edited.equals(df):
+            new_values = edited.iloc[0].tolist()
+            old_values = st.session_state[key]
+            changed_idx = None
+            for i in range(60):
+                if abs(new_values[i] - old_values[i]) > 1e-9:
+                    changed_idx = i
+                    break
+            if changed_idx is not None:
+                changed_value = new_values[changed_idx]
+                for i in range(changed_idx, 60):
+                    st.session_state[key][i] = changed_value
+                st.success(f"✅ {label}：{changed_idx + 1}年目以降を {changed_value:.0f}万円に変更")
+                st.rerun()
+    
+    income_editor("ご主人 年収", "husband_income_schedule")
+    income_editor("奥様 年収", "wife_income_schedule") 
+    income_editor("株式配当・その他", "other_income_schedule")
+
+# ==========================================
+# 2. 借入可能額自動計算（その他収入除外）
 # ==========================================
 st.markdown("---")
 st.markdown("## 💰 借入可能額自動判定")
@@ -345,7 +340,8 @@ SCREENING_RATE = 0.03
 REPAYMENT_RATIO = 0.40
 MAX_COMPLETION_AGE = 79
 
-annual_repayment_capacity = first_year_total * 10000 * REPAYMENT_RATIO
+# 借入計算は給与のみ（その他収入を除外）
+annual_repayment_capacity = loan_calculation_income * 10000 * REPAYMENT_RATIO
 monthly_repayment_capacity = annual_repayment_capacity / 12
 max_loan_years = min(50, MAX_COMPLETION_AGE - husband_age)
 
@@ -362,6 +358,8 @@ col_loan1, col_loan2, col_loan3 = st.columns(3)
 with col_loan1: st.metric("35年返済での借入可能額", f"{max_loan_35/10000:,.0f}万円")
 with col_loan2: st.metric(f"最長{max_loan_years}年返済での借入可能額", f"{max_loan_max/10000:,.0f}万円")
 with col_loan3: st.metric("月額返済可能額", f"{monthly_repayment_capacity/10000:,.1f}万円")
+
+st.caption("💡 借入可能額は給与収入のみで計算（株式配当等は除外）")
 
 # ==========================================
 # 3. 物件・資金計画
@@ -385,8 +383,7 @@ with col_prop1:
         "希望借入年数", 
         min_value=1, max_value=max_loan_years, 
         value=min(35, max_loan_years),
-        on_change=reset_loan_conditions,
-        help="年数を変更すると金利スケジュールが自動更新されます"
+        on_change=reset_loan_conditions
     )
 
 with col_prop2:
@@ -407,26 +404,23 @@ else:
     st.error(f"❌ 借入不可（不足額：{shortage:,.0f}万円）")
 
 # ==========================================
-# 修正⑤：物件価値設定（シンプル化）
+# 物件価値設定
 # ==========================================
 st.markdown("---")
 st.markdown("## 📈 物件価値シミュレーション設定")
-st.caption("💡 将来の売却を想定した資産価値の変動を設定します")
 
-# シンプルに年間減価償却率のみ設定
 depreciation_rate = st.slider(
     "年間価値減少率（%）",
     min_value=0.0, max_value=5.0, value=1.5, step=0.1,
-    help="一般的に1.0〜2.0%程度。0%にすると価値が下がらない設定になります"
+    help="一般的に1.0〜2.0%程度"
 )
 st.caption(f"📉 毎年 {depreciation_rate}% ずつ価値が減少していく設定です")
 
-# 初期価値は購入価格そのまま（100%）
 initial_property_value = property_price
 st.info(f"購入時点の価値：{initial_property_value:,.0f}万円（購入価格と同額）")
 
 # ==========================================
-# 5. 賃貸プラン設定
+# 賃貸プラン設定
 # ==========================================
 st.markdown("---")
 st.markdown("## 🏠 賃貸プラン設定")
@@ -447,20 +441,10 @@ with col_rent3:
     rent_family_4 = st.number_input("月額家賃（万円）", min_value=0.0, value=22.0, step=0.5, key="rent_4ldk")
 
 # ==========================================
-# 6. 60年完全比較テーブル（全機能統合版）
+# 60年完全比較テーブル
 # ==========================================
 st.markdown("---")
-st.markdown("## 📊 60年完全比較テーブル（独立計画・収入内訳連動）")
-
-# 子供データ変更検知
-if 'last_children_data' not in st.session_state:
-    st.session_state.last_children_data = children_data
-
-if st.session_state.last_children_data != children_data:
-    if 'complete_table' in st.session_state:
-        del st.session_state.complete_table
-    st.session_state.last_children_data = children_data
-    st.info("🔄 子供の独立計画変更を検知し、テーブルを再構築しました")
+st.markdown("## 📊 60年完全比較テーブル")
 
 # 基準金利設定
 col_rate1, col_rate2, col_rate3 = st.columns(3)
@@ -494,7 +478,6 @@ with col_rate2:
         st.success(f"✅ 基準金利：{actual_flat_base:.2f}%")
 
 with col_rate3:
-    # フラット35ポイント計算
     current_children_under18 = 0
     for child in children_data:
         birth_year_offset = child["birth_year_offset"]
@@ -545,7 +528,7 @@ def generate_flat35_schedule(base_rate, total_points, loan_years):
 
 flat_rate_schedule = generate_flat35_schedule(actual_flat_base, total_flat_points, loan_years)
 
-# テーブル初期化（修正④：0.0セル削除対応）
+# テーブル初期化
 if 'complete_table' not in st.session_state:
     row_items = [
         "【家族構成】",
@@ -615,7 +598,6 @@ if ('last_loan_years' not in st.session_state or
     st.session_state.variable_rates = [actual_variable_base] * 60
     st.session_state.last_loan_years = loan_years
     st.session_state.last_base_rate = actual_variable_base
-    st.success(f"🔄 金利スケジュール自動更新：{actual_variable_base:.2f}%")
 
 # 計算エンジン
 def calculate_complete_schedule(loan_amount_man, loan_years, rate_list):
@@ -663,7 +645,6 @@ def calculate_complete_schedule(loan_amount_man, loan_years, rate_list):
 variable_schedule = calculate_complete_schedule(required_loan, loan_years, st.session_state.variable_rates)
 flat_schedule = calculate_complete_schedule(required_loan, loan_years, flat_rate_schedule)
 
-# 項目名から行インデックスを取得する関数
 def get_row_index(item_name, occurrence=0):
     try:
         matching_indices = st.session_state.complete_table[
@@ -675,13 +656,12 @@ def get_row_index(item_name, occurrence=0):
     except Exception:
         return None
 
-# データ投入（全機能統合版）
+# データ投入
 rent_cumulative = 0
 
 for year in range(1, 61):
     col_name = f"{year}年目"
     
-    # 家族情報計算
     current_year_ad = start_year + year - 1
     husband_age_year = husband_age + year - 1
     wife_age_year = wife_age + year - 1
@@ -689,12 +669,10 @@ for year in range(1, 61):
     children_ages_year = []
     children_living = 0
     
-    # 独立計画に基づく家族構成計算
     for child in children_data:
         birth_year_offset = child["birth_year_offset"]
         independence_age = child["independence_age"]
         
-        # 年齢計算
         if birth_year_offset <= 0:
             current_age = abs(birth_year_offset)
             child_age = current_age + year - 1
@@ -704,7 +682,6 @@ for year in range(1, 61):
             else:
                 child_age = year - birth_year_offset
         
-        # 独立判定と表示
         if isinstance(child_age, int):
             if child_age < 0:
                 child_display = "未誕生"
@@ -720,7 +697,6 @@ for year in range(1, 61):
     
     family_size = 2 + children_living
     
-    # 家族人数に基づく間取りと家賃決定
     if children_living == 0:
         required_layout = "2LDK"
         monthly_rent = rent_couple
@@ -736,13 +712,11 @@ for year in range(1, 61):
     rent_total = rent_annual + renewal_cost
     rent_cumulative += rent_total
     
-    # 収入データ（スケジュールから取得）
     husband_income_year = st.session_state.husband_income_schedule[year - 1]
     wife_income_year = st.session_state.wife_income_schedule[year - 1]
     other_income_year = st.session_state.other_income_schedule[year - 1]
     total_income_year = husband_income_year + wife_income_year + other_income_year
     
-    # 物件価値計算（シンプル減価償却）
     years_since_purchase = year - 1
     property_value = initial_property_value * ((100 - depreciation_rate) / 100) ** years_since_purchase
     
@@ -752,7 +726,7 @@ for year in range(1, 61):
     var_equity = property_value - var_data["balance"]
     flat_equity = property_value - flat_data["balance"]
     
-    # テーブルデータ書き込み
+    # テーブル書き込み
     idx = get_row_index("【家族構成】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -779,7 +753,6 @@ for year in range(1, 61):
     idx = get_row_index("必要間取り")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = required_layout
     
-    # 収入内訳
     idx = get_row_index("【収入内訳】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -795,7 +768,6 @@ for year in range(1, 61):
     idx = get_row_index("合計 世帯年収(万円)")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = total_income_year
     
-    # 変動金利データ
     idx = get_row_index("【変動金利】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -823,7 +795,6 @@ for year in range(1, 61):
     idx = get_row_index("売却損益(万円)", 0)
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_equity
     
-    # 固定金利データ
     idx = get_row_index("【固定金利】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -851,7 +822,6 @@ for year in range(1, 61):
     idx = get_row_index("売却損益(万円)", 1)
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_equity
     
-    # 賃貸データ
     idx = get_row_index("【賃貸】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -930,13 +900,12 @@ if not edited_rates.equals(rate_edit_df):
         st.balloons()
         st.rerun()
 
-# テーブル表示（修正④：0.0セル完全削除）
+# テーブル表示
 st.markdown("### 📊 60年完全統合テーブル")
 st.caption("💡 横スクロールで家族構成・収入・住居費・資産推移を同時確認できます")
 
 display_table = st.session_state.complete_table.copy()
 
-# 修正④：不要な0.0セルの完全削除処理
 for col in display_table.columns[1:]:
     for idx in display_table.index:
         try:
@@ -946,26 +915,21 @@ for col in display_table.columns[1:]:
             if not isinstance(item_name, str): continue
             if isinstance(value, str): continue
             
-            # セクションヘッダーは強制的に空白に
             if item_name in ["【家族構成】", "【収入内訳】", "【変動金利】", "【固定金利】", "【賃貸】"]: 
                 display_table.at[idx, col] = ""
                 continue
             
             if isinstance(value, (int, float)):
-                # 0値の処理を強化
                 if value == 0:
-                    # 0でも表示すべき項目（適用金利、年齢、西暦、年収系）
                     if "適用金利" in item_name:
                         display_table.at[idx, col] = f"{value:.2f}"
                     elif item_name in ["家族人数", "西暦"]:
                         display_table.at[idx, col] = f"{int(value)}"
                     elif "年収" in item_name or "収入" in item_name:
-                        display_table.at[idx, col] = "0"  # 退職後など
+                        display_table.at[idx, col] = "0"
                     else:
-                        # その他の0値（ローン残債、売却損益など）は空白に
                         display_table.at[idx, col] = ""
                 else:
-                    # 0以外の値の表示フォーマット
                     if "適用金利" in item_name:
                         display_table.at[idx, col] = f"{value:.2f}"
                     elif "年齢" in item_name or item_name in ["家族人数", "西暦"]:
@@ -1001,10 +965,9 @@ with col_sum4:
     else:
         st.metric("賃貸との差額", f"{rent_vs_variable:,.0f}万円", delta="賃貸が有利", delta_color="inverse")
 
-# 購入時期比較シミュレーション
+# 購入時期比較
 st.markdown("---")
 st.markdown("## ⏰ 購入時期を遅らせた場合のシミュレーション")
-st.caption("💡 先送りにした場合に発生する追加コストを試算します")
 
 wait_years = st.number_input("購入をどれくらい先送りするか（年）", min_value=1, max_value=10, value=2)
 
@@ -1041,6 +1004,5 @@ st.info("""
 数値はあくまで参考情報です。ご家族の状況や将来計画に合わせて、総合的にご判断ください。
 """)
 
-# PDF出力案内
 st.markdown("---")
 st.info("💡 **PDF出力方法**：ブラウザの印刷機能（Ctrl+P）を使用してPDFとして保存してください。")
