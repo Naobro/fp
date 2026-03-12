@@ -252,8 +252,8 @@ if children_count > 0:
                 current_age = st.number_input("現在の年齢（歳）", min_value=0, max_value=30, value=2 if i == 0 else 0, key=f"child_age_{i}")
                 birth_year_offset = -current_age
             else:
-                years_until_birth = st.number_input("何年後に誕生予定？", min_value=1, max_value=20, value=2 if i == 1 else (2 * i), key=f"child_future_{i}")
-                birth_year_offset = years_until_birth
+                years_until_birth = st.number_input("何年後に誕生予定？", min_value=1, max_value=20, value=max(1, 2 if i == 1 else (2 * i)), key=f"child_future_{i}")
+
             
             st.markdown("**🏠 独立計画**")
             independence_option = st.selectbox(
