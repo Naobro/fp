@@ -230,7 +230,7 @@ with col_loan3:
 st.markdown("---")
 st.markdown("### 👶 子供情報（独立計画設定対応）")
 
-children_count = st.number_input("子供人数（予定含む）", min_value=0, max_value=5, value=2)
+children_count = st.number_input("子供人数（予定含む）", min_value=0, max_value=5, value=0)
 
 children_data = []
 
@@ -304,10 +304,11 @@ st.markdown("---")
 st.markdown("## 🏠 物件・資金計画")
 
 def reset_loan_conditions():
-    keys_to_reset = ['variable_rates', 'complete_table', 'last_loan_years', 'last_base_rate', 'last_children_data']
+    keys_to_reset = ['variable_rates', 'complete_table', 'last_loan_years', 'last_base_rate', 'last_children_data', 'last_children_count']
     for key in keys_to_reset:
         if key in st.session_state:
             del st.session_state[key]
+
 
 col_prop1, col_prop2 = st.columns(2)
 
@@ -538,8 +539,18 @@ def generate_flat35_schedule(base_rate, total_points, loan_years):
 
 flat_rate_schedule = generate_flat35_schedule(actual_flat_base, total_flat_points, loan_years)
 
-# テーブル初期化
-if 'complete_table' not in st.session_state:
+# ==========================================
+# テーブル初期化（子供人数連動対応）
+# ==========================================
+
+# 子供人数変更検知
+if 'last_children_count' not in st.session_state:
+    st.session_state.last_children_count = children_count
+
+# 子供人数が変更された場合、テーブルを再生成
+if ('complete_table' not in st.session_state or 
+    st.session_state.last_children_count != children_count):
+    
     row_items = [
         "【家族構成】",
         "西暦",
@@ -547,6 +558,7 @@ if 'complete_table' not in st.session_state:
         "奥様 年齢"
     ]
     
+    # 🔑 現在の子供人数分だけ行を追加（0人なら追加されない）
     for i in range(children_count):
         row_items.append(f"第{i+1}子 年齢")
     
@@ -592,7 +604,9 @@ if 'complete_table' not in st.session_state:
         dtype=object
     )
     st.session_state.complete_table["項目"] = row_items
+    st.session_state.last_children_count = children_count  # 🔑 人数を記録
     
+    # 年収の初期値設定
     for year in range(1, 61):
         col_name = f"{year}年目"
         h_age = husband_age + year - 1
@@ -618,6 +632,7 @@ if 'complete_table' not in st.session_state:
                 st.session_state.complete_table.at[idx, col_name] = stock_income
             elif item == "合計 世帯年収(万円)":
                 st.session_state.complete_table.at[idx, col_name] = int(h_income + w_income + stock_income)
+
 
 if 'variable_rates' not in st.session_state:
     st.session_state.variable_rates = [actual_variable_base] * 60
