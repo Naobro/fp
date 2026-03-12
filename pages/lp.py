@@ -5,7 +5,11 @@ import numpy_financial as npf
 from datetime import datetime
 from io import BytesIO
 
+# ==========================================
+# 安全な数値変換関数（エラー完全防止）
+# ==========================================
 def safe_num(value, default=0.0):
+    """どんな値でも安全に数値に変換する関数"""
     if value is None or value == "":
         return default
     if isinstance(value, (int, float)):
@@ -20,8 +24,306 @@ def safe_num(value, default=0.0):
             return default
     return default
 
-# ここから既存のコードが続きます
+# ==========================================
+# ページ設定
+# ==========================================
+st.set_page_config(page_title="簡易ライフプラン表（住居費ver）", layout="wide")
 
+# スタイル設定
+hide_sidebar = """
+<style>
+section[data-testid='stSidebar'] {display: none !important;}
+button[kind="header"] {display: none !important;}
+[data-testid="stHeader"] {visibility: hidden !important;}
+[data-testid="stToolbar"] {display: none !important;}
+div.block-container {padding-top: 1rem !important; max-width: 100% !important;}
+</style>
+"""
+st.markdown(hide_sidebar, unsafe_allow_html=True)
+
+# ==========================================
+# 管理者機能（パスワード変更）
+# ==========================================
+if 'customer_password' not in st.session_state:
+    st.session_state.customer_password = "terassnishiyama"
+if 'password_history' not in st.session_state:
+    st.session_state.password_history = []
+if 'admin_authenticated' not in st.session_state:
+    st.session_state.admin_authenticated = False
+if 'user_authenticated' not in st.session_state:
+    st.session_state.user_authenticated = False
+
+query_params = st.query_params
+is_admin_mode = query_params.get("admin") == "1"
+
+if is_admin_mode:
+    st.markdown("# 🔐 管理者専用ページ")
+    st.markdown("---")
+    
+    if not st.session_state.admin_authenticated:
+        admin_password = st.text_input("管理者パスワードを入力", type="password", key="admin_pw")
+        if st.button("ログイン", type="primary"):
+            if admin_password == "naoki0709":
+                st.session_state.admin_authenticated = True
+                st.success("✅ 認証成功")
+                st.rerun()
+            else:
+                st.error("❌ パスワードが違います")
+        st.stop()
+    
+    st.success("✅ 管理者認証完了")
+    st.markdown("---")
+    st.markdown("## 📊 ツールアクセス管理")
+    
+    col_admin1, col_admin2 = st.columns(2)
+    
+    with col_admin1:
+        st.metric("現在のお客様用パスワード", st.session_state.customer_password)
+        if st.session_state.password_history:
+            last_change = st.session_state.password_history[-1]
+            st.caption(f"最終変更：{last_change}")
+    
+    with col_admin2:
+        new_password = st.text_input("新しいパスワード", key="new_pw")
+        if st.button("🔄 パスワード変更", type="primary"):
+            if new_password and len(new_password) >= 4:
+                st.session_state.customer_password = new_password
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                st.session_state.password_history.append(f"{timestamp} - {new_password}")
+                st.success(f"✅ パスワードを変更しました：{new_password}")
+                st.info("💡 この新パスワードをLステップで配信してください")
+                st.balloons()
+            else:
+                st.error("❌ 4文字以上のパスワードを入力してください")
+    
+    st.markdown("---")
+    st.markdown("### 📋 変更履歴")
+    if st.session_state.password_history:
+        for record in reversed(st.session_state.password_history[-10:]):
+            st.text(record)
+    else:
+        st.caption("まだ変更履歴はありません")
+    
+    if st.button("🚪 ログアウト"):
+        st.session_state.admin_authenticated = False
+        st.rerun()
+    st.stop()
+
+# ==========================================
+# お客様用パスワード認証
+# ==========================================
+if not st.session_state.user_authenticated:
+    st.markdown("<h1 style='text-align:center;'>🔐 ライフプランツール</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;'>公式LINE登録者専用</p>", unsafe_allow_html=True)
+    
+    col_auth1, col_auth2, col_auth3 = st.columns([1, 2, 1])
+    with col_auth2:
+        password_input = st.text_input("パスワードを入力してください", type="password")
+        if st.button("ログイン", type="primary", use_container_width=True):
+            if password_input == st.session_state.customer_password:
+                st.session_state.user_authenticated = True
+                st.success("✅ 認証成功")
+                st.rerun()
+            else:
+                st.error("❌ パスワードが正しくありません")
+    st.stop()
+
+# ==========================================
+# タイトル
+# ==========================================
+st.markdown("<h1 style='font-size:28px; text-align:center;'>📊 簡易ライフプラン表（住居費ver）</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; color:#666;'>今後60年間の住居戦略完全比較</p>", unsafe_allow_html=True)
+
+# ==========================================
+# 1. 基本情報
+# ==========================================
+st.markdown("## 👨‍👩‍👧 基本情報")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown("### ご主人")
+    husband_age = st.number_input("現在年齢（歳）", min_value=20, max_value=70, value=32, key="husband_age")
+    
+    col_h_sal, col_h_grow = st.columns([2, 1])
+    with col_h_sal:
+        husband_salary = st.number_input("現在の年収（万円）", min_value=0, value=600, step=10, key="husband_salary")
+    with col_h_grow:
+        husband_growth = st.number_input("上昇率(%)", min_value=0.0, max_value=10.0, value=2.0, step=0.1, key="husband_growth")
+    
+    husband_retirement = st.number_input("定年年齢（歳）", min_value=50, max_value=80, value=65, key="husband_retire")
+
+with col2:
+    st.markdown("### 奥様")
+    wife_age = st.number_input("現在年齢（歳）", min_value=20, max_value=70, value=30, key="wife_age")
+    
+    col_w_sal, col_w_grow = st.columns([2, 1])
+    with col_w_sal:
+        wife_salary = st.number_input("現在の年収（万円）", min_value=0, value=200, step=10, key="wife_salary")
+    with col_w_grow:
+        wife_growth = st.number_input("上昇率(%)", min_value=0.0, max_value=10.0, value=1.5, step=0.1, key="wife_growth")
+    
+    wife_retirement = st.number_input("定年年齢（歳）", min_value=50, max_value=80, value=65, key="wife_retire")
+
+with col3:
+    st.markdown("### その他・設定")
+    stock_income = st.number_input("株式配当・その他収入（年額・万円）", min_value=0, value=0, step=10, help="※住宅ローンの借入計算には含まれません")
+    start_year = st.number_input("シミュレーション開始年", min_value=2020, max_value=2030, value=2026)
+
+# 年金計算関数
+def calculate_pension(average_salary):
+    employee_pension = average_salary * 0.18
+    national_pension = 80
+    return employee_pension + national_pension
+
+def calculate_average_working_salary(current_salary, growth_rate, current_age, retirement_age):
+    working_years = max(1, retirement_age - current_age)
+    total = 0
+    for i in range(working_years):
+        salary = current_salary * ((1 + growth_rate / 100) ** i)
+        total += salary
+    return total / working_years
+
+husband_avg_salary = calculate_average_working_salary(husband_salary, husband_growth, husband_age, husband_retirement)
+wife_avg_salary = calculate_average_working_salary(wife_salary, wife_growth, wife_age, wife_retirement)
+
+husband_pension = calculate_pension(husband_avg_salary)
+wife_pension = calculate_pension(wife_avg_salary)
+
+loan_calculation_income = husband_salary + wife_salary
+
+# ==========================================
+# 借入可能額自動計算
+# ==========================================
+st.markdown("---")
+st.markdown("### 💰 借入可能額判定")
+
+SCREENING_RATE = 0.03
+REPAYMENT_RATIO = 0.40
+MAX_COMPLETION_AGE = 79
+
+annual_repayment_capacity = loan_calculation_income * 10000 * REPAYMENT_RATIO
+monthly_repayment_capacity = annual_repayment_capacity / 12
+max_loan_years = min(50, MAX_COMPLETION_AGE - husband_age)
+
+def calculate_max_loan_amount(years):
+    if years <= 0: return 0
+    monthly_rate = SCREENING_RATE / 12
+    n_months = years * 12
+    return monthly_repayment_capacity * ((1 - (1 + monthly_rate)**(-n_months)) / monthly_rate)
+
+max_loan_35 = calculate_max_loan_amount(35)
+max_loan_max = calculate_max_loan_amount(max_loan_years)
+
+col_loan1, col_loan2, col_loan3 = st.columns(3)
+with col_loan1: 
+    st.metric("借入計算用年収", f"{loan_calculation_income:,.0f}万円")
+    st.caption("※給与のみ（その他収入除外）")
+with col_loan2: 
+    st.metric("35年返済での借入可能額", f"{max_loan_35/10000:,.0f}万円")
+with col_loan3: 
+    st.metric(f"最長{max_loan_years}年返済での借入可能額", f"{max_loan_max/10000:,.0f}万円")
+
+# ==========================================
+# 1-2. 子供情報
+# ==========================================
+st.markdown("---")
+st.markdown("### 👶 子供情報（独立計画設定対応）")
+
+children_count = st.number_input("子供人数（予定含む）", min_value=0, max_value=5, value=2)
+
+children_data = []
+
+if children_count > 0:
+    cols = st.columns(min(children_count, 5))
+    for i in range(children_count):
+        with cols[i]:
+            st.markdown(f"#### 第{i+1}子")
+            
+            birth_status = st.radio(
+                "状況",
+                options=["既に誕生済み", "将来の予定"],
+                index=0 if i == 0 else 1,
+                key=f"child_status_{i}",
+                label_visibility="collapsed"
+            )
+            
+            if birth_status == "既に誕生済み":
+                current_age = st.number_input("現在の年齢（歳）", min_value=0, max_value=30, value=2 if i == 0 else 0, key=f"child_age_{i}")
+                birth_year_offset = -current_age
+            else:
+                years_until_birth = st.number_input("何年後に誕生予定？", min_value=1, max_value=20, value=2 if i == 1 else (2 * i), key=f"child_future_{i}")
+                birth_year_offset = years_until_birth
+            
+            st.markdown("**🏠 独立計画**")
+            independence_option = st.selectbox(
+                "いつ家を出る？",
+                options=["18歳", "22歳", "25歳", "30歳", "ずっと同居"],
+                index=1,
+                key=f"child_indep_{i}"
+            )
+            
+            if "18歳" in independence_option: independence_age = 18
+            elif "22歳" in independence_option: independence_age = 22
+            elif "25歳" in independence_option: independence_age = 25
+            elif "30歳" in independence_option: independence_age = 30
+            else: independence_age = 999
+            
+            children_data.append({
+                "birth_year_offset": birth_year_offset,
+                "independence_age": independence_age
+            })
+else:
+    st.info("💑 子供なし（DINKS）として計算します")
+
+# ==========================================
+# 3. 物件・資金計画
+# ==========================================
+st.markdown("---")
+st.markdown("## 🏠 物件・資金計画")
+
+def reset_loan_conditions():
+    keys_to_reset = ['variable_rates', 'complete_table', 'last_loan_years', 'last_base_rate', 'last_children_data']
+    for key in keys_to_reset:
+        if key in st.session_state:
+            del st.session_state[key]
+
+col_prop1, col_prop2 = st.columns(2)
+
+with col_prop1:
+    property_type = st.radio(
+        "物件種別",
+        options=["マンション", "戸建て（新築）"],
+        horizontal=True,
+        key="property_type"
+    )
+    
+    property_price = st.number_input("物件価格（万円）", min_value=100, value=6000, step=100)
+    self_funds = st.number_input("自己資金（万円）", min_value=0, value=500, step=50)
+    
+    loan_years = st.number_input(
+        "希望借入年数", 
+        min_value=1, max_value=max_loan_years, 
+        value=min(35, max_loan_years),
+        on_change=reset_loan_conditions
+    )
+
+with col_prop2:
+    closing_costs = property_price * 0.07
+    total_cost = property_price + closing_costs
+    required_loan = max(0, total_cost - self_funds)
+    
+    st.metric("諸費用（7%）", f"{closing_costs:,.0f}万円")
+    st.metric("必要総額", f"{total_cost:,.0f}万円")
+    st.metric("必要借入額", f"{required_loan:,.0f}万円")
+
+if required_loan <= max_loan_35:
+    st.success(f"✅ 35年ローンで購入可能（余裕額：{(max_loan_35/10000 - required_loan):,.0f}万円）")
+elif required_loan <= max_loan_max:
+    st.warning(f"⚠️ 超長期ローン（{max_loan_years}年）なら購入可能")
+else:
+    shortage = required_loan - max_loan_max
+    st.error(f"❌ 借入不可（不足額：{shortage:,.0f}万円）")
 
 # ==========================================
 # 数年後の不動産価値シミュレーション（60年テーブル完全連動）
@@ -29,7 +331,7 @@ def safe_num(value, default=0.0):
 st.markdown("---")
 st.markdown("## 📈 数年後の不動産価値シミュレーション")
 
-# セッション状態で編集値を管理（ページリロード対応）
+# セッション状態で編集値を管理
 if 'property_values_edited' not in st.session_state:
     st.session_state.property_values_edited = {}
 
@@ -56,10 +358,8 @@ else:
 
 # 🔑 統合物件価値取得関数（編集値優先）
 def get_property_value(year_index):
-    """
-    編集された値があればそれを使用、なければ自動計算値を使用
-    """
-    year_key = year_index + 1  # year_index=0 → 1年後
+    """編集された値があればそれを使用、なければ自動計算値を使用"""
+    year_key = year_index + 1
     if year_key in st.session_state.property_values_edited:
         return st.session_state.property_values_edited[year_key]
     else:
@@ -67,7 +367,7 @@ def get_property_value(year_index):
 
 # シミュレーションテーブル用データ生成
 sim_data = []
-for year in range(1, 21):  # 20年分表示
+for year in range(1, 21):
     age = husband_age + year - 1
     value = get_property_value(year - 1)
     sim_data.append({
@@ -98,7 +398,7 @@ edited_property_table = st.data_editor(
     key="property_value_editor"
 )
 
-# 🔑 編集された値をセッション状態に保存（連動の核心部分）
+# 🔑 編集された値をセッション状態に保存
 for index, row in edited_property_table.iterrows():
     year = int(row["経過年数"])
     value = safe_num(row["売却予想価格"])
@@ -217,7 +517,7 @@ def generate_flat35_schedule(base_rate, total_points, loan_years):
 
 flat_rate_schedule = generate_flat35_schedule(actual_flat_base, total_flat_points, loan_years)
 
-# テーブル初期化（エラー修正版）
+# テーブル初期化
 if 'complete_table' not in st.session_state:
     row_items = [
         "【家族構成】",
