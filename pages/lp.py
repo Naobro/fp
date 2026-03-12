@@ -1,3 +1,28 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import numpy_financial as npf
+from datetime import datetime
+from io import BytesIO
+
+def safe_num(value, default=0.0):
+    if value is None or value == "":
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.replace(",", "").replace("万円", "").strip()
+        if cleaned == "":
+            return default
+        try:
+            return float(cleaned)
+        except ValueError:
+            return default
+    return default
+
+# ここから既存のコードが続きます
+
+
 # ==========================================
 # 数年後の不動産価値シミュレーション（60年テーブル完全連動）
 # ==========================================
