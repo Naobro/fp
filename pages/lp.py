@@ -150,7 +150,7 @@ with col3:
     stock_income = st.number_input("株式配当・その他収入（年額・万円）", min_value=0, value=0, step=10, help="※住宅ローンの借入計算には含まれません")
     start_year = st.number_input("シミュレーション開始年", min_value=2020, max_value=2030, value=2026)
 
-# 年金計算関数（内部使用のみ）
+# 年金計算関数
 def calculate_pension(average_salary):
     employee_pension = average_salary * 0.18  # 厚生年金係数0.18
     national_pension = 80  # 国民年金80万円
@@ -501,7 +501,7 @@ def generate_flat35_schedule(base_rate, total_points, loan_years):
 
 flat_rate_schedule = generate_flat35_schedule(actual_flat_base, total_flat_points, loan_years)
 
-# テーブル初期化（年金自動反映）
+# テーブル初期化（エラー修正版）
 if 'complete_table' not in st.session_state:
     row_items = [
         "【家族構成】",
@@ -549,13 +549,15 @@ if 'complete_table' not in st.session_state:
     
     year_columns = ["項目"] + [f"{y}年目" for y in range(1, 61)]
     
+    # 🔑 重要：dtype=objectを明示的に指定（数値・文字列の混在を許可）
     st.session_state.complete_table = pd.DataFrame(
         index=range(len(row_items)),
-        columns=year_columns
+        columns=year_columns,
+        dtype=object
     )
     st.session_state.complete_table["項目"] = row_items
     
-    # 年収の初期値設定（定年・年金考慮）- 初期化時のみ実行
+    # 年収の初期値設定（定年・年金考慮）
     for year in range(1, 61):
         col_name = f"{year}年目"
         h_age = husband_age + year - 1
@@ -654,7 +656,7 @@ def get_row_index(item_name, occurrence=0):
     except Exception:
         return None
 
-# データ投入（年収セルは触らず、その他の項目のみ更新）
+# データ投入（年収セル以外を更新）
 rent_cumulative = 0
 
 for year in range(1, 61):
@@ -715,9 +717,27 @@ for year in range(1, 61):
     idx_w = get_row_index("奥様 年収(万円)")
     idx_o = get_row_index("株式配当・その他(万円)")
     
-    husband_income_year = st.session_state.complete_table.at[idx_h, col_name] if idx_h is not None else 0
-    wife_income_year = st.session_state.complete_table.at[idx_w, col_name] if idx_w is not None else 0
-    other_income_year = st.session_state.complete_table.at[idx_o, col_name] if idx_o is not None else 0
+    # 安全な値取得（None対応）
+    try:
+        husband_income_year = st.session_state.complete_table.at[idx_h, col_name] if idx_h is not None else 0
+        if husband_income_year is None:
+            husband_income_year = 0
+    except:
+        husband_income_year = 0
+        
+    try:
+        wife_income_year = st.session_state.complete_table.at[idx_w, col_name] if idx_w is not None else 0
+        if wife_income_year is None:
+            wife_income_year = 0
+    except:
+        wife_income_year = 0
+        
+    try:
+        other_income_year = st.session_state.complete_table.at[idx_o, col_name] if idx_o is not None else 0
+        if other_income_year is None:
+            other_income_year = 0
+    except:
+        other_income_year = 0
     
     total_income_year = husband_income_year + wife_income_year + other_income_year
     
@@ -956,7 +976,7 @@ for col in edited_complete_table.columns:
     for idx in edited_complete_table.index:
         try:
             edited_value = edited_complete_table.at[idx, col]
-            if isinstance(edited_value, str) and edited_value.replace(",", "").replace(".", "").isdigit():
+            if isinstance(edited_value, str) and edited_value.replace(",", "").replace(".", "").replace("-", "").isdigit():
                 # 数値文字列を数値に変換
                 numeric_value = float(edited_value.replace(",", ""))
                 st.session_state.complete_table.at[idx, col] = numeric_value
