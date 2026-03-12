@@ -248,12 +248,26 @@ if children_count > 0:
                 label_visibility="collapsed"
             )
             
+            # 🔑 重要：両方の分岐で必ず birth_year_offset を定義
             if birth_status == "既に誕生済み":
-                current_age = st.number_input("現在の年齢（歳）", min_value=0, max_value=30, value=2 if i == 0 else 0, key=f"child_age_{i}")
+                current_age = st.number_input(
+                    "現在の年齢（歳）", 
+                    min_value=0, 
+                    max_value=30, 
+                    value=2 if i == 0 else 0, 
+                    key=f"child_age_{i}"
+                )
                 birth_year_offset = -current_age
             else:
-                years_until_birth = st.number_input("何年後に誕生予定？", min_value=1, max_value=20, value=max(1, 2 if i == 1 else (2 * i)), key=f"child_future_{i}")
-
+                # 前回のStreamlitValueBelowMinErrorも同時に修正
+                years_until_birth = st.number_input(
+                    "何年後に誕生予定？", 
+                    min_value=1, 
+                    max_value=20, 
+                    value=max(1, 2 if i == 1 else (2 * i)), 
+                    key=f"child_future_{i}"
+                )
+                birth_year_offset = years_until_birth
             
             st.markdown("**🏠 独立計画**")
             independence_option = st.selectbox(
@@ -263,18 +277,25 @@ if children_count > 0:
                 key=f"child_indep_{i}"
             )
             
-            if "18歳" in independence_option: independence_age = 18
-            elif "22歳" in independence_option: independence_age = 22
-            elif "25歳" in independence_option: independence_age = 25
-            elif "30歳" in independence_option: independence_age = 30
-            else: independence_age = 999
+            if "18歳" in independence_option: 
+                independence_age = 18
+            elif "22歳" in independence_option: 
+                independence_age = 22
+            elif "25歳" in independence_option: 
+                independence_age = 25
+            elif "30歳" in independence_option: 
+                independence_age = 30
+            else: 
+                independence_age = 999
             
+            # ここで birth_year_offset は必ず定義されている
             children_data.append({
                 "birth_year_offset": birth_year_offset,
                 "independence_age": independence_age
             })
 else:
     st.info("💑 子供なし（DINKS）として計算します")
+
 
 # ==========================================
 # 3. 物件・資金計画
