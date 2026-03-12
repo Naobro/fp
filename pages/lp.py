@@ -3,6 +3,29 @@ import pandas as pd
 import numpy as np
 import numpy_financial as npf
 from datetime import datetime
+from io import BytesIO
+
+# ==========================================
+# 安全な数値変換関数（エラー完全防止）
+# ==========================================
+def safe_num(value, default=0.0):
+    """
+    どんな値でも安全に数値に変換する関数
+    これがあることでTypeErrorが発生しなくなります
+    """
+    if value is None or value == "":
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.replace(",", "").replace("万円", "").strip()
+        if cleaned == "":
+            return default
+        try:
+            return float(cleaned)
+        except ValueError:
+            return default
+    return default
 
 # ==========================================
 # ページ設定
@@ -152,8 +175,8 @@ with col3:
 
 # 年金計算関数
 def calculate_pension(average_salary):
-    employee_pension = average_salary * 0.18  # 厚生年金係数0.18
-    national_pension = 80  # 国民年金80万円
+    employee_pension = average_salary * 0.18
+    national_pension = 80
     return employee_pension + national_pension
 
 def calculate_average_working_salary(current_salary, growth_rate, current_age, retirement_age):
@@ -170,7 +193,6 @@ wife_avg_salary = calculate_average_working_salary(wife_salary, wife_growth, wif
 husband_pension = calculate_pension(husband_avg_salary)
 wife_pension = calculate_pension(wife_avg_salary)
 
-# 借入計算用年収（その他収入を除外）
 loan_calculation_income = husband_salary + wife_salary
 
 # ==========================================
@@ -307,92 +329,58 @@ else:
     st.error(f"❌ 借入不可（不足額：{shortage:,.0f}万円）")
 
 # ==========================================
-# 物件価値シミュレーション
+# 数年後の不動産価値シミュレーション
 # ==========================================
 st.markdown("---")
-st.markdown("## 📈 物件価値シミュレーション")
+st.markdown("## 📈 数年後の不動産価値シミュレーション")
 
+# 物件価値計算関数
 if property_type == "戸建て（新築）":
-    st.info("🏡 **新築戸建て**：土地と建物を分けて評価します")
-    
-    land_price = property_price * 0.60
-    building_price = property_price * 0.40
-    
-    col_split1, col_split2 = st.columns(2)
-    with col_split1:
-        st.metric("土地価格", f"{land_price:,.0f}万円", "60%")
-    with col_split2:
-        st.metric("建物価格", f"{building_price:,.0f}万円", "40%")
-    
-    st.markdown("#### 📊 価格推移予測")
-    
-    building_1y_low, building_1y_high = 0.85, 0.90
-    building_2y_low, building_2y_high = 0.80, 0.85
-    land_1y_low, land_1y_high = 0.96, 1.00
-    land_2y_low, land_2y_high = 0.94, 0.98
-    
-    land_1_low = land_price * land_1y_low
-    land_1_high = land_price * land_1y_high
-    building_1_low = building_price * building_1y_low
-    building_1_high = building_price * building_1y_high
-    total_1_low = land_1_low + building_1_low
-    total_1_high = land_1_high + building_1_high
-    
-    land_2_low = land_price * land_2y_low
-    land_2_high = land_price * land_2y_high
-    building_2_low = building_price * building_2y_low
-    building_2_high = building_price * building_2y_high
-    total_2_low = land_2_low + building_2_low
-    total_2_high = land_2_high + building_2_high
-    
-    price_table = pd.DataFrame({
-        "項目": ["土地", "建物", "合計", "全体係数"],
-        "購入時": [f"{land_price:,.0f}万円", f"{building_price:,.0f}万円", f"{property_price:,.0f}万円", "1.000"],
-        "1年後（下限）": [f"{land_1_low:,.0f}万円", f"{building_1_low:,.0f}万円", f"{total_1_low:,.0f}万円", f"{total_1_low/property_price:.3f}"],
-        "1年後（上限）": [f"{land_1_high:,.0f}万円", f"{building_1_high:,.0f}万円", f"{total_1_high:,.0f}万円", f"{total_1_high/property_price:.3f}"],
-        "2年後（下限）": [f"{land_2_low:,.0f}万円", f"{building_2_low:,.0f}万円", f"{total_2_low:,.0f}万円", f"{total_2_low/property_price:.3f}"],
-        "2年後（上限）": [f"{land_2_high:,.0f}万円", f"{building_2_high:,.0f}万円", f"{total_2_high:,.0f}万円", f"{total_2_high/property_price:.3f}"]
-    })
-    
-    st.dataframe(price_table, use_container_width=True, hide_index=True)
-    
     def calculate_property_value(year_index):
-        if year_index == 0:
-            return property_price
+        if year_index == 0: return property_price
+        land_price = property_price * 0.60
+        building_price = property_price * 0.40
         
-        if year_index == 1:
-            building_coef = (building_1y_low + building_1y_high) / 2
-        elif year_index == 2:
-            building_coef = (building_2y_low + building_2y_high) / 2
+        if year_index <= 2:
+            building_coef = 1.0 - (year_index * 0.08)
         else:
-            building_coef = ((building_2y_low + building_2y_high) / 2) * (0.985 ** (year_index - 2))
+            building_coef = 0.84 * (0.985 ** (year_index - 2))
         
-        if year_index == 1:
-            land_coef = (land_1y_low + land_1y_high) / 2
-        elif year_index == 2:
-            land_coef = (land_2y_low + land_2y_high) / 2
-        else:
-            land_coef = ((land_2y_low + land_2y_high) / 2) * (0.995 ** (year_index - 2))
+        land_coef = max(0.9, 1.0 - (year_index * 0.005))
         
-        building_value = building_price * max(0.1, building_coef)
-        land_value = land_price * max(0.8, land_coef)
-        
-        return building_value + land_value
-
+        return (building_price * max(0.1, building_coef)) + (land_price * land_coef)
 else:
-    st.info("🏢 **マンション**：建物全体として評価します")
-    
     def calculate_property_value(year_index):
-        if year_index == 0:
-            return property_price
-        elif year_index == 1:
-            return property_price * 0.90
-        elif year_index <= 5:
-            return property_price * (0.90 - (year_index - 1) * 0.02)
-        elif year_index <= 15:
-            return property_price * (0.82 - (year_index - 5) * 0.015)
-        else:
-            return property_price * max(0.50, 0.67 - (year_index - 15) * 0.01)
+        if year_index == 0: return property_price
+        elif year_index <= 5: return property_price * (0.95 - (year_index * 0.03))
+        elif year_index <= 15: return property_price * (0.80 - ((year_index - 5) * 0.02))
+        else: return property_price * max(0.50, 0.60 - ((year_index - 15) * 0.01))
+
+# シミュレーションデータ生成
+sim_data = []
+for year in range(1, 21):
+    age = husband_age + year - 1
+    value = calculate_property_value(year - 1)
+    sim_data.append({
+        "経過年数": f"{year}年後",
+        "年齢": f"{age}歳", 
+        "売却予想価格": f"{value:,.0f}万円"
+    })
+
+df_property_sim = pd.DataFrame(sim_data)
+
+st.caption("💡 売却予想価格は直接編集できます")
+edited_property_table = st.data_editor(
+    df_property_sim,
+    use_container_width=True,
+    num_rows="fixed",
+    height=400,
+    column_config={
+        "経過年数": st.column_config.TextColumn("経過年数", width="small"),
+        "年齢": st.column_config.TextColumn("年齢", width="small"),
+        "売却予想価格": st.column_config.TextColumn("売却予想価格", width="large"),
+    }
+)
 
 # ==========================================
 # 賃貸プラン設定
@@ -549,7 +537,6 @@ if 'complete_table' not in st.session_state:
     
     year_columns = ["項目"] + [f"{y}年目" for y in range(1, 61)]
     
-    # 🔑 重要：dtype=objectを明示的に指定（数値・文字列の混在を許可）
     st.session_state.complete_table = pd.DataFrame(
         index=range(len(row_items)),
         columns=year_columns,
@@ -557,25 +544,21 @@ if 'complete_table' not in st.session_state:
     )
     st.session_state.complete_table["項目"] = row_items
     
-    # 年収の初期値設定（定年・年金考慮）
     for year in range(1, 61):
         col_name = f"{year}年目"
         h_age = husband_age + year - 1
         w_age = wife_age + year - 1
         
-        # ご主人の収入（定年前は給与、定年後は年金）
         if h_age < husband_retirement:
             h_income = husband_salary * ((1 + husband_growth / 100) ** (year - 1))
         else:
-            h_income = husband_pension  # 年金に切り替え
+            h_income = husband_pension
             
-        # 奥様の収入（定年前は給与、定年後は年金）
         if w_age < wife_retirement:
             w_income = wife_salary * ((1 + wife_growth / 100) ** (year - 1))
         else:
-            w_income = wife_pension  # 年金に切り替え
+            w_income = wife_pension
         
-        # 初期値をテーブルに設定
         for idx in st.session_state.complete_table.index:
             item = st.session_state.complete_table.at[idx, "項目"]
             if item == "ご主人 年収(万円)":
@@ -656,7 +639,6 @@ def get_row_index(item_name, occurrence=0):
     except Exception:
         return None
 
-# データ投入（年収セル以外を更新）
 rent_cumulative = 0
 
 for year in range(1, 61):
@@ -712,32 +694,18 @@ for year in range(1, 61):
     rent_total = rent_annual + renewal_cost
     rent_cumulative += rent_total
     
-    # テーブルから年収データを取得（編集済みの値を使用）
+    # 🔑 エラー修正の核心部分：safe_num()で安全に取得
     idx_h = get_row_index("ご主人 年収(万円)")
     idx_w = get_row_index("奥様 年収(万円)")
     idx_o = get_row_index("株式配当・その他(万円)")
     
-    # 安全な値取得（None対応）
-    try:
-        husband_income_year = st.session_state.complete_table.at[idx_h, col_name] if idx_h is not None else 0
-        if husband_income_year is None:
-            husband_income_year = 0
-    except:
-        husband_income_year = 0
-        
-    try:
-        wife_income_year = st.session_state.complete_table.at[idx_w, col_name] if idx_w is not None else 0
-        if wife_income_year is None:
-            wife_income_year = 0
-    except:
-        wife_income_year = 0
-        
-    try:
-        other_income_year = st.session_state.complete_table.at[idx_o, col_name] if idx_o is not None else 0
-        if other_income_year is None:
-            other_income_year = 0
-    except:
-        other_income_year = 0
+    raw_h = st.session_state.complete_table.at[idx_h, col_name] if idx_h is not None else 0
+    raw_w = st.session_state.complete_table.at[idx_w, col_name] if idx_w is not None else 0
+    raw_o = st.session_state.complete_table.at[idx_o, col_name] if idx_o is not None else 0
+    
+    husband_income_year = safe_num(raw_h)
+    wife_income_year = safe_num(raw_w)
+    other_income_year = safe_num(raw_o)
     
     total_income_year = husband_income_year + wife_income_year + other_income_year
     
@@ -749,7 +717,7 @@ for year in range(1, 61):
     var_equity = property_value - var_data["balance"]
     flat_equity = property_value - flat_data["balance"]
     
-    # テーブル書き込み（年収セル以外を更新）
+    # テーブル書き込み
     idx = get_row_index("【家族構成】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -779,10 +747,10 @@ for year in range(1, 61):
     idx = get_row_index("【収入内訳】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
-    # 合計世帯年収のみ再計算
     idx = get_row_index("合計 世帯年収(万円)")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = total_income_year
     
+    # 変動金利セクション
     idx = get_row_index("【変動金利】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -810,6 +778,7 @@ for year in range(1, 61):
     idx = get_row_index("売却損益(万円)", 0)
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = var_equity
     
+    # 固定金利セクション
     idx = get_row_index("【固定金利】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -837,6 +806,7 @@ for year in range(1, 61):
     idx = get_row_index("売却損益(万円)", 1)
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = flat_equity
     
+    # 賃貸セクション
     idx = get_row_index("【賃貸】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -919,7 +889,6 @@ if not edited_rates.equals(rate_edit_df):
 st.markdown("### 📊 60年完全統合テーブル（Excelライク編集）")
 st.caption("💡 全てのセルをダブルクリックして直接編集できます（年収・年金・家賃等を自由に調整）")
 
-# 表示用テーブルの作成（0.0セル削除処理）
 display_table = st.session_state.complete_table.copy()
 
 for col in display_table.columns[1:]:
@@ -931,14 +900,12 @@ for col in display_table.columns[1:]:
             if not isinstance(item_name, str): continue
             if isinstance(value, str): continue
             
-            # セクションヘッダーは空白に
             if item_name in ["【家族構成】", "【収入内訳】", "【変動金利】", "【固定金利】", "【賃貸】"]: 
                 display_table.at[idx, col] = ""
                 continue
             
             if isinstance(value, (int, float)):
                 if value == 0:
-                    # 0でも表示すべき項目
                     if "適用金利" in item_name:
                         display_table.at[idx, col] = f"{value:.2f}"
                     elif item_name in ["家族人数", "西暦"]:
@@ -946,10 +913,8 @@ for col in display_table.columns[1:]:
                     elif "年収" in item_name or "収入" in item_name:
                         display_table.at[idx, col] = "0"
                     else:
-                        # その他の0値は空白に（0.0セル削除）
                         display_table.at[idx, col] = ""
                 else:
-                    # 0以外の値の表示フォーマット
                     if "適用金利" in item_name:
                         display_table.at[idx, col] = f"{value:.2f}"
                     elif "年齢" in item_name or item_name in ["家族人数", "西暦"]:
@@ -961,7 +926,6 @@ for col in display_table.columns[1:]:
         except:
             continue
 
-# 完全編集可能テーブル
 edited_complete_table = st.data_editor(
     display_table,
     use_container_width=True,
@@ -971,13 +935,11 @@ edited_complete_table = st.data_editor(
     key="complete_table_editor"
 )
 
-# 編集結果を元のテーブルに反映
 for col in edited_complete_table.columns:
     for idx in edited_complete_table.index:
         try:
             edited_value = edited_complete_table.at[idx, col]
             if isinstance(edited_value, str) and edited_value.replace(",", "").replace(".", "").replace("-", "").isdigit():
-                # 数値文字列を数値に変換
                 numeric_value = float(edited_value.replace(",", ""))
                 st.session_state.complete_table.at[idx, col] = numeric_value
             elif isinstance(edited_value, (int, float)):
@@ -1003,6 +965,38 @@ with col_sum4:
         st.metric("賃貸との差額", f"+{rent_vs_variable:,.0f}万円", delta="購入が有利", delta_color="normal")
     else:
         st.metric("賃貸との差額", f"{rent_vs_variable:,.0f}万円", delta="賃貸が有利", delta_color="inverse")
+
+# Excel出力機能
+st.markdown("---")
+st.markdown("### 📥 Excel出力")
+
+col_excel1, col_excel2 = st.columns(2)
+
+with col_excel1:
+    if st.button("📊 物件価値シミュレーションをExcel出力"):
+        output1 = BytesIO()
+        with pd.ExcelWriter(output1, engine='openpyxl') as writer:
+            edited_property_table.to_excel(writer, index=False, sheet_name='物件価値シミュレーション')
+        
+        st.download_button(
+            label="物件価値テーブル.xlsx",
+            data=output1.getvalue(),
+            file_name=f"property_simulation_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheet.sheet"
+        )
+
+with col_excel2:
+    if st.button("📋 60年完全テーブルをExcel出力"):
+        output2 = BytesIO()
+        with pd.ExcelWriter(output2, engine='openpyxl') as writer:
+            st.session_state.complete_table.to_excel(writer, index=False, sheet_name='60年ライフプラン')
+        
+        st.download_button(
+            label="60年完全プラン.xlsx",
+            data=output2.getvalue(),
+            file_name=f"life_plan_60years_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheet.sheet"
+        )
 
 # 購入時期比較
 st.markdown("---")
