@@ -115,7 +115,7 @@ st.markdown("<h1 style='font-size:28px; text-align:center;'>📊 簡易ライフ
 st.markdown("<p style='text-align:center; color:#666;'>今後60年間の住居戦略完全比較</p>", unsafe_allow_html=True)
 
 # ==========================================
-# 1. 基本情報（定年設定統合）
+# 1. 基本情報
 # ==========================================
 st.markdown("## 👨‍👩‍👧 基本情報")
 
@@ -150,18 +150,12 @@ with col3:
     stock_income = st.number_input("株式配当・その他収入（年額・万円）", min_value=0, value=0, step=10, help="※住宅ローンの借入計算には含まれません")
     start_year = st.number_input("シミュレーション開始年", min_value=2020, max_value=2030, value=2026)
 
-# 年金計算（簡易版）- 係数を0.18に変更
+# 年金計算関数（内部使用のみ）
 def calculate_pension(average_salary):
-    """
-    簡易年金計算（サラリーマン前提）
-    厚生年金 = 平均年収 × 0.18
-    国民年金 = 80万円（満額想定）
-    """
-    employee_pension = average_salary * 0.18  # 厚生年金（係数変更）
-    national_pension = 80  # 国民年金（万円）
+    employee_pension = average_salary * 0.18  # 厚生年金係数0.18
+    national_pension = 80  # 国民年金80万円
     return employee_pension + national_pension
 
-# 現役時代の平均年収を計算
 def calculate_average_working_salary(current_salary, growth_rate, current_age, retirement_age):
     working_years = max(1, retirement_age - current_age)
     total = 0
@@ -176,32 +170,7 @@ wife_avg_salary = calculate_average_working_salary(wife_salary, wife_growth, wif
 husband_pension = calculate_pension(husband_avg_salary)
 wife_pension = calculate_pension(wife_avg_salary)
 
-# 年金情報の表示
-st.markdown("---")
-st.markdown("### 💰 定年後の年金収入（概算）")
-st.caption("💡 現役時代の平均年収から概算した年金額です（厚生年金係数0.18 + 国民年金80万円）")
-
-col_pension1, col_pension2, col_pension3 = st.columns(3)
-
-with col_pension1:
-    st.metric("ご主人の想定年金", f"{husband_pension:,.0f}万円/年")
-    st.caption(f"現役平均年収：{husband_avg_salary:,.0f}万円")
-    st.caption(f"内訳：厚生年金{husband_avg_salary * 0.18:,.0f}万円 + 国民年金80万円")
-
-with col_pension2:
-    st.metric("奥様の想定年金", f"{wife_pension:,.0f}万円/年")
-    st.caption(f"現役平均年収：{wife_avg_salary:,.0f}万円")
-    st.caption(f"内訳：厚生年金{wife_avg_salary * 0.18:,.0f}万円 + 国民年金80万円")
-
-with col_pension3:
-    total_pension = husband_pension + wife_pension
-    current_total = husband_salary + wife_salary
-    income_drop = ((current_total - total_pension) / current_total * 100) if current_total > 0 else 0
-    
-    st.metric("世帯年金合計", f"{total_pension:,.0f}万円/年")
-    st.error(f"⚠️ 現役から約{income_drop:.0f}%減少")
-
-# 借入計算用年収
+# 借入計算用年収（その他収入を除外）
 loan_calculation_income = husband_salary + wife_salary
 
 # ==========================================
@@ -447,7 +416,7 @@ with col_rent3:
     rent_family_4 = st.number_input("月額家賃（万円）", min_value=0.0, value=22.0, step=0.5, key="rent_4ldk")
 
 # ==========================================
-# 60年完全比較テーブル（年金自動反映）
+# 60年完全比較テーブル
 # ==========================================
 st.markdown("---")
 st.markdown("## 📊 60年完全比較テーブル")
@@ -532,6 +501,7 @@ def generate_flat35_schedule(base_rate, total_points, loan_years):
 
 flat_rate_schedule = generate_flat35_schedule(actual_flat_base, total_flat_points, loan_years)
 
+# テーブル初期化（年金自動反映）
 if 'complete_table' not in st.session_state:
     row_items = [
         "【家族構成】",
@@ -585,21 +555,25 @@ if 'complete_table' not in st.session_state:
     )
     st.session_state.complete_table["項目"] = row_items
     
+    # 年収の初期値設定（定年・年金考慮）- 初期化時のみ実行
     for year in range(1, 61):
         col_name = f"{year}年目"
         h_age = husband_age + year - 1
         w_age = wife_age + year - 1
         
+        # ご主人の収入（定年前は給与、定年後は年金）
         if h_age < husband_retirement:
             h_income = husband_salary * ((1 + husband_growth / 100) ** (year - 1))
         else:
-            h_income = husband_pension
+            h_income = husband_pension  # 年金に切り替え
             
+        # 奥様の収入（定年前は給与、定年後は年金）
         if w_age < wife_retirement:
             w_income = wife_salary * ((1 + wife_growth / 100) ** (year - 1))
         else:
-            w_income = wife_pension
+            w_income = wife_pension  # 年金に切り替え
         
+        # 初期値をテーブルに設定
         for idx in st.session_state.complete_table.index:
             item = st.session_state.complete_table.at[idx, "項目"]
             if item == "ご主人 年収(万円)":
@@ -680,6 +654,7 @@ def get_row_index(item_name, occurrence=0):
     except Exception:
         return None
 
+# データ投入（年収セルは触らず、その他の項目のみ更新）
 rent_cumulative = 0
 
 for year in range(1, 61):
@@ -735,6 +710,7 @@ for year in range(1, 61):
     rent_total = rent_annual + renewal_cost
     rent_cumulative += rent_total
     
+    # テーブルから年収データを取得（編集済みの値を使用）
     idx_h = get_row_index("ご主人 年収(万円)")
     idx_w = get_row_index("奥様 年収(万円)")
     idx_o = get_row_index("株式配当・その他(万円)")
@@ -753,6 +729,7 @@ for year in range(1, 61):
     var_equity = property_value - var_data["balance"]
     flat_equity = property_value - flat_data["balance"]
     
+    # テーブル書き込み（年収セル以外を更新）
     idx = get_row_index("【家族構成】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
@@ -782,6 +759,7 @@ for year in range(1, 61):
     idx = get_row_index("【収入内訳】")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = ""
     
+    # 合計世帯年収のみ再計算
     idx = get_row_index("合計 世帯年収(万円)")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = total_income_year
     
@@ -857,6 +835,7 @@ for year in range(1, 61):
     idx = get_row_index("賃貸累計(万円)")
     if idx is not None: st.session_state.complete_table.at[idx, col_name] = rent_cumulative
 
+# 金利編集機能
 st.markdown("### 🛠 変動金利スケジュール編集")
 
 col_info, col_reset = st.columns([3, 1])
@@ -916,29 +895,79 @@ if not edited_rates.equals(rate_edit_df):
         st.balloons()
         st.rerun()
 
-st.markdown("### 📊 60年完全統合テーブル（年収編集可能）")
-st.caption("💡 年収欄をダブルクリックして編集できます（定年後の年金生活などを反映）")
+# テーブル表示（完全編集可能・0.0セル削除対応）
+st.markdown("### 📊 60年完全統合テーブル（Excelライク編集）")
+st.caption("💡 全てのセルをダブルクリックして直接編集できます（年収・年金・家賃等を自由に調整）")
 
-def make_editable_config():
-    config = {}
-    for col in st.session_state.complete_table.columns:
-        if col == "項目":
-            config[col] = st.column_config.TextColumn(col, disabled=True, width="medium")
-        else:
-            config[col] = st.column_config.NumberColumn(col, disabled=False, step=1, format="%.0f")
-    return config
+# 表示用テーブルの作成（0.0セル削除処理）
+display_table = st.session_state.complete_table.copy()
 
+for col in display_table.columns[1:]:
+    for idx in display_table.index:
+        try:
+            value = display_table.at[idx, col]
+            item_name = display_table.at[idx, "項目"]
+            
+            if not isinstance(item_name, str): continue
+            if isinstance(value, str): continue
+            
+            # セクションヘッダーは空白に
+            if item_name in ["【家族構成】", "【収入内訳】", "【変動金利】", "【固定金利】", "【賃貸】"]: 
+                display_table.at[idx, col] = ""
+                continue
+            
+            if isinstance(value, (int, float)):
+                if value == 0:
+                    # 0でも表示すべき項目
+                    if "適用金利" in item_name:
+                        display_table.at[idx, col] = f"{value:.2f}"
+                    elif item_name in ["家族人数", "西暦"]:
+                        display_table.at[idx, col] = f"{int(value)}"
+                    elif "年収" in item_name or "収入" in item_name:
+                        display_table.at[idx, col] = "0"
+                    else:
+                        # その他の0値は空白に（0.0セル削除）
+                        display_table.at[idx, col] = ""
+                else:
+                    # 0以外の値の表示フォーマット
+                    if "適用金利" in item_name:
+                        display_table.at[idx, col] = f"{value:.2f}"
+                    elif "年齢" in item_name or item_name in ["家族人数", "西暦"]:
+                        display_table.at[idx, col] = f"{int(value)}"
+                    elif "年収" in item_name or "収入" in item_name:
+                        display_table.at[idx, col] = f"{int(value)}"
+                    else:
+                        display_table.at[idx, col] = f"{value:,.1f}"
+        except:
+            continue
+
+# 完全編集可能テーブル
 edited_complete_table = st.data_editor(
-    st.session_state.complete_table,
-    column_config=make_editable_config(),
+    display_table,
     use_container_width=True,
     height=800,
     hide_index=True,
+    num_rows="fixed",
     key="complete_table_editor"
 )
 
-st.session_state.complete_table = edited_complete_table
+# 編集結果を元のテーブルに反映
+for col in edited_complete_table.columns:
+    for idx in edited_complete_table.index:
+        try:
+            edited_value = edited_complete_table.at[idx, col]
+            if isinstance(edited_value, str) and edited_value.replace(",", "").replace(".", "").isdigit():
+                # 数値文字列を数値に変換
+                numeric_value = float(edited_value.replace(",", ""))
+                st.session_state.complete_table.at[idx, col] = numeric_value
+            elif isinstance(edited_value, (int, float)):
+                st.session_state.complete_table.at[idx, col] = edited_value
+            else:
+                st.session_state.complete_table.at[idx, col] = edited_value
+        except:
+            continue
 
+# サマリー
 st.markdown("### 📋 60年総コスト比較")
 col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
 
@@ -955,6 +984,7 @@ with col_sum4:
     else:
         st.metric("賃貸との差額", f"{rent_vs_variable:,.0f}万円", delta="賃貸が有利", delta_color="inverse")
 
+# 購入時期比較
 st.markdown("---")
 st.markdown("## ⏰ 購入時期を遅らせた場合のシミュレーション")
 
