@@ -72,33 +72,70 @@ if sbi_rate is not None:
         unsafe_allow_html=True
     )
 
-# ===== 事前審査用紙 =====
-st.subheader("事前審査用紙（ダウンロード）")
+# ===== 住宅ローン WEB事前審査 =====
+st.subheader("🌐 住宅ローン WEB事前審査")
+
+# Web申込URL
+WEB_APPLY_URL = "https://webform.sbishinseibank.co.jp/n/form/c/v1/bxfb/forms/-PbXSXrwkQPu-aRXpfz2W"
+
+# GitHub画像URL
+WEB_GUIDE_IMAGE_URL = "https://raw.githubusercontent.com/Naobro/fp/main/assets/sbi/sbiweb.jpg"
+
 st.markdown("""
-事前審査は **紙面での記入** になります。  
-**下記よりダウンロード** をお願いします。  
+SBI新生銀行の事前審査は、**Web申込** に変更になりました。
 
-- **単独**：A3 申込書のみ  
-- **ペアローン**：A3 申込書 **＋** ペアローン申込書 の両方が必要
-
-合わせて、**源泉徴収票・運転免許証（表裏）・健康保険証（表裏）** を **私に送ってください**。
+**手順：**
+1. 下のボタンから **Web事前審査フォーム** を開く  
+2. 画面の案内に沿って必要事項を入力  
+3. 申込完了後、必要書類を **私（西山）宛** に送付してください  
 """)
 
-col1, col2 = st.columns(2)
-with col1:
-    st.download_button(
-        "📥 A3 申込書",
-        data=load_bytes(PDF_A3),
-        file_name="SBI_A3_申込書.pdf",
-        mime="application/pdf"
-    )
-with col2:
-    st.download_button(
-        "📥 ペアローン申込書",
-        data=load_bytes(PDF_PAIR),
-        file_name="SBI_ペアローン申込書.pdf",
-        mime="application/pdf"
-    )
+# Web申込ボタン
+st.markdown(
+    f"""
+    <div style="text-align:center; margin: 20px 0;">
+      <a href="{WEB_APPLY_URL}" target="_blank" rel="noopener noreferrer"
+         style="
+           display:inline-block;
+           background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+           color: white; padding: 16px 40px; border-radius: 25px;
+           text-decoration: none; font-weight: 800; font-size: 1.1rem;
+           box-shadow: 0 4px 12px rgba(30, 64, 175, 0.35);
+         ">
+        📝 SBI新生銀行 Web事前審査フォームを開く
+      </a>
+      <div style="margin-top: 8px; font-size: 0.9rem; color: #666;">
+        ※新しいタブでSBI新生銀行の公式申込フォームが開きます
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# GitHub画像を表示
+st.markdown("**📋 申込手順の詳細案内**")
+try:
+    st.image(WEB_GUIDE_IMAGE_URL, use_container_width=True, 
+             caption="住宅ローンWEB事前審査のご案内")
+except Exception:
+    st.info("💡 申込案内画像は読み込み中です。上のボタンから直接お申込みください。")
+
+# 必要書類（送り先を「私」に変更）
+st.markdown("""
+### 📎 Web申込完了後の必要書類
+
+Webフォームでの入力が終わったら、以下の書類を **私（西山）宛** にお送りください：
+
+- **本人確認書類**：運転免許証（表・裏）、マイナンバーカード等  
+- **収入証明書類**：源泉徴収票、確定申告書 等  
+- **健康保険証**：表・裏の両面  
+
+**📲 送付方法（どちらでもOK）：**
+- **LINE**：いつものLINEに画像で送付  
+- **メール**：`naoki.nishiyama@terass.com` に添付して送付  
+
+※ **物件資料は私が銀行に送りますので、お客様でのご用意・送付は不要です。**
+""")
 
 # ===== 強み =====
 st.subheader("強み")
