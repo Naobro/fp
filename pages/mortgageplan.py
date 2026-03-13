@@ -695,7 +695,30 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-   undefined
+       # ===== 最長50年行（スライダー上限 or 79歳完済上限） =====
+    row50_local = []
+    vals50 = []
+    
+    for col_idx, bank in enumerate(BANKS):
+
+        # 三菱UFJ銀行のみ 35年まで（新生は50年対応）
+        if bank in ["三菱UFJ銀行"]:
+            row50_local.append({"rate": None, "monthly": None, "years": None})
+            continue
+
+        # 金利未設定 or 借入上限オーバー
+        if principal > limits.get(bank, float("inf")) or bank not in rates:
+            row50_local.append({"rate": None, "monthly": None, "years": None})
+            continue
+
+        # 79歳完済制限を考慮した最長年数
+        y50 = min(79 - age_now, 50)
+
+        try:
+            base_percent_saved = float(rates[bank])
+        except Exception:
+            row50_local.append({"rate": None, "monthly": None, "years": None})
+            continue
 
         # 銀行別金利補正
         if bank == "住信SBI銀行":
@@ -718,16 +741,17 @@ def build_table(principal: float, years_req: int, age_now: int):
         row50_local.append({"rate": base + add, "monthly": m50, "years": y50})
         vals50.append((col_idx, m50))
 
-        # フラット35は空欄
-        row50_local.append({"rate": None, "monthly": None, "years": None})
+    # ✅ 重要：forループの外でフラット35用空欄を1回だけ追加
+    row50_local.append({"rate": None, "monthly": None, "years": None})
 
-    # ✅ 最小返済額ハイライト
+    # 最小返済額ハイライト
     mins50 = set()
     if vals50:
         mv50 = min(v for _, v in vals50)
         for idx, v in vals50:
             if abs(v - mv50) < 0.5:
                 mins50.add(idx)
+
 
     return table_rows_local, highlights_local, row50_local, mins50
 # 借入上限額の再計算ロジック（修正版）
