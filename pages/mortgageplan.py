@@ -669,7 +669,10 @@ def build_table(principal: float, years_req: int, age_now: int):
                 y_flat = 35
 
                 # ✅ LTV 90%以下なら flat35_90、超過なら flat35_100 を動的選択
-                base_flat_rate_percent = float(rates["flat35_90"]) if borrowing_ratio <= 0.90 else float(rates["flat35_100"])
+               # ✅ KeyError対策：.get()でデフォルト値を設定
+val_90 = rates.get("flat35_90", 1.80)   # デフォルト 1.80%
+val_100 = rates.get("flat35_100", 1.94) # デフォルト 1.94%
+base_flat_rate_percent = float(val_90) if borrowing_ratio <= 0.90 else float(val_100)
 
                 # ✅ 計算時のみ小数化
                 base_flat_rate = base_flat_rate_percent / 100
