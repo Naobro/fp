@@ -695,29 +695,7 @@ def build_table(principal: float, years_req: int, age_now: int):
         table_rows_local.append(row)
         highlights_local.append(mins)
 
-    # ===== 最長50年行（スライダー上限 or 79歳完済上限） =====
-    row50_local = []
-    vals50 = []
-    for col_idx, bank in enumerate(BANKS):
-
-        # 三菱UFJ銀行のみ 35年まで（新生は50年対応）
-        if bank in ["三菱UFJ銀行"]:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
-
-        # 金利未設定 or 借入上限オーバー
-        if principal > limits.get(bank, float("inf")) or bank not in rates:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
-
-        # 79歳完済制限を考慮した最長年数
-        y50 = min(79 - age_now, 50)
-
-        try:
-            base_percent_saved = float(rates[bank])
-        except Exception:
-            row50_local.append({"rate": None, "monthly": None, "years": None})
-            continue
+   undefined
 
         # 銀行別金利補正
         if bank == "住信SBI銀行":
