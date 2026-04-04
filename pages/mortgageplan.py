@@ -207,26 +207,48 @@ def extra_rate_percent(bank: str, plan: str, age: int) -> float:
     return 0.0
 
 # ===== 保存（Supabase） =====
-TABLE_RECORDS  = st.secrets.get("SUPABASE_TABLE_RECORDS", "client_portal_records")
+TABLE_RECORDS = st.secrets.get("SUPABASE_TABLE_RECORDS", "client_portal_records")
 
 @st.cache_resource(show_spinner=False)
 def get_sb():
-    """Supabaseクライアント（最新データを毎回確実に取得）"""
-    if "SUPABASE_URL" not in st.secrets or "SUPABASE_ANON_KEY" not in st.secrets:
-        st.error("🚨 Supabase接続情報がst.secretsに見つかりません。")
-        st.stop()
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_ANON_KEY"]
-    client = create_client(url, key)
-    # 💡 キャッシュを使わず毎回新しい接続で最新データを取得
-    client.postgrest.session.headers["Cache-Control"] = "no-cache"
-    return client
+    """Supabaseクライアント生成（URL/KEYの空白や改行を除去して接続）"""
+    try:
+        raw_url = str(
+            st.secrets.get("SUPABASE_URL", "")
+        ).strip().strip('"').strip("'")
+        raw_anon = str(
+            st.secrets.get("SUPABASE_ANON_KEY", "")
+        ).strip().strip('"').strip("'")
+        raw_service = str(
+            st.secrets.get("SUPABASE_SERVICE_KEY", "")
+        ).strip().strip('"').strip("'")
+
+        url = raw_url.rstrip("/")
+        key = raw_service or raw_anon
+
+        if not url:
+            raise ValueError("SUPABASE_URL が未設定です")
+        if not key:
+            raise ValueError("SUPABASE_ANON_KEY または SUPABASE_SERVICE_KEY が未設定です")
+        if not url.startswith("https://"):
+            raise ValueError(f"SUPABASE_URL の形式が不正です: {url}")
+
+        client = create_client(url, key)
+        try:
+            client.postgrest.session.headers["Cache-Control"] = "no-cache"
+        except Exception:
+            pass
+        return client
+
+    except Exception as e:
+        st.error(f"Supabase接続エラー: {e}")
+        raise
 
 def load_manual_rates() -> dict:
     """
     Supabase から最新の金利辞書を取得。
     client_id='global', record_type='mortgage_rates' の最新1件を読む。
-    返される値はパーセント表記（例: 0.389）または、フラット35のみ小数表記（例: 0.01234）。
+    返される値はすべてパーセント表記の数値として扱う。
     """
     try:
         sb = get_sb()
@@ -242,20 +264,18 @@ def load_manual_rates() -> dict:
         data = getattr(res, "data", []) or []
         if not data:
             return {}
+
         payload = data[0].get("payload") or {}
-        # 期待型に整形（{銀行名:str/float} → float）
         out: Dict[str, float] = {}
+
         for k, v in payload.items():
             try:
-                # フラット35の金利は小数で保存されている前提
-                if k in ["flat35_90", "flat35_100"]:
-                     out[str(k)] = float(v)
-                # 他の銀行の金利はパーセントで保存されている前提
-                else:
-                    out[str(k)] = float(v)
+                out[str(k)] = float(v)
             except Exception:
                 continue
+
         return out
+
     except Exception as e:
         st.error(f"金利読込エラー: {e}")
         return {}
@@ -263,26 +283,25 @@ def load_manual_rates() -> dict:
 def save_manual_rates(d: dict) -> bool:
     """
     入力された金利を Supabase に保存（新規行として append）。
-    （d は、通常の銀行はパーセント値、フラット35は小数値が入っている想定）
+    d はすべてパーセント値で受け取る。
     """
     try:
-        # 既存を読み、差分マージ（空欄は既存を温存）
         current = load_manual_rates()
         merged: Dict[str, Any] = dict(current)
         updated_any = False
 
-        # 通常の銀行の金利（パーセント）とフラット35の金利（小数）を処理
         for bank, val in d.items():
             if val is None:
                 continue
+
             try:
                 fv = float(val)
             except Exception:
                 continue
-            if fv == 0.0: # 0.0 は未設定扱い
+
+            if fv == 0.0:
                 continue
-            
-            # 変更があったかチェック
+
             if bank not in merged or float(merged[bank]) != fv:
                 merged[bank] = fv
                 updated_any = True
@@ -299,6 +318,7 @@ def save_manual_rates(d: dict) -> bool:
         }
         sb.table(TABLE_RECORDS).insert(row).execute()
         return True
+
     except Exception as e:
         st.error(f"金利保存エラー: {e}")
         return False
