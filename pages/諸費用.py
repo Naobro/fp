@@ -406,12 +406,13 @@ base_rate = st.number_input(
     value=float(st.session_state.get("base_rate", 0.590)),
     step=0.001,
     format="%.3f",
-    key="base_rate",
+    key="input_base_rate",
 )
 save_to_state("base_rate", float(base_rate))
 
 base_years = int(st.session_state.get("base_years", 35))
 save_to_state("base_years", base_years)
+
 
 colA1, colA2, colA3 = st.columns(3)
 with colA1:
