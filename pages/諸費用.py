@@ -416,25 +416,34 @@ save_to_state("base_years", base_years)
 
 colA1, colA2, colA3 = st.columns(3)
 with colA1:
+    loanA_default = st.session_state.get("loanA_man", price_man)
+    if loanA_default in [None, ""]:
+        loanA_default = price_man
     loanA_man = st.number_input(
         "借入金額（万円：A）",
-        value=int(st.session_state.get("loanA_man", price_man)),
+        value=int(float(loanA_default)),
         step=10,
         format="%d",
         key="loanA_man",
     )
 with colA2:
+    rateA_default = st.session_state.get("rateA", base_rate)
+    if rateA_default in [None, ""]:
+        rateA_default = base_rate
     rateA = st.number_input(
         "金利（A）",
-        value=float(st.session_state.get("rateA", base_rate)),
+        value=float(rateA_default),
         step=0.001,
         format="%.3f",
         key="rateA",
     )
 with colA3:
+    yearA_default = st.session_state.get("yearA", base_years)
+    if yearA_default in [None, ""]:
+        yearA_default = base_years
     yearA = st.number_input(
         "年数（A）",
-        value=int(st.session_state.get("yearA", base_years)),
+        value=int(float(yearA_default)),
         step=1,
         format="%d",
         key="yearA",
@@ -447,25 +456,34 @@ save_to_state("yearA", int(yearA))
 
 colB1, colB2, colB3 = st.columns(3)
 with colB1:
+    loanB_default = st.session_state.get("loanB_man", price_man)
+    if loanB_default in [None, ""]:
+        loanB_default = price_man
     loanB_man = st.number_input(
         "借入金額（万円：B）",
-        value=int(st.session_state.get("loanB_man", price_man)),
+        value=int(float(loanB_default)),
         step=10,
         format="%d",
         key="loanB_man",
     )
 with colB2:
+    rateB_default = st.session_state.get("rateB", base_rate)
+    if rateB_default in [None, ""]:
+        rateB_default = base_rate
     rateB = st.number_input(
         "金利（B）",
-        value=float(st.session_state.get("rateB", base_rate)),
+        value=float(rateB_default),
         step=0.001,
         format="%.3f",
         key="rateB",
     )
 with colB3:
+    yearB_default = st.session_state.get("yearB", base_years)
+    if yearB_default in [None, ""]:
+        yearB_default = base_years
     yearB = st.number_input(
         "年数（B）",
-        value=int(st.session_state.get("yearB", base_years)),
+        value=int(float(yearB_default)),
         step=1,
         format="%d",
         key="yearB",
