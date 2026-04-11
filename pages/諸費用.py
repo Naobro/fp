@@ -818,9 +818,7 @@ if st.button("💾 諸費用データを保存"):
             "total": int(total),
             "target_expenses": int(target_expenses),
 
-            "base_rate": float(base_rate),
-            "base_years": int(base_years),
-            "monthly_full": int(m_full),
+                        "monthly_full": int(m_full),
             "monthly_only": int(m_only),
             "monthly_A": int(mA),
             "monthly_B": int(mB),
