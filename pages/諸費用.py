@@ -645,60 +645,7 @@ def build_pdf():
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%目安）", ln=1)
     pdf.cell(0, 7, f"借入金額：{fmt_jpy(loan_amount_man * 10_000)}", ln=1)
-       pdf.ln(4)
-
-    # --- 決済時 金種テーブル ---
-    seller_payment = int((property_price - deposit) + tax_clear)
-    settlement_self_funds = int(max(0, seller_payment + loan_fee + broker_settlement - loan_amount))
-
-    pdf.set_font("IPAexGothic", "B", 10)
-    pdf.cell(0, 7, "◆ 決済時 金種", ln=1)
-
-    money_w = [55, 35, 100]
-    money_headers = ["項目", "金額", "計算式"]
-    pdf.set_fill_color(220, 230, 250)
-
-    for h, ww in zip(money_headers, money_w):
-        pdf.cell(ww, 7, h, 1, 0, "C", 1)
-    pdf.ln(7)
-
-    pdf.set_font("IPAexGothic", "", 9)
-
-    money_rows = [
-        ["借入金額", f"{int(loan_amount_man):,}万円", f"{fmt_jpy(loan_amount)}"],
-        ["売主支払額", fmt_jpy(seller_payment), f"残代金{fmt_jpy(property_price - deposit)}＋精算金{fmt_jpy(tax_clear)}"],
-        ["住宅ローン手数料", fmt_jpy(loan_fee), ""],
-        ["仲介手数料 決済時金額", fmt_jpy(broker_settlement), ""],
-        ["決済時必要自己資金", fmt_jpy(settlement_self_funds), f"売主支払額{fmt_jpy(seller_payment)}＋住宅ローン手数料{fmt_jpy(loan_fee)}＋仲介手数料決済時{fmt_jpy(broker_settlement)}－借入金額{fmt_jpy(loan_amount)}"],
-    ]
-
-    for r in money_rows:
-        x_row = pdf.get_x()
-        y_row = pdf.get_y()
-
-        formula_width = money_w[2]
-        formula_text = r[2]
-        lines = max(1, int(pdf.get_string_width(formula_text) / (formula_width - 2)) + 1) if formula_text else 1
-        row_h = max(7, 6 * lines)
-
-        pdf.rect(x_row, y_row, money_w[0], row_h)
-        pdf.rect(x_row + money_w[0], y_row, money_w[1], row_h)
-        pdf.rect(x_row + money_w[0] + money_w[1], y_row, money_w[2], row_h)
-
-        pdf.set_xy(x_row, y_row)
-        pdf.multi_cell(money_w[0], 6, r[0], border=0)
-
-        pdf.set_xy(x_row + money_w[0], y_row)
-        pdf.cell(money_w[1], row_h, r[1], border=0, align="R")
-
-        pdf.set_xy(x_row + money_w[0] + money_w[1], y_row)
-        pdf.multi_cell(money_w[2], 6, r[2], border=0)
-
-        pdf.set_xy(x_row, y_row + row_h)
-
     pdf.ln(4)
-
-    # --- テーブル設定（A4幅内に収まるサイズ） ---
 
     pdf.set_fill_color(235, 240, 255)
     pdf.set_font("IPAexGothic", "B", 11)
@@ -732,6 +679,49 @@ def build_pdf():
     )
     pdf.ln(4)
 
+    seller_payment = int((property_price - deposit) + tax_clear)
+    settlement_self_funds = int(max(0, seller_payment + loan_fee + broker_settlement - loan_amount))
+
+    pdf.set_font("IPAexGothic", "B", 10)
+    pdf.cell(0, 7, "◆ 決済時 金種", ln=1)
+
+    money_w = [45, 45, 100]
+    money_headers = ["項目", "金額", "計算式"]
+    pdf.set_fill_color(220, 230, 250)
+    for h, ww in zip(money_headers, money_w):
+        pdf.cell(ww, 7, h, 1, 0, "C", 1)
+    pdf.ln(7)
+
+    pdf.set_font("IPAexGothic", "", 9)
+    money_rows = [
+        ["借入金額", f"{int(loan_amount_man):,}万円", ""],
+        ["売主支払額", fmt_jpy(seller_payment), f"残代金{fmt_jpy(property_price - deposit)}＋精算金{fmt_jpy(tax_clear)}"],
+        ["住宅ローン手数料", fmt_jpy(loan_fee), ""],
+        ["仲介手数料 決済時金額", fmt_jpy(broker_settlement), ""],
+        ["決済時必要自己資金", fmt_jpy(settlement_self_funds), f"借入金額{fmt_jpy(loan_amount)}－売主支払額{fmt_jpy(seller_payment)}－住宅ローン手数料{fmt_jpy(loan_fee)}－仲介手数料 決済時金額{fmt_jpy(broker_settlement)}"],
+    ]
+
+    for r in money_rows:
+        y0 = pdf.get_y()
+        x0 = pdf.get_x()
+
+        h = 8
+        if len(r[2]) > 35:
+            h = 14
+        if len(r[2]) > 70:
+            h = 20
+
+        pdf.cell(money_w[0], h, r[0], border=1)
+        pdf.cell(money_w[1], h, r[1], border=1, align="R")
+
+        x_formula = pdf.get_x()
+        y_formula = pdf.get_y()
+        pdf.multi_cell(money_w[2], 7, r[2], border=1)
+
+        pdf.set_xy(x0, max(y0 + h, pdf.get_y()))
+
+    pdf.ln(4)
+
     w = [60, 40, 25, 65]
     headers = ["項目", "金額", "支払時期", "説明"]
 
@@ -745,32 +735,24 @@ def build_pdf():
 
         pdf.set_font("IPAexGothic", "", 9)
         for r in rows:
-            x_row = pdf.get_x()
-            y_row = pdf.get_y()
+            y0 = pdf.get_y()
+            x0 = pdf.get_x()
 
-            desc_width = w[3]
-            desc_text = r[3]
-            lines = max(
-                1,
-                int(pdf.get_string_width(desc_text) / (desc_width - 2)) + 1
-            )
-            row_h = max(6, 6 * lines)
+            h = 8
+            if len(r[3]) > 22:
+                h = 14
+            if len(r[3]) > 44:
+                h = 20
 
-            pdf.rect(x_row, y_row, w[0], row_h)
-            pdf.rect(x_row + w[0], y_row, w[1], row_h)
-            pdf.rect(x_row + w[0] + w[1], y_row, w[2], row_h)
-            pdf.rect(x_row + w[0] + w[1] + w[2], y_row, w[3], row_h)
+            pdf.cell(w[0], h, r[0], border=1)
+            pdf.cell(w[1], h, r[1], border=1, align="R")
+            pdf.cell(w[2], h, r[2], border=1, align="C")
 
-            pdf.set_xy(x_row, y_row)
-            pdf.multi_cell(w[0], 6, r[0], border=0)
-            pdf.set_xy(x_row + w[0], y_row)
-            pdf.cell(w[1], row_h, r[1], border=0, align="R")
-            pdf.set_xy(x_row + w[0] + w[1], y_row)
-            pdf.cell(w[2], row_h, r[2], border=0, align="C")
-            pdf.set_xy(x_row + w[0] + w[1] + w[2], y_row)
-            pdf.multi_cell(w[3], 6, r[3], border=0)
+            x_desc = pdf.get_x()
+            y_desc = pdf.get_y()
+            pdf.multi_cell(w[3], 7, r[3], border=1)
 
-            pdf.set_xy(x_row, y_row + row_h)
+            pdf.set_xy(x0, max(y0 + h, pdf.get_y()))
 
         pdf.ln(3)
 
@@ -782,14 +764,14 @@ def build_pdf():
     ])
 
     draw_table("◆ 金融機関・火災保険", [
-        ["銀行事務手数料", fmt_jpy(new_loan_fee), "決済時", "借入金額×2.2%で自動算出"],
+        ["銀行事務手数料", fmt_jpy(loan_fee), "決済時", "借入金額×2.2%で自動算出"],
         ["火災保険", fmt_jpy(fire_fee), "決済時", "5年分の概算"],
         ["適合証明書", fmt_jpy(tekigo_fee), "相談", "フラット35利用時に必要"],
     ])
 
     draw_table("◆ 仲介会社（TERASS）", [
-        ["仲介手数料 総額", fmt_jpy(new_broker_total), "契約＋決済", "物件価格×3%＋6万＋税"],
-        ["契約時 仲介手数料", fmt_jpy(new_broker_contract), "契約時", "契約時 半金"],
+        ["仲介手数料 総額", fmt_jpy(broker_total), "契約＋決済", "物件価格×3%＋6万＋税"],
+        ["契約時 仲介手数料", fmt_jpy(broker_contract), "契約時", "契約時 半金"],
         ["決済時 仲介手数料", fmt_jpy(broker_settlement), "決済時", "残額分"],
     ])
 
