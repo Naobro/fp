@@ -645,7 +645,60 @@ def build_pdf():
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%目安）", ln=1)
     pdf.cell(0, 7, f"借入金額：{fmt_jpy(loan_amount_man * 10_000)}", ln=1)
+       pdf.ln(4)
+
+    # --- 決済時 金種テーブル ---
+    seller_payment = int((property_price - deposit) + tax_clear)
+    settlement_self_funds = int(max(0, seller_payment + loan_fee + broker_settlement - loan_amount))
+
+    pdf.set_font("IPAexGothic", "B", 10)
+    pdf.cell(0, 7, "◆ 決済時 金種", ln=1)
+
+    money_w = [55, 35, 100]
+    money_headers = ["項目", "金額", "計算式"]
+    pdf.set_fill_color(220, 230, 250)
+
+    for h, ww in zip(money_headers, money_w):
+        pdf.cell(ww, 7, h, 1, 0, "C", 1)
+    pdf.ln(7)
+
+    pdf.set_font("IPAexGothic", "", 9)
+
+    money_rows = [
+        ["借入金額", f"{int(loan_amount_man):,}万円", f"{fmt_jpy(loan_amount)}"],
+        ["売主支払額", fmt_jpy(seller_payment), f"残代金{fmt_jpy(property_price - deposit)}＋精算金{fmt_jpy(tax_clear)}"],
+        ["住宅ローン手数料", fmt_jpy(loan_fee), ""],
+        ["仲介手数料 決済時金額", fmt_jpy(broker_settlement), ""],
+        ["決済時必要自己資金", fmt_jpy(settlement_self_funds), f"売主支払額{fmt_jpy(seller_payment)}＋住宅ローン手数料{fmt_jpy(loan_fee)}＋仲介手数料決済時{fmt_jpy(broker_settlement)}－借入金額{fmt_jpy(loan_amount)}"],
+    ]
+
+    for r in money_rows:
+        x_row = pdf.get_x()
+        y_row = pdf.get_y()
+
+        formula_width = money_w[2]
+        formula_text = r[2]
+        lines = max(1, int(pdf.get_string_width(formula_text) / (formula_width - 2)) + 1) if formula_text else 1
+        row_h = max(7, 6 * lines)
+
+        pdf.rect(x_row, y_row, money_w[0], row_h)
+        pdf.rect(x_row + money_w[0], y_row, money_w[1], row_h)
+        pdf.rect(x_row + money_w[0] + money_w[1], y_row, money_w[2], row_h)
+
+        pdf.set_xy(x_row, y_row)
+        pdf.multi_cell(money_w[0], 6, r[0], border=0)
+
+        pdf.set_xy(x_row + money_w[0], y_row)
+        pdf.cell(money_w[1], row_h, r[1], border=0, align="R")
+
+        pdf.set_xy(x_row + money_w[0] + money_w[1], y_row)
+        pdf.multi_cell(money_w[2], 6, r[2], border=0)
+
+        pdf.set_xy(x_row, y_row + row_h)
+
     pdf.ln(4)
+
+    # --- テーブル設定（A4幅内に収まるサイズ） ---
 
     pdf.set_fill_color(235, 240, 255)
     pdf.set_font("IPAexGothic", "B", 11)
