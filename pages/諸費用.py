@@ -808,7 +808,7 @@ if st.button("💾 諸費用データを保存"):
             "reform_fee": int(reform_fee),
             "stamp_fee": int(stamp_fee),
 
-                       "_deposit_manual": bool(st.session_state.get("_deposit_manual", False)),
+            "_deposit_manual": bool(st.session_state.get("_deposit_manual", False)),
             "_loanfee_manual": bool(st.session_state.get("_loanfee_manual", False)),
             "_manual_broker": bool(st.session_state.get("_manual_broker", False)),
 
@@ -816,9 +816,8 @@ if st.button("💾 諸費用データを保存"):
             "settlement_funds": int(settlement_funds),
             "total_expenses": int(total_expenses),
             "total": int(total),
-            "target_expenses": int(target_expenses),
 
-                        "monthly_full": int(m_full),
+            "monthly_full": int(m_full),
             "monthly_only": int(m_only),
             "monthly_A": int(mA),
             "monthly_B": int(mB),
