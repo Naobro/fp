@@ -679,49 +679,6 @@ def build_pdf():
     )
     pdf.ln(4)
 
-    seller_payment = int((property_price - deposit) + tax_clear)
-    settlement_self_funds = int(max(0, seller_payment + loan_fee + broker_settlement - loan_amount))
-
-    pdf.set_font("IPAexGothic", "B", 10)
-    pdf.cell(0, 7, "◆ 決済時 金種", ln=1)
-
-    money_w = [45, 45, 100]
-    money_headers = ["項目", "金額", "計算式"]
-    pdf.set_fill_color(220, 230, 250)
-    for h, ww in zip(money_headers, money_w):
-        pdf.cell(ww, 7, h, 1, 0, "C", 1)
-    pdf.ln(7)
-
-    pdf.set_font("IPAexGothic", "", 9)
-    money_rows = [
-        ["借入金額", f"{int(loan_amount_man):,}万円", ""],
-        ["売主支払額", fmt_jpy(seller_payment), f"残代金{fmt_jpy(property_price - deposit)}＋精算金{fmt_jpy(tax_clear)}"],
-        ["住宅ローン手数料", fmt_jpy(loan_fee), ""],
-        ["仲介手数料 決済時金額", fmt_jpy(broker_settlement), ""],
-        ["決済時必要自己資金", fmt_jpy(settlement_self_funds), f"借入金額{fmt_jpy(loan_amount)}－売主支払額{fmt_jpy(seller_payment)}－住宅ローン手数料{fmt_jpy(loan_fee)}－仲介手数料 決済時金額{fmt_jpy(broker_settlement)}"],
-    ]
-
-    for r in money_rows:
-        y0 = pdf.get_y()
-        x0 = pdf.get_x()
-
-        h = 8
-        if len(r[2]) > 35:
-            h = 14
-        if len(r[2]) > 70:
-            h = 20
-
-        pdf.cell(money_w[0], h, r[0], border=1)
-        pdf.cell(money_w[1], h, r[1], border=1, align="R")
-
-        x_formula = pdf.get_x()
-        y_formula = pdf.get_y()
-        pdf.multi_cell(money_w[2], 7, r[2], border=1)
-
-        pdf.set_xy(x0, max(y0 + h, pdf.get_y()))
-
-    pdf.ln(4)
-
     w = [60, 40, 25, 65]
     headers = ["項目", "金額", "支払時期", "説明"]
 
@@ -735,25 +692,15 @@ def build_pdf():
 
         pdf.set_font("IPAexGothic", "", 9)
         for r in rows:
-            y0 = pdf.get_y()
-            x0 = pdf.get_x()
-
-            h = 8
-            if len(r[3]) > 22:
-                h = 14
-            if len(r[3]) > 44:
-                h = 20
-
-            pdf.cell(w[0], h, r[0], border=1)
-            pdf.cell(w[1], h, r[1], border=1, align="R")
-            pdf.cell(w[2], h, r[2], border=1, align="C")
-
-            x_desc = pdf.get_x()
-            y_desc = pdf.get_y()
-            pdf.multi_cell(w[3], 7, r[3], border=1)
-
-            pdf.set_xy(x0, max(y0 + h, pdf.get_y()))
-
+            y_start = pdf.get_y()
+            pdf.cell(w[0], 6, r[0], border=1)
+            pdf.cell(w[1], 6, r[1], border=1, align="R")
+            pdf.cell(w[2], 6, r[2], border=1, align="C")
+            x = pdf.get_x()
+            y = pdf.get_y()
+            pdf.multi_cell(w[3], 6, r[3], border=1)
+            max_y = pdf.get_y()
+            pdf.set_xy(x_start, max_y)
         pdf.ln(3)
 
     draw_table("◆ 登記費用・税金・精算金等", [
