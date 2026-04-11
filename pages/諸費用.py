@@ -346,9 +346,13 @@ st.session_state["_manual_broker"] = bool(
 )
 st.session_state["_prev_broker_price"] = property_price
 
-save_to_state("broker_total", int(new_broker_total))
-save_to_state("broker_contract", int(new_broker_contract))
-save_to_state("broker_settlement", int(broker_settlement))
+broker_total = int(new_broker_total)
+broker_contract = int(new_broker_contract)
+broker_settlement = int(broker_settlement)
+
+save_to_state("broker_total", broker_total)
+save_to_state("broker_contract", broker_contract)
+save_to_state("broker_settlement", broker_settlement)
 
 # --- その他費用 ---
 registration_tax_rate = 0.0015
