@@ -33,27 +33,62 @@ def load_saved_data(client_id: str):
     return None
 
 # ----------------------------
-# Supabaseから保存データを取得・反映
-# ----------------------------
-client_id = st.query_params.get("client", "unknown")
-saved = load_saved_data(client_id)
-
-# ---- 🔧 Supabaseデータをsession_stateに強制上書き（初期値ロジック排除） ----
-if saved:
-    for k, v in saved.items():
-        # Supabaseからのロード時、自動計算フラグもロードする
-        if k in ["_deposit_manual", "_loanfee_manual", "_manual_broker"]:
-            st.session_state[k] = v
-        # _prev_price, _prev_loan_amount, _prev_broker_price はロードしない (現在の値と比較するため)
-        elif not k.startswith("_prev_"):
-            st.session_state[k] = v 
-
-
-# ----------------------------
 # 画面設定
 # ----------------------------
 st.set_page_config(page_title="資金計画書（諸費用明細）", layout="centered")
 st.title("資金計画書（諸費用明細）")
+
+# ----------------------------
+# 共通関数
+# ----------------------------
+def fmt_jpy(n):
+    return f"{int(n):,} 円"
+
+def number_input_commas(label, value, key):
+    if value is None:
+        value = 0
+    if key not in st.session_state:
+        st.session_state[key] = f"{int(value):,}"
+    s = st.text_input(label, key=key)
+    s = re.sub(r"[^\d]", "", str(s))
+    if s == "":
+        return 0
+    return int(s)
+
+def round_deposit(price_yen):
+    return int(round(price_yen * 0.05 / 500_000) * 500_000)
+
+def calc_stamp_tax(p):
+    if p <= 5_000_000:
+        return 5_000
+    if p <= 10_000_000:
+        return 10_000
+    if p <= 50_000_000:
+        return 10_000
+    if p <= 100_000_000:
+        return 30_000
+    if p <= 500_000_000:
+        return 60_000
+    if p <= 1_000_000_000:
+        return 160_000
+    if p <= 5_000_000_000:
+        return 320_000
+    return 480_000
+
+def monthly_payment(loan, years, rate):
+    n = years * 12
+    r = rate / 100 / 12
+    if r == 0:
+        return int(loan / n)
+    return int(loan * r * (1 + r) ** n / ((1 + r) ** n - 1))
+
+def round_to_10man(n):
+    import math
+    return int(math.ceil(n / 100_000.0) * 100_000)
+
+def save_to_state(key, value):
+    st.session_state[key] = value
+    return value
 
 # ----------------------------
 # フォント設定
@@ -101,149 +136,129 @@ def _register_jp_fonts(pdf: FPDF):
     pdf.add_font("IPAexMincho", "B", str(FONT_MINCHO_PATH), uni=True)
 
 # ----------------------------
-# 共通関数
+# Supabaseから保存データを取得・反映
 # ----------------------------
-def fmt_jpy(n): return f"{int(n):,} 円"
-def number_input_commas(label, value, step=1):
-    """カンマ付き整数入力（Noneや空値を安全に処理）"""
-    if value is None:
-        value = 0
-    try:
-        # Streamlitのtext_inputを使用
-        # Streamlitのバージョンによっては、text_inputのkey引数が必要になる場合がありますが、
-        # ここではnumber_input_commasを呼び出す箇所で一意のkeyを与える必要があります。
-        # ただし、現状のコードでは呼び出し側のロジックが複雑なため、ここではtext_inputのまま残します。
-        s = st.text_input(label, f"{int(value):,}")
-    except Exception:
-        s = st.text_input(label, "0")
-    s = re.sub(r"[^\d]", "", s)
-    try:
-        return int(s)
-    except Exception:
-        return int(value)
-def round_deposit(price_yen): return int(round(price_yen * 0.05 / 500_000) * 500_000)
-def calc_stamp_tax(p):
-    if p <= 5_000_000: return 5_000
-    if p <= 10_000_000: return 10_000
-    if p <= 50_000_000: return 10_000
-    if p <= 100_000_000: return 30_000
-    if p <= 500_000_000: return 60_000
-    if p <= 1_000_000_000: return 160_000
-    if p <= 5_000_000_000: return 320_000
-    return 480_000
-def monthly_payment(loan, years, rate):
-    n = years * 12
-    r = rate / 100 / 12
-    if r == 0: return int(loan / n)
-    return int(loan * r * (1 + r) ** n / ((1 + r) ** n - 1))
-    
-def round_to_10man(n):
-    """金額を10万円単位で繰り上げ"""
-    import math
-    return int(math.ceil(n / 100_000.0) * 100_000)
+client_id = st.query_params.get("client", "unknown")
+saved = load_saved_data(client_id)
 
-def save_to_state(key, value):
-    st.session_state[key] = value
-    return value
+if saved:
+    for k, v in saved.items():
+        st.session_state[k] = v
+
+    if "price_man" in saved and saved.get("price_man") is not None:
+        st.session_state["_prev_price"] = int(saved["price_man"])
+
+    if "loan_amount_man" in saved and saved.get("loan_amount_man") is not None:
+        st.session_state["_prev_loan_amount"] = int(saved["loan_amount_man"])
+
+    if "property_price" in saved and saved.get("property_price") is not None:
+        st.session_state["_prev_broker_price"] = int(saved["property_price"])
+    elif "price_man" in saved and saved.get("price_man") is not None:
+        st.session_state["_prev_broker_price"] = int(saved["price_man"]) * 10_000
 
 # ----------------------------
 # 入力エリア（基本情報）
 # ----------------------------
-# 🔧 keyの追加
-st.session_state["customer_name"] = st.text_input("お客様名", st.session_state.get("customer_name", ""), key="input_customer_name")
-st.session_state["property_name"] = st.text_input("物件名", st.session_state.get("property_name", ""), key="input_property_name")
+st.session_state["customer_name"] = st.text_input(
+    "お客様名",
+    value=st.session_state.get("customer_name", ""),
+    key="input_customer_name",
+)
+st.session_state["property_name"] = st.text_input(
+    "物件名",
+    value=st.session_state.get("property_name", ""),
+    key="input_property_name",
+)
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    prop_type = st.selectbox("物件種別", ["マンション", "戸建て"],
-                             index=0 if st.session_state.get("prop_type", "マンション") == "マンション" else 1)
+    prop_type = st.selectbox(
+        "物件種別",
+        ["マンション", "戸建て"],
+        index=0 if st.session_state.get("prop_type", "マンション") == "マンション" else 1,
+        key="input_prop_type",
+    )
     save_to_state("prop_type", prop_type)
+
 with col2:
-    is_new = st.checkbox("新築戸建（表示登記あり）",
-                             value=st.session_state.get("is_new", prop_type == "戸建て"))
+    is_new = st.checkbox(
+        "新築戸建（表示登記あり）",
+        value=st.session_state.get("is_new", prop_type == "戸建て"),
+        key="input_is_new",
+    )
     save_to_state("is_new", is_new)
+
 with col3:
-    use_flat35 = st.checkbox("フラット35（適合証明）",
-                             value=st.session_state.get("use_flat35", False))
+    use_flat35 = st.checkbox(
+        "フラット35（適合証明）",
+        value=st.session_state.get("use_flat35", False),
+        key="input_use_flat35",
+    )
     save_to_state("use_flat35", use_flat35)
 
 price_man = st.number_input(
     "物件価格（万円）",
-    min_value=0,             # ✅ int型モード
-    max_value=10_000_000,    # ✅ 上限 1,000万万円（＝100億円）
+    min_value=0,
+    max_value=10_000_000,
     value=int(float(st.session_state.get("price_man", 5800) or 5800)),
-    step=1,                  # ✅ 万円単位
-    format="%d"              # ✅ 整数表示
+    step=1,
+    format="%d",
+    key="input_price_man",
 )
-
-# ✅ Supabase 保存安全化処理：float混入防止
 price_man = int(price_man)
 save_to_state("price_man", price_man)
-property_price = int(price_man * 10_000)  # ✅ 円換算（bigint対応）
+property_price = int(price_man * 10_000)
+save_to_state("property_price", property_price)
+
 # ================================
-# 自動計算ブロック（手付金・印紙代・銀行事務手数料・仲介手数料）
+# 自動計算ブロック
 # ================================
 
-# --- 手付金（物件価格×5%を自動計算＋手動修正可／物件価格変更時のみ再計算） ---
+# --- 手付金 ---
+auto_deposit = int(round(property_price * 0.05 / 500_000) * 500_000)
+prev_price = int(st.session_state.get("_prev_price", price_man))
+manual_flag = bool(st.session_state.get("_deposit_manual", False))
 
-# 1. 自動計算値 (物件価格の5%を50万円単位で丸める)
-auto_deposit = int(round(price_man * 10_000 * 0.05 / 500_000) * 500_000)
-
-# 2. 自動更新の条件をチェック
-prev_price = st.session_state.get("_prev_price", 0)
-manual_flag = st.session_state.get("_deposit_manual", False)
-
-# 物件価格が変わった場合、または手動フラグが立っていない場合に自動計算値を初期値とする
-if (prev_price != price_man) or not manual_flag:
-    # 💡 修正: 価格が変わったら、強制的に自動計算値を初期値にセット
+if (prev_price != price_man) or ("deposit" not in st.session_state):
     deposit_initial = auto_deposit
-    st.session_state["_deposit_manual"] = False # 強制的にリセット
-else:
-    # 💡 修正: 価格が変わっていない、かつ手動修正済みなら、保存された値を初期値とする
-    # savedがNoneの場合のフォールバックとしてauto_depositを設定
-    deposit_initial = st.session_state.get("deposit", auto_deposit) 
-
-# 3. ユーザー入力
-# 🔧 keyの追加
-new_deposit = number_input_commas("手付金（円：物件価格×5%自動計算／50万円単位）", deposit_initial)
-
-# 4. 手動フラグの更新
-# ユーザーが入力した値が自動計算値と異なる場合、手動フラグをTrueにする
-if new_deposit != auto_deposit:
-    st.session_state["_deposit_manual"] = True
-else:
     st.session_state["_deposit_manual"] = False
+    st.session_state["deposit"] = auto_deposit
+    st.session_state["input_deposit"] = f"{auto_deposit:,}"
+else:
+    deposit_initial = int(st.session_state.get("deposit", auto_deposit))
 
-# 5. セッションステートの更新と永続化に必要な値の保存
+new_deposit = number_input_commas(
+    "手付金（円：物件価格×5%自動計算／50万円単位）",
+    deposit_initial,
+    "input_deposit",
+)
+st.session_state["_deposit_manual"] = bool(new_deposit != auto_deposit)
 st.session_state["_prev_price"] = price_man
 deposit = save_to_state("deposit", new_deposit)
 
-
-# --- 印紙代（自動計算＋電子契約で0円） ---
+# --- 印紙代 ---
 elec_contract = st.checkbox(
     "電子契約（印紙代 0円）",
-    value=st.session_state.get("elec_contract", False)
+    value=st.session_state.get("elec_contract", False),
+    key="input_elec_contract",
 )
 save_to_state("elec_contract", elec_contract)
 
-# ✅ 修正：チェック時に即0円へ反映（再描画対応）
-if elec_contract:
-    stamp_fee_auto = 0
-else:
-    stamp_fee_auto = calc_stamp_tax(price_man * 10_000)
+stamp_fee_auto = 0 if elec_contract else calc_stamp_tax(property_price)
 
-# 🔧 keyの追加
+if "stamp_fee" not in st.session_state:
+    st.session_state["stamp_fee"] = stamp_fee_auto
+    st.session_state["input_stamp_fee"] = f"{stamp_fee_auto:,}"
+
 stamp_fee = number_input_commas(
     "契約書 印紙代（円：自動計算）",
-    stamp_fee_auto
+    st.session_state.get("stamp_fee", stamp_fee_auto),
+    "input_stamp_fee",
 )
 save_to_state("stamp_fee", stamp_fee)
 
-
-# --- 借入金額入力（None対策入り） ---
+# --- 借入金額 ---
 loan_amount_man_raw = st.session_state.get("loan_amount_man", price_man)
-
-# None が混入した場合の完全ガード
 if loan_amount_man_raw is None:
     loan_amount_man_raw = price_man
 
@@ -252,49 +267,41 @@ loan_amount_man = st.number_input(
     min_value=0,
     max_value=200_000,
     value=int(loan_amount_man_raw),
-    step=10
+    step=10,
+    format="%d",
+    key="input_loan_amount_man",
 )
+save_to_state("loan_amount_man", int(loan_amount_man))
 
-save_to_state("loan_amount_man", loan_amount_man)
-# --- 銀行事務手数料（借入金額×2.2％を自動計算＋手動修正可） ---
-# 借入金額（円）の計算
-loan_amount = loan_amount_man * 10_000 # 👈 loan_amountをここで定義
-save_to_state("loan_amount", loan_amount) # 👈 loan_amountをここで保存
+loan_amount = int(loan_amount_man * 10_000)
+save_to_state("loan_amount", loan_amount)
 
-auto_loan_fee = int(loan_amount * 0.022) # 👈 loan_amountを使って計算
-prev_loan = st.session_state.get("_prev_loan_amount", 0)
-manual_fee_flag = st.session_state.get("_loanfee_manual", False)
+# --- 銀行事務手数料 ---
+auto_loan_fee = int(loan_amount * 0.022)
+prev_loan = int(st.session_state.get("_prev_loan_amount", loan_amount_man))
+manual_fee_flag = bool(st.session_state.get("_loanfee_manual", False))
 
-# 自動更新条件: 借入金額が変わった or （手動フラグがFalseなのに）保存値が自動計算値と異なる
-if (prev_loan != loan_amount_man) or \
-   (not manual_fee_flag and st.session_state.get("loan_fee") != auto_loan_fee): # 👈 修正点: 初期ロード時の補正を追加
-    loan_fee = auto_loan_fee
-    st.session_state["_loanfee_manual"] = False # 👈 修正点: 強制更新で手動フラグをリセット
+if (prev_loan != loan_amount_man) or ("loan_fee" not in st.session_state):
+    loan_fee_initial = auto_loan_fee
+    st.session_state["_loanfee_manual"] = False
+    st.session_state["loan_fee"] = auto_loan_fee
+    st.session_state["input_loan_fee"] = f"{auto_loan_fee:,}"
 else:
-    loan_fee = st.session_state.get("loan_fee", auto_loan_fee)
+    loan_fee_initial = int(st.session_state.get("loan_fee", auto_loan_fee))
 
-# 🔧 keyの追加
 new_loan_fee = number_input_commas(
-    "銀行事務手数料（円：借入金額×2.2% 自動計算）", loan_fee
+    "銀行事務手数料（円：借入金額×2.2% 自動計算）",
+    loan_fee_initial,
+    "input_loan_fee",
 )
-
-# 手動検出・保存
-if new_loan_fee != auto_loan_fee: # 👈 修正点: 自動計算値と異なればTrue
-    st.session_state["_loanfee_manual"] = True
-else:
-    st.session_state["_loanfee_manual"] = False # 👈 修正点: 自動計算値に戻ったらFalse
-
-st.session_state["_prev_loan_amount"] = loan_amount_man
+st.session_state["_loanfee_manual"] = bool(new_loan_fee != auto_loan_fee)
+st.session_state["_prev_loan_amount"] = int(loan_amount_man)
 save_to_state("loan_fee", new_loan_fee)
 
-
-# --- 仲介手数料（物件価格に自動連動＋分割） ---
+# --- 仲介手数料 ---
 tax_rate = 0.10
-
-# 自動算出
 auto_broker_total = int((property_price * 0.03 + 60_000) * (1 + tax_rate))
 
-# 契約時分の初期値（段階的に決定）
 if auto_broker_total >= 2_200_000:
     auto_broker_contract = 1_100_000
 elif auto_broker_total >= 1_100_000:
@@ -302,85 +309,86 @@ elif auto_broker_total >= 1_100_000:
 else:
     auto_broker_contract = 330_000
 
-auto_broker_settlement = auto_broker_total - auto_broker_contract
+prev_broker_price = int(st.session_state.get("_prev_broker_price", property_price))
+manual_broker_flag = bool(st.session_state.get("_manual_broker", False))
 
-# -------------------------------
-# ✅ 仲介手数料は「物件価格」変更時のみ再計算
-# -------------------------------
-prev_broker_price = st.session_state.get("_prev_broker_price", 0)
-manual_broker_flag = st.session_state.get("_manual_broker", False)
-
-# 🔹物件価格が変更されたとき or 初回ロード時に物件価格と一致しないとき
-#    手動フラグがあっても強制的に自動計算値を適用する
-if (prev_broker_price != property_price) or \
-   (not manual_broker_flag and st.session_state.get("broker_total") != auto_broker_total): # ← この行を追加・修正
-
-    broker_total = auto_broker_total
-    broker_contract = auto_broker_contract
-    # 強制的に自動計算値を適用した場合は、手動フラグをFalseに戻す
-    st.session_state["_manual_broker"] = False # ← この行を追加（デバッグ修正点）
-
+if (prev_broker_price != property_price) or ("broker_total" not in st.session_state) or ("broker_contract" not in st.session_state):
+    broker_total_initial = auto_broker_total
+    broker_contract_initial = auto_broker_contract
+    st.session_state["_manual_broker"] = False
+    st.session_state["broker_total"] = auto_broker_total
+    st.session_state["broker_contract"] = auto_broker_contract
+    st.session_state["input_broker_total"] = f"{auto_broker_total:,}"
+    st.session_state["input_broker_contract"] = f"{auto_broker_contract:,}"
 else:
-    # 以前の値かセッションステートの値を読み込む（手動フラグがTrueの場合）
-    broker_total = int(st.session_state.get("broker_total", auto_broker_total) or 0)
-    broker_contract = int(st.session_state.get("broker_contract", auto_broker_contract) or 0)
+    broker_total_initial = int(st.session_state.get("broker_total", auto_broker_total))
+    broker_contract_initial = int(st.session_state.get("broker_contract", auto_broker_contract))
 
-# 🔽 以下の入力欄のコードはそのまま 🔽
-# --- 入力欄（カンマ入力でも安全に数値変換） ---
-# 🔧 keyの追加
-new_broker_total = number_input_commas("仲介手数料 総額（円）", broker_total)
-# 🔧 keyの追加
-new_broker_contract = number_input_commas("仲介手数料 契約時（円）", broker_contract)
+new_broker_total = number_input_commas(
+    "仲介手数料 総額（円）",
+    broker_total_initial,
+    "input_broker_total",
+)
+new_broker_contract = number_input_commas(
+    "仲介手数料 契約時（円）",
+    broker_contract_initial,
+    "input_broker_contract",
+)
 
-# --- 安全ロジック（契約時が総額を超えたら補正） ---
 if new_broker_contract > new_broker_total:
     new_broker_contract = new_broker_total
+    st.session_state["input_broker_contract"] = f"{new_broker_contract:,}"
 
 broker_settlement = int(new_broker_total) - int(new_broker_contract)
-
-# --- 手動検出・保存 ---
-# 🚨 ここで手動フラグのロジックを修正し、自動計算値から少しでもズレたら手動と見なす
-# (new_broker_total != auto_broker_total) または (new_broker_contract != auto_broker_contract) のどちらか。
-if new_broker_total != auto_broker_total or new_broker_contract != auto_broker_contract:
-    st.session_state["_manual_broker"] = True
-else:
-    st.session_state["_manual_broker"] = False # ← 追加: 自動計算値に戻ったらフラグも戻す（デバッグ修正点）
-
+st.session_state["_manual_broker"] = bool(
+    new_broker_total != auto_broker_total or new_broker_contract != auto_broker_contract
+)
 st.session_state["_prev_broker_price"] = property_price
 
-# --- 保存（確実にint型で保持） ---
 save_to_state("broker_total", int(new_broker_total))
 save_to_state("broker_contract", int(new_broker_contract))
 save_to_state("broker_settlement", int(broker_settlement))
-# --- 各種費用（登記費用ロジック付き）---
 
-# 🔹 登記費用：物件価格×登録免許税率＋司法書士報酬（15万円）
-registration_tax_rate = 0.0015  # 減税税率（住宅用 0.15%）
-judicial_fee = 150000           # 司法書士報酬（円）
-
+# --- その他費用 ---
+registration_tax_rate = 0.0015
+judicial_fee = 150000
 auto_regist_fee = int(property_price * registration_tax_rate + judicial_fee)
-# 🔧 keyの追加
-regist_fee = number_input_commas("登記費用（円：物件価格×0.15%＋司法書士報酬15万円 自動計算）",
-                             st.session_state.get("regist_fee", auto_regist_fee))
 
-# 🔧 keyの追加
-fire_fee = number_input_commas("火災保険料（円）",
-                              st.session_state.get("fire_fee", 200_000))
-# 🔧 keyの追加
-tax_clear = number_input_commas("精算金（円）",
-                               st.session_state.get("tax_clear", 100_000))
-# 🔧 keyの追加
-display_fee = number_input_commas("表示登記（円）",
-                                 st.session_state.get("display_fee", 110_000 if (prop_type == "戸建て" and is_new) else 0))
-# 🔧 keyの追加
-tekigo_fee = number_input_commas("適合証明書（円）",
-                               st.session_state.get("tekigo_fee", 55_000 if use_flat35 else 0))
-# 🔧 keyの追加
-reform_fee = number_input_commas("追加リフォーム費用（円）",
-                               st.session_state.get("reform_fee", 0))
-# 🔧 keyの追加
-move_fee = number_input_commas("引越し費用（円）",
-                              st.session_state.get("move_fee", 120_000))
+regist_fee = number_input_commas(
+    "登記費用（円：物件価格×0.15%＋司法書士報酬15万円 自動計算）",
+    st.session_state.get("regist_fee", auto_regist_fee),
+    "input_regist_fee",
+)
+fire_fee = number_input_commas(
+    "火災保険料（円）",
+    st.session_state.get("fire_fee", 200_000),
+    "input_fire_fee",
+)
+tax_clear = number_input_commas(
+    "精算金（円）",
+    st.session_state.get("tax_clear", 100_000),
+    "input_tax_clear",
+)
+display_fee = number_input_commas(
+    "表示登記（円）",
+    st.session_state.get("display_fee", 110_000 if (prop_type == "戸建て" and is_new) else 0),
+    "input_display_fee",
+)
+tekigo_fee = number_input_commas(
+    "適合証明書（円）",
+    st.session_state.get("tekigo_fee", 55_000 if use_flat35 else 0),
+    "input_tekigo_fee",
+)
+reform_fee = number_input_commas(
+    "追加リフォーム費用（円）",
+    st.session_state.get("reform_fee", 0),
+    "input_reform_fee",
+)
+move_fee = number_input_commas(
+    "引越し費用（円）",
+    st.session_state.get("move_fee", 120_000),
+    "input_move_fee",
+)
 
 save_to_state("regist_fee", regist_fee)
 save_to_state("fire_fee", fire_fee)
@@ -390,93 +398,127 @@ save_to_state("tekigo_fee", tekigo_fee)
 save_to_state("reform_fee", reform_fee)
 save_to_state("move_fee", move_fee)
 
-
 # --- 金利パターン ---
 st.markdown("#### 借入パターン A / B（手動入力）")
-# 🔧 keyの追加
-base_rate = st.number_input("基準金利（年%）", value=0.780, step=0.001, format="%.3f", key="input_base_rate")
-base_years = 35
+
+base_rate = st.number_input(
+    "基準金利（年%）",
+    value=float(st.session_state.get("base_rate", 0.590)),
+    step=0.001,
+    format="%.3f",
+    key="base_rate",
+)
+save_to_state("base_rate", float(base_rate))
+
+base_years = int(st.session_state.get("base_years", 35))
+save_to_state("base_years", base_years)
 
 colA1, colA2, colA3 = st.columns(3)
-with colA1: loanA_man = st.number_input("借入金額（万円：A）", value=int(price_man), step=10, key="input_loanA_man")
-with colA2: rateA = st.number_input("金利（A）", value=base_rate, step=0.001, format="%.3f", key="input_rateA")
-with colA3: yearA = st.number_input("年数（A）", value=base_years, step=1, key="input_yearA")
-loanA = loanA_man * 10_000
+with colA1:
+    loanA_man = st.number_input(
+        "借入金額（万円：A）",
+        value=int(st.session_state.get("loanA_man", price_man)),
+        step=10,
+        format="%d",
+        key="loanA_man",
+    )
+with colA2:
+    rateA = st.number_input(
+        "金利（A）",
+        value=float(st.session_state.get("rateA", base_rate)),
+        step=0.001,
+        format="%.3f",
+        key="rateA",
+    )
+with colA3:
+    yearA = st.number_input(
+        "年数（A）",
+        value=int(st.session_state.get("yearA", base_years)),
+        step=1,
+        format="%d",
+        key="yearA",
+    )
+
+loanA = int(loanA_man * 10_000)
+save_to_state("loanA_man", int(loanA_man))
+save_to_state("rateA", float(rateA))
+save_to_state("yearA", int(yearA))
 
 colB1, colB2, colB3 = st.columns(3)
-with colB1: loanB_man = st.number_input("借入金額（万円：B）", value=int(price_man), step=10, key="input_loanB_man")
-with colB2: rateB = st.number_input("金利（B）", value=base_rate, step=0.001, format="%.3f", key="input_rateB")
-with colB3: yearB = st.number_input("年数（B）", value=base_years, step=1, key="input_yearB")
-loanB = loanB_man * 10_000
+with colB1:
+    loanB_man = st.number_input(
+        "借入金額（万円：B）",
+        value=int(st.session_state.get("loanB_man", price_man)),
+        step=10,
+        format="%d",
+        key="loanB_man",
+    )
+with colB2:
+    rateB = st.number_input(
+        "金利（B）",
+        value=float(st.session_state.get("rateB", base_rate)),
+        step=0.001,
+        format="%.3f",
+        key="rateB",
+    )
+with colB3:
+    yearB = st.number_input(
+        "年数（B）",
+        value=int(st.session_state.get("yearB", base_years)),
+        step=1,
+        format="%d",
+        key="yearB",
+    )
+
+loanB = int(loanB_man * 10_000)
+save_to_state("loanB_man", int(loanB_man))
+save_to_state("rateB", float(rateB))
+save_to_state("yearB", int(yearB))
 
 # --- 月々支払計算 ---
-# ✅ 修正：total（物件＋諸費用合計）をここで再定義してから利用
 total_expenses = int(
     regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
     tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
 )
 total = property_price + total_expenses
 
-# ✅ 自己資金0（物件＋諸費用すべてを借入）
-loan_full = round_to_10man(total)  # ✅ 総額を10万円単位で切り上げて借入額に
+loan_full = round_to_10man(total)
 m_full = monthly_payment(loan_full, base_years, base_rate)
-
-# ✅ 諸費用のみ自己資金パターン
 m_only = monthly_payment(property_price, base_years, base_rate)
-
-# ✅ A／Bパターン
 mA = monthly_payment(loanA, yearA, rateA)
 mB = monthly_payment(loanB, yearB, rateB)
 
-# --- 契約・決済必要資金 ---
 contract_funds = int(deposit + stamp_fee + broker_contract)
 settlement_funds = int((property_price - deposit) + regist_fee + tax_clear + broker_settlement + loan_fee)
 
-total_expenses = int(
-    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
-    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
-)
-
-total_expenses = int(
-    regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
-    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
-)
-
-# ================================
-# 🆕 目標諸費用（円）を直接入力
-#    デフォルト値は「物件価格×7%」
-# ================================
-default_target = int(property_price * 0.07)  # 初期値：物件価格の7%
-
+default_target = int(property_price * 0.07)
 target_expenses = st.number_input(
     "目標諸費用（円）",
     min_value=0,
     max_value=100_000_000,
     value=int(st.session_state.get("target_expenses", default_target)),
     step=10_000,
-    format="%d"
+    format="%d",
+    key="input_target_expenses",
 )
-st.session_state["target_expenses"] = target_expenses
+st.session_state["target_expenses"] = int(target_expenses)
 
-# ================================
-# 🆕 諸費用の現在値と目標値の差額
-# ================================
 st.markdown("### 💰 諸費用の現在値と目標値の差額（リアルタイム）")
-
 st.table({
     "項目": [
         "🎯 目標 諸費用（円）",
         "📌 現在の諸費用（入力合計）",
-        "🔻 差額（目標 − 現在）"
+        "🔻 差額（目標 − 現在）",
     ],
     "金額（円）": [
         f"{target_expenses:,}",
         f"{total_expenses:,}",
-        f"{target_expenses - total_expenses:,}"
-    ]
+        f"{target_expenses - total_expenses:,}",
+    ],
 })
 
 total = property_price + total_expenses
+
 # ----------------------------
 # PDF 生成関数
 # ----------------------------
@@ -486,41 +528,47 @@ def build_pdf():
     pdf.add_page()
     pdf.set_font("IPAexGothic", "B", 12)
 
-    # --- ヘッダー ---
     if st.session_state["customer_name"]:
         pdf.cell(0, 8, f"{st.session_state['customer_name']} 様", ln=1)
     pdf.set_font("IPAexGothic", "", 11)
     pdf.cell(0, 7, f"物件名：{st.session_state['property_name']}", ln=1)
     pdf.cell(0, 7, f"物件価格：{fmt_jpy(property_price)}", ln=1)
     pdf.cell(0, 7, f"手付金：{fmt_jpy(deposit)}（物件価格の5%目安）", ln=1)
-    pdf.cell(0, 7, f"借入金額：{fmt_jpy(loan_amount_man * 10_000)}", ln=1)  # ✅ 追加（万円→円換算）
+    pdf.cell(0, 7, f"借入金額：{fmt_jpy(loan_amount_man * 10_000)}", ln=1)
     pdf.ln(4)
-# ✅ 3行まとめて外枠付き（罫線ボックス化）
+
     pdf.set_fill_color(235, 240, 255)
     pdf.set_font("IPAexGothic", "B", 11)
 
-    # 枠の開始位置と幅・高さを記録
     x_start = pdf.get_x()
     y_start = pdf.get_y()
-    box_width = 190  # A4余白考慮
+    box_width = 190
     line_height = 8
     total_height = line_height * 3
 
-    # 背景ボックス描画（塗り＋外枠）
-    pdf.rect(x_start, y_start, box_width, total_height, style="DF")  # D=枠線, F=塗り
-
-    # テキスト描画（背景付き）
-    # 描画位置を調整して枠線内に収める
+    pdf.rect(x_start, y_start, box_width, total_height, style="DF")
     pdf.set_xy(x_start, y_start)
-    pdf.cell(box_width, 8, f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}　自己資金差額：{fmt_jpy(max(0, total - (loan_amount_man * 10_000)))}", border=0, ln=1, fill=1)
+    pdf.cell(
+        box_width,
+        8,
+        f"諸費用合計：{fmt_jpy(total_expenses)}　総合計：{fmt_jpy(total)}　自己資金差額：{fmt_jpy(max(0, total - (loan_amount_man * 10_000)))}",
+        border=0,
+        ln=1,
+        fill=1,
+    )
     pdf.set_x(x_start)
     pdf.cell(box_width, 8, f"契約時必要資金：{fmt_jpy(contract_funds)}", border=0, ln=1, fill=1)
     pdf.set_x(x_start)
-    pdf.cell(box_width, 8, f"決済時必要資金：{fmt_jpy(settlement_funds)}　※（追加リフォーム・火災保険・引っ越し費用除く）", border=0, ln=1, fill=1)
+    pdf.cell(
+        box_width,
+        8,
+        f"決済時必要資金：{fmt_jpy(settlement_funds)}　※（追加リフォーム・火災保険・引っ越し費用除く）",
+        border=0,
+        ln=1,
+        fill=1,
+    )
     pdf.ln(4)
-    
 
-    # --- テーブル設定（A4幅内に収まるサイズ） ---
     w = [60, 40, 25, 65]
     headers = ["項目", "金額", "支払時期", "説明"]
 
@@ -534,19 +582,35 @@ def build_pdf():
 
         pdf.set_font("IPAexGothic", "", 9)
         for r in rows:
-            y_start = pdf.get_y()
-            pdf.cell(w[0], 6, r[0], border=1)
-            pdf.cell(w[1], 6, r[1], border=1, align="R")
-            pdf.cell(w[2], 6, r[2], border=1, align="C")
-            x = pdf.get_x()
-            y = pdf.get_y()
-            pdf.multi_cell(w[3], 6, r[3], border=1)
-            # multi_cellを使った後のカーソルY座標調整
-            max_y = pdf.get_y()
-            pdf.set_xy(x_start, max_y) # 次の行の開始位置をリセット
+            x_row = pdf.get_x()
+            y_row = pdf.get_y()
+
+            desc_width = w[3]
+            desc_text = r[3]
+            lines = max(
+                1,
+                int(pdf.get_string_width(desc_text) / (desc_width - 2)) + 1
+            )
+            row_h = max(6, 6 * lines)
+
+            pdf.rect(x_row, y_row, w[0], row_h)
+            pdf.rect(x_row + w[0], y_row, w[1], row_h)
+            pdf.rect(x_row + w[0] + w[1], y_row, w[2], row_h)
+            pdf.rect(x_row + w[0] + w[1] + w[2], y_row, w[3], row_h)
+
+            pdf.set_xy(x_row, y_row)
+            pdf.multi_cell(w[0], 6, r[0], border=0)
+            pdf.set_xy(x_row + w[0], y_row)
+            pdf.cell(w[1], row_h, r[1], border=0, align="R")
+            pdf.set_xy(x_row + w[0] + w[1], y_row)
+            pdf.cell(w[2], row_h, r[2], border=0, align="C")
+            pdf.set_xy(x_row + w[0] + w[1] + w[2], y_row)
+            pdf.multi_cell(w[3], 6, r[3], border=0)
+
+            pdf.set_xy(x_row, y_row + row_h)
+
         pdf.ln(3)
 
-    # --- 各テーブル ---
     draw_table("◆ 登記費用・税金・精算金等", [
         ["契約書 印紙代", fmt_jpy(stamp_fee), "契約時", "電子契約なら0円"],
         ["登記費用", fmt_jpy(regist_fee), "決済時", "司法書士報酬＋登録免許税"],
@@ -555,14 +619,14 @@ def build_pdf():
     ])
 
     draw_table("◆ 金融機関・火災保険", [
-        ["銀行事務手数料", fmt_jpy(loan_fee), "決済時", "借入金額×2.2%で自動算出"],
+        ["銀行事務手数料", fmt_jpy(new_loan_fee), "決済時", "借入金額×2.2%で自動算出"],
         ["火災保険", fmt_jpy(fire_fee), "決済時", "5年分の概算"],
         ["適合証明書", fmt_jpy(tekigo_fee), "相談", "フラット35利用時に必要"],
     ])
 
     draw_table("◆ 仲介会社（TERASS）", [
-        ["仲介手数料 総額", fmt_jpy(broker_total), "契約＋決済", "物件価格×3%＋6万＋税"],
-        ["契約時 仲介手数料", fmt_jpy(broker_contract), "契約時", "契約時 半金"],
+        ["仲介手数料 総額", fmt_jpy(new_broker_total), "契約＋決済", "物件価格×3%＋6万＋税"],
+        ["契約時 仲介手数料", fmt_jpy(new_broker_contract), "契約時", "契約時 半金"],
         ["決済時 仲介手数料", fmt_jpy(broker_settlement), "決済時", "残額分"],
     ])
 
@@ -572,14 +636,14 @@ def build_pdf():
     ])
 
     pdf.set_font("IPAexGothic", "", 9)
-    pdf.multi_cell(0, 5,
+    pdf.multi_cell(
+        0,
+        5,
         "※諸費用は概算です。物件・契約内容により増減します。\n"
-        "登記費用・保険料・精算金などは見積確定後に決定します。")
+        "登記費用・保険料・精算金などは見積確定後に決定します。"
+    )
     pdf.ln(2)
 
-    
-    
-    # --- 借入パターン比較 ---
     pdf.set_font("IPAexGothic", "B", 10)
     pdf.cell(0, 6, "◆ 借入パターン比較", ln=1)
     pdf.cell(90, 7, "借入パターン", 1, 0, "C")
@@ -601,18 +665,12 @@ def build_pdf():
 
     out = pdf.output(dest="S")
     return out.encode("latin-1") if isinstance(out, str) else bytes(out)
+
 # ----------------------------
 # Supabase保存
 # ----------------------------
 if st.button("💾 諸費用データを保存"):
     try:
-        # 不要な一時キー（内部フラグ）を除外
-        exclude_keys = {"_deposit_manual", "_prev_price", "_loanfee_manual", "_prev_loan_amount", "_manual_broker", "_prev_broker_price"}
-        
-        # 保存する値を再確認
-        # broker_totalなどはnew_broker_totalなどを使わずに、session_stateから取得した値を使う
-        # ※ session_stateには既にsave_to_stateで確定値が入っている
-        
         payload = {
             "client_id": client_id,
             "customer_name": st.session_state.get("customer_name", ""),
@@ -621,63 +679,60 @@ if st.button("💾 諸費用データを保存"):
             "is_new": st.session_state.get("is_new", False),
             "use_flat35": st.session_state.get("use_flat35", False),
             "elec_contract": st.session_state.get("elec_contract", False),
-            
-            # 数値データ
-            "price_man": price_man,
-            "property_price": property_price,
-            "deposit": deposit,
-            "loan_amount_man": loan_amount_man,
-            "loan_amount": loan_amount,
-            "loan_fee": new_loan_fee, # ユーザー入力値
-            "broker_total": new_broker_total, # ユーザー入力値
-            "broker_contract": new_broker_contract, # ユーザー入力値
-            "broker_settlement": broker_settlement,
-            "regist_fee": regist_fee,
-            "fire_fee": fire_fee,
-            "tax_clear": tax_clear,
-            "display_fee": display_fee,
-            "tekigo_fee": tekigo_fee,
-            "move_fee": move_fee,
-            "reform_fee": reform_fee,
-            "stamp_fee": stamp_fee,
-            
-            # 自動計算フラグ
-            "_deposit_manual": st.session_state.get("_deposit_manual", False),
-            "_loanfee_manual": st.session_state.get("_loanfee_manual", False),
-            "_manual_broker": st.session_state.get("_manual_broker", False),
 
-            # 合計/月々
-            "contract_funds": contract_funds,
-            "settlement_funds": settlement_funds,
-            "total_expenses": total_expenses,
-            "total": total,
-            "monthly_full": m_full,
-            "monthly_only": m_only,
-            "monthly_A": mA,
-            "monthly_B": mB,
-            "rateA": rateA,
-            "rateB": rateB,
-            "yearA": yearA,
-            "yearB": yearB,
-            "loanA_man": loanA_man,
-            "loanB_man": loanB_man,
+            "price_man": int(price_man),
+            "property_price": int(property_price),
+            "deposit": int(deposit),
+            "loan_amount_man": int(loan_amount_man),
+            "loan_amount": int(loan_amount),
+            "loan_fee": int(new_loan_fee),
+            "broker_total": int(new_broker_total),
+            "broker_contract": int(new_broker_contract),
+            "broker_settlement": int(broker_settlement),
+            "regist_fee": int(regist_fee),
+            "fire_fee": int(fire_fee),
+            "tax_clear": int(tax_clear),
+            "display_fee": int(display_fee),
+            "tekigo_fee": int(tekigo_fee),
+            "move_fee": int(move_fee),
+            "reform_fee": int(reform_fee),
+            "stamp_fee": int(stamp_fee),
+
+            "_deposit_manual": bool(st.session_state.get("_deposit_manual", False)),
+            "_loanfee_manual": bool(st.session_state.get("_loanfee_manual", False)),
+            "_manual_broker": bool(st.session_state.get("_manual_broker", False)),
+            "_prev_price": int(price_man),
+            "_prev_loan_amount": int(loan_amount_man),
+            "_prev_broker_price": int(property_price),
+
+            "contract_funds": int(contract_funds),
+            "settlement_funds": int(settlement_funds),
+            "total_expenses": int(total_expenses),
+            "total": int(total),
+            "target_expenses": int(target_expenses),
+
+            "base_rate": float(base_rate),
+            "base_years": int(base_years),
+            "monthly_full": int(m_full),
+            "monthly_only": int(m_only),
+            "monthly_A": int(mA),
+            "monthly_B": int(mB),
+            "rateA": float(rateA),
+            "rateB": float(rateB),
+            "yearA": int(yearA),
+            "yearB": int(yearB),
+            "loanA_man": int(loanA_man),
+            "loanB_man": int(loanB_man),
             "saved_at": now_iso(),
         }
 
-        # 安全対策：Supabaseのスキーマにないキーを排除 (今回はそのまま)
-        # 内部フラグは保存したいので、exclude_keysから除外
-        
-        # 最終的に保存するデータ
-        final_payload = {k: st.session_state[k] for k in st.session_state.keys() if not k.startswith("_prev_") and k in payload}
-        final_payload["client_id"] = client_id
-        final_payload["saved_at"] = now_iso()
-        
-        SB.table("fees_detail").upsert(final_payload, on_conflict="client_id").execute()
-        st.success("保存しました ✅") # 👈 実際にはDB接続が必要
+        SB.table("fees_detail").upsert(payload, on_conflict="client_id").execute()
+        st.success("保存しました ✅")
     except Exception as e:
         st.error(f"保存中にエラー: {e}")
+
 # ----------------------------
-# PDF生成（確実に定義後に呼び出し）
+# PDF生成
 # ----------------------------
 try:
     pdf_bytes = build_pdf()
