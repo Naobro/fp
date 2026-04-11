@@ -296,7 +296,8 @@ new_loan_fee = number_input_commas(
 )
 st.session_state["_loanfee_manual"] = bool(new_loan_fee != auto_loan_fee)
 st.session_state["_prev_loan_amount"] = int(loan_amount_man)
-save_to_state("loan_fee", new_loan_fee)
+loan_fee = int(new_loan_fee)
+save_to_state("loan_fee", loan_fee)
 
 # --- 仲介手数料 ---
 tax_rate = 0.10
