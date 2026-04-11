@@ -401,20 +401,40 @@ save_to_state("move_fee", move_fee)
 # --- 金利パターン ---
 st.markdown("#### 借入パターン A / B（手動入力）")
 
+base_rate_default = st.session_state.get("base_rate", 0.590)
+if base_rate_default in [None, ""]:
+    base_rate_default = 0.590
+try:
+    base_rate_default = float(base_rate_default)
+except:
+    base_rate_default = 0.590
+
 base_rate = st.number_input(
     "基準金利（年%）",
-    value=float(st.session_state.get("base_rate", 0.590)),
+    value=base_rate_default,
     step=0.001,
     format="%.3f",
     key="input_base_rate",
 )
-save_to_state("base_rate", float(base_rate))
+base_rate = float(base_rate)
+save_to_state("base_rate", base_rate)
 
-base_years = int(st.session_state.get("base_years", 35))
+base_years_default = st.session_state.get("base_years", 35)
+if base_years_default in [None, ""]:
+    base_years_default = 35
+try:
+    base_years_default = int(base_years_default)
+except:
+    try:
+        base_years_default = int(float(base_years_default))
+    except:
+        base_years_default = 35
+
+base_years = base_years_default
 save_to_state("base_years", base_years)
 
-
 colA1, colA2, colA3 = st.columns(3)
+
 with colA1:
     loanA_default = st.session_state.get("loanA_man", price_man)
     if loanA_default in [None, ""]:
@@ -429,12 +449,13 @@ with colA1:
 
     loanA_man = st.number_input(
         "借入金額（万円：A）",
+        min_value=0,
+        max_value=10_000_000,
         value=loanA_default,
         step=10,
         format="%d",
-        key="loanA_man",
+        key="input_loanA_man",
     )
-    loanA_man = int(loanA_man)
 
 with colA2:
     rateA_default = st.session_state.get("rateA", base_rate)
@@ -450,9 +471,8 @@ with colA2:
         value=rateA_default,
         step=0.001,
         format="%.3f",
-        key="rateA",
+        key="input_rateA",
     )
-    rateA = float(rateA)
 
 with colA3:
     yearA_default = st.session_state.get("yearA", base_years)
@@ -468,16 +488,22 @@ with colA3:
 
     yearA = st.number_input(
         "年数（A）",
+        min_value=1,
+        max_value=100,
         value=yearA_default,
         step=1,
         format="%d",
-        key="yearA",
+        key="input_yearA",
     )
-    yearA = int(yearA)
 
-loanA = loanA_man * 10_000
+loanA_man = loanA_man if loanA_man is not None else 0
+rateA = rateA if rateA is not None else 0.0
+yearA = yearA if yearA is not None else 35
 
-save_to_state("loanA_man", loanA_man)
+loanA = int(loanA_man) * 10_000
+rateA = float(rateA)
+yearA = int(yearA)
+save_to_state("loanA_man", int(loanA_man))
 save_to_state("rateA", rateA)
 save_to_state("yearA", yearA)
 
@@ -497,12 +523,13 @@ with colB1:
 
     loanB_man = st.number_input(
         "借入金額（万円：B）",
+        min_value=0,
+        max_value=10_000_000,
         value=loanB_default,
         step=10,
         format="%d",
-        key="loanB_man",
+        key="input_loanB_man",
     )
-    loanB_man = int(loanB_man)
 
 with colB2:
     rateB_default = st.session_state.get("rateB", base_rate)
@@ -518,9 +545,8 @@ with colB2:
         value=rateB_default,
         step=0.001,
         format="%.3f",
-        key="rateB",
+        key="input_rateB",
     )
-    rateB = float(rateB)
 
 with colB3:
     yearB_default = st.session_state.get("yearB", base_years)
@@ -536,16 +562,22 @@ with colB3:
 
     yearB = st.number_input(
         "年数（B）",
+        min_value=1,
+        max_value=100,
         value=yearB_default,
         step=1,
         format="%d",
-        key="yearB",
+        key="input_yearB",
     )
-    yearB = int(yearB)
 
-loanB = loanB_man * 10_000
+loanB_man = loanB_man if loanB_man is not None else 0
+rateB = rateB if rateB is not None else 0.0
+yearB = yearB if yearB is not None else 35
 
-save_to_state("loanB_man", loanB_man)
+loanB = int(loanB_man) * 10_000
+rateB = float(rateB)
+yearB = int(yearB)
+save_to_state("loanB_man", int(loanB_man))
 save_to_state("rateB", rateB)
 save_to_state("yearB", yearB)
 # --- 月々支払計算 ---
