@@ -174,8 +174,8 @@ col1, col2, col3 = st.columns(3)
 with col1:
     prop_type = st.selectbox(
         "物件種別",
-        ["マンション", "戸建て"],
-        index=0 if st.session_state.get("prop_type", "マンション") == "マンション" else 1,
+        ["マンション", "戸建て", "中古戸建・土地"],
+        index=["マンション", "戸建て", "中古戸建・土地"].index(st.session_state.get("prop_type", "マンション")),
         key="input_prop_type",
     )
     save_to_state("prop_type", prop_type)
@@ -403,6 +403,49 @@ save_to_state("tekigo_fee", tekigo_fee)
 save_to_state("reform_fee", reform_fee)
 save_to_state("move_fee", move_fee)
 
+
+# ----------------------------
+# 中古戸建・土地
+# ----------------------------
+is_kodate_land = (prop_type == "中古戸建・土地")
+
+demolition_fee = number_input_commas(
+    "解体費用（円）※アスベスト調査込み",
+    st.session_state.get("demolition_fee", 0),
+    "input_demolition_fee",
+)
+
+zanchi_fee = number_input_commas(
+    "残置物撤去（円）",
+    st.session_state.get("zanchi_fee", 0),
+    "input_zanchi_fee",
+)
+
+loss_reg_fee = number_input_commas(
+    "滅失登記費用（円）",
+    st.session_state.get("loss_reg_fee", 0),
+    "input_loss_reg_fee",
+)
+
+survey_fee = number_input_commas(
+    "境界確定測量費用（円）",
+    st.session_state.get("survey_fee", 0),
+    "input_survey_fee",
+)
+
+yohheki_fee = number_input_commas(
+    "擁壁解体・是正（円）",
+    st.session_state.get("yohheki_fee", 0),
+    "input_yohheki_fee",
+)
+
+
+save_to_state("demolition_fee", demolition_fee)
+save_to_state("zanchi_fee", zanchi_fee)
+save_to_state("loss_reg_fee", loss_reg_fee)
+save_to_state("survey_fee", survey_fee)
+save_to_state("yohheki_fee", yohheki_fee)
+
 # --- 金利パターン ---
 st.markdown("#### 借入パターン A / B（手動入力）")
 
@@ -588,7 +631,12 @@ save_to_state("yearB", yearB)
 # --- 月々支払計算 ---
 total_expenses = int(
     regist_fee + loan_fee + fire_fee + tax_clear + display_fee +
-    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total
+    tekigo_fee + move_fee + reform_fee + stamp_fee + broker_total +
+    (demolition_fee if prop_type == "中古戸建・土地" else 0) +
+    (zanchi_fee if prop_type == "中古戸建・土地" else 0) +
+    (loss_reg_fee if prop_type == "中古戸建・土地" else 0) +
+    (survey_fee if prop_type == "中古戸建・土地" else 0) +
+    (yohheki_fee if prop_type == "中古戸建・土地" else 0)
 )
 total = property_price + total_expenses
 
@@ -727,6 +775,15 @@ def build_pdf():
         ["引越し費用", fmt_jpy(move_fee), "入居時", "距離・荷物量による目安"],
     ])
 
+    if prop_type == "中古戸建・土地":
+        draw_table("◆ 中古戸建・土地 追加費用", [
+            ["解体費用", fmt_jpy(demolition_fee), "契約後", "アスベスト調査込み"],
+            ["残置物撤去", fmt_jpy(zanchi_fee), "契約後", "残置物がある場合"],
+            ["滅失登記費用", fmt_jpy(loss_reg_fee), "解体後", "建物解体後に必要"],
+            ["境界確定測量費用", fmt_jpy(survey_fee), "契約後", "境界確定測量"],
+            ["擁壁解体・是正", fmt_jpy(yohheki_fee), "必要時", "擁壁がある場合"],
+        ])
+
     pdf.set_font("IPAexGothic", "", 9)
     pdf.multi_cell(
         0,
@@ -789,6 +846,12 @@ if st.button("💾 諸費用データを保存"):
             "reform_fee": int(reform_fee),
             "stamp_fee": int(stamp_fee),
 
+            "demolition_fee": int(demolition_fee),
+            "zanchi_fee": int(zanchi_fee),
+            "loss_reg_fee": int(loss_reg_fee),
+            "survey_fee": int(survey_fee),
+            "yohheki_fee": int(yohheki_fee),
+
             "_deposit_manual": bool(st.session_state.get("_deposit_manual", False)),
             "_loanfee_manual": bool(st.session_state.get("_loanfee_manual", False)),
             "_manual_broker": bool(st.session_state.get("_manual_broker", False)),
@@ -815,7 +878,6 @@ if st.button("💾 諸費用データを保存"):
         st.success("保存しました ✅")
     except Exception as e:
         st.error(f"保存中にエラー: {e}")
-
 # ----------------------------
 # PDF生成
 # ----------------------------
