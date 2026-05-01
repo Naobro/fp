@@ -24,14 +24,15 @@ st.markdown("""
     box-shadow: 0 3px 10px rgba(0,0,0,0.15);
     text-align: center;
 }
-.header-box .company { font-size: 14px; font-weight: 600; opacity: 0.95; margin-bottom: 4px; }
-.header-box .agent { font-size: 18px; font-weight: 800; margin-bottom: 10px; letter-spacing: 0.5px; }
-.header-box .catch { font-size: 15px; font-weight: 600; line-height: 1.6; margin-bottom: 14px; }
-.header-box .catch .strong { font-size: 17px; font-weight: 800; color: #fff200; }
+.header-box .company { font-size: 14px; font-weight: 600; opacity: 0.95; margin-bottom: 4px; color:#fff !important; -webkit-text-fill-color:#fff; }
+.header-box .agent { font-size: 18px; font-weight: 800; margin-bottom: 10px; letter-spacing: 0.5px; color:#fff !important; -webkit-text-fill-color:#fff; }
+.header-box .catch { font-size: 15px; font-weight: 600; line-height: 1.6; margin-bottom: 14px; color:#fff !important; -webkit-text-fill-color:#fff; }
+.header-box .catch .strong { font-size: 17px; font-weight: 800; color: #fff200 !important; -webkit-text-fill-color:#fff200; }
 .header-cta {
     display: inline-block;
     background: #ff5722;
     color: #fff !important;
+    -webkit-text-fill-color:#fff;
     font-size: 18px;
     font-weight: 900;
     padding: 12px 38px;
@@ -143,7 +144,7 @@ FLAT35S_GROUPS = {
         "S（ZEH）": 3,
         "S（Aプラン）": 2,
         "S（Bプラン）": 1,
-        "リノベ（Aプラン）": 4,
+        "リノベ(Aプラン）": 4,
         "リノベ（Bプラン）": 2,
     },
     "3. 管理・修繕": {
@@ -268,7 +269,7 @@ def build_pdf(
     story.append(t_cond)
     story.append(Spacer(1, 2*mm))
 
-    # ── シミュレーション結果（フォント2回り小さく） ──
+    # ── シミュレーション結果 ──
     story.append(Paragraph("■ 返済シミュレーション結果", jp_h2))
     chk_filtered = [y for y in checkpoints if y <= years]
     header = ["シナリオ"] + [f"{y}年末" for y in chk_filtered]
@@ -278,15 +279,14 @@ def build_pdf(
         for y in chk_filtered:
             if y in data:
                 d = data[y]
-                # 改行区切りで3行
                 row.append(f"金利{d['金利']}%\n月{d['月額']}万\n累計{d['累計']}万")
             else:
                 row.append("-")
         rows_pdf.append(row)
 
     ncols = len(header)
-    total_w = 185  # mm
-    name_w  = 32   # シナリオ列
+    total_w = 185
+    name_w  = 32
     rest_w  = (total_w - name_w) / max(ncols - 1, 1)
     col_w   = [name_w * mm] + [rest_w * mm] * (ncols - 1)
 
@@ -295,8 +295,8 @@ def build_pdf(
         ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a4f8a")),
         ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
         ("FONTNAME",      (0, 0), (-1, -1), JP),
-        ("FONTSIZE",      (0, 0), (-1, -1), 5),   # ← 2回り小さく（7→5）
-        ("LEADING",       (0, 0), (-1, -1), 7),   # ← 行間も縮小
+        ("FONTSIZE",      (0, 0), (-1, -1), 5),
+        ("LEADING",       (0, 0), (-1, -1), 7),
         ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#eef3fb")]),
         ("GRID",          (0, 0), (-1, -1), 0.3, colors.grey),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
@@ -668,7 +668,7 @@ with c9:
     st.metric("①変動 月額返済",       f"{monthly_var:,.0f} 円")
     st.metric("③フラット35 月額返済", f"{monthly_flat:,.0f} 円")
 with c10:
-    st.metric("差額（月）",   f"{diff_monthly:,.0f} 円")
+    st.metric("差額(月）",   f"{diff_monthly:,.0f} 円")
     st.metric("差額（総額）", f"{diff_monthly * years * 12:,.0f} 円")
 
 c11, c12 = st.columns(2)
@@ -688,7 +688,7 @@ st.success(
 )
 
 # ──────────────────────────────────────────────────────────────────────
-# どちらを選ぶ？（差額投資の下に追加）
+# どちらを選ぶ？（ダークモード対応）
 # ──────────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown(
@@ -699,14 +699,14 @@ st.markdown(
 col_a, col_b = st.columns(2)
 with col_a:
     st.markdown("""
-<div style="background:#dbeafe; border-radius:10px; padding:16px; height:100%;">
-<h4 style="color:#1d4ed8; margin-top:0;">📈 変動金利を選ぶ方</h4>
-<p>
+<div style="background:#dbeafe; border-radius:10px; padding:16px; height:100%; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
+<h4 style="color:#1d4ed8 !important; -webkit-text-fill-color:#1d4ed8; margin-top:0;">📈 変動金利を選ぶ方</h4>
+<p style="color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
 固定金利を支払っているつもりで<br>
-<b>差額を毎月運用する</b><br><br>
+<b style="color:#0f172a !important; -webkit-text-fill-color:#0f172a;">差額を毎月運用する</b><br><br>
 変動金利で借りて、固定との差額を積立投資に回すことで、
 長期的に大きな資産形成が期待できます。<br><br>
-ただし、<b>金利上昇リスク・運用リスク</b>を
+ただし、<b style="color:#0f172a !important; -webkit-text-fill-color:#0f172a;">金利上昇リスク・運用リスク</b>を
 自己管理できる方向けです。
 </p>
 </div>
@@ -714,21 +714,21 @@ with col_a:
 
 with col_b:
     st.markdown("""
-<div style="background:#dcfce7; border-radius:10px; padding:16px; height:100%;">
-<h4 style="color:#15803d; margin-top:0;">🛡️ 固定金利を選ぶ方</h4>
-<p>
+<div style="background:#dcfce7; border-radius:10px; padding:16px; height:100%; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
+<h4 style="color:#15803d !important; -webkit-text-fill-color:#15803d; margin-top:0;">🛡️ 固定金利を選ぶ方</h4>
+<p style="color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
 金利上昇リスク・運用失敗リスク・<br>
-<b>精神的ストレスを避けたい方</b><br><br>
+<b style="color:#0f172a !important; -webkit-text-fill-color:#0f172a;">精神的ストレスを避けたい方</b><br><br>
 返済額が全期間固定で、家計設計が安定します。
 金利がどう動いても毎月の支払いは変わらず、
 安心して生活できます。<br><br>
-<b>安定・安心を最優先する方</b>向けです。
+<b style="color:#0f172a !important; -webkit-text-fill-color:#0f172a;">安定・安心を最優先する方</b>向けです。
 </p>
 </div>
 """, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────────────────────────────
-# メリット・デメリット
+# メリット・デメリット（ダークモード対応）
 # ──────────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown(
@@ -736,34 +736,34 @@ st.markdown(
     unsafe_allow_html=True
 )
 st.markdown("""
-<div style="font-size:14px; line-height:1.8;">
-<table style="width:100%; border-collapse:collapse;">
-<tr style="background:#1a4f8a; color:white;">
-  <th style="padding:6px 10px; width:12%;">　</th>
-  <th style="padding:6px 10px; width:44%;">変動金利</th>
-  <th style="padding:6px 10px; width:44%;">フラット35（固定）</th>
+<div style="font-size:14px; line-height:1.8; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
+<table style="width:100%; border-collapse:collapse; background:#ffffff;">
+<tr style="background:#1a4f8a;">
+  <th style="padding:6px 10px; width:12%; color:#ffffff !important; -webkit-text-fill-color:#ffffff;">　</th>
+  <th style="padding:6px 10px; width:44%; color:#ffffff !important; -webkit-text-fill-color:#ffffff;">変動金利</th>
+  <th style="padding:6px 10px; width:44%; color:#ffffff !important; -webkit-text-fill-color:#ffffff;">フラット35（固定）</th>
 </tr>
 <tr style="background:#eef3fb;">
-  <td style="padding:6px 10px; font-weight:bold;">メリット</td>
-  <td style="padding:6px 10px;">
+  <td style="padding:6px 10px; font-weight:bold; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">メリット</td>
+  <td style="padding:6px 10px; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
     ・借入時の金利が低く月々返済を抑えやすい<br>
     ・金利低下時に返済負担が軽減<br>
     ・団信の選択肢が多い
   </td>
-  <td style="padding:6px 10px;">
+  <td style="padding:6px 10px; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
     ・返済額固定で家計設計が安定<br>
     ・金利上昇リスクなし<br>
     ・団信加入が任意（健康不安でも利用可）
   </td>
 </tr>
-<tr>
-  <td style="padding:6px 10px; font-weight:bold;">デメリット</td>
-  <td style="padding:6px 10px;">
+<tr style="background:#ffffff;">
+  <td style="padding:6px 10px; font-weight:bold; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">デメリット</td>
+  <td style="padding:6px 10px; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
     ・金利上昇で返済額増のリスク<br>
     ・125%ルールによる未払利息リスク<br>
     ・家計設計が不安定
   </td>
-  <td style="padding:6px 10px;">
+  <td style="padding:6px 10px; color:#0f172a !important; -webkit-text-fill-color:#0f172a;">
     ・初期金利が変動より高い<br>
     ・市場金利低下の恩恵なし<br>
     ・借入上限8,000万円<br>
@@ -815,6 +815,7 @@ st.caption(
     "※本シミュレーションは概算です。実際の返済額・金利は金融機関にご確認ください。"
     "　フラット35Sポイント引下げは住宅金融支援機構の審査・認定が必要です。"
 )
+
 # ===== 公式LINEバナー（×で閉じられる） =====
 import urllib.parse as _url
 
@@ -855,18 +856,19 @@ def render_line_banner():
       font-size: 15px; text-align: center; position: relative;
     }}
     .line-banner:hover {{ transform: scale(1.02); background:#05b34d; }}
-    .line-banner .ttl {{ font-size: 17px; font-weight: 800; line-height: 1.4; }}
-    .line-banner .id  {{ font-size: 20px; font-weight: 900; margin: 6px 0 6px; }}
+    .line-banner .ttl {{ font-size: 17px; font-weight: 800; line-height: 1.4; color:#fff !important; -webkit-text-fill-color:#fff; }}
+    .line-banner .id  {{ font-size: 20px; font-weight: 900; margin: 6px 0 6px; color:#fff !important; -webkit-text-fill-color:#fff; }}
     .line-banner img  {{
       width: 130px; display:block; margin: 8px auto 10px;
       border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       background:#fff;
     }}
-    .line-banner .cta {{ display:inline-block; font-weight: 800; text-decoration: underline; color:#fff; }}
+    .line-banner .cta {{ display:inline-block; font-weight: 800; text-decoration: underline; color:#fff !important; -webkit-text-fill-color:#fff; }}
     .line-banner .close-btn {{
       position:absolute; top:6px; right:10px; width:24px; height:24px;
       border-radius:50%; background: rgba(0,0,0,0.25);
-      color:#fff; text-align:center; line-height:24px;
+      color:#fff !important; -webkit-text-fill-color:#fff;
+      text-align:center; line-height:24px;
       font-size:16px; font-weight:700; text-decoration:none;
     }}
     .line-banner .close-btn:hover {{ background: rgba(0,0,0,0.4); }}
