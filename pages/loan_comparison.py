@@ -322,9 +322,9 @@ st.markdown(
 )
 
 # ──────────────────────────────────────────────────────────────────────
-# ① フラット35 S ポイント入力
+# ① フラット35 S ポイント入力（各グループ1つのみ選択可）
 # ──────────────────────────────────────────────────────────────────────
-with st.expander("① フラット35 S ポイント入力（チェックで合計自動計算）", expanded=True):
+with st.expander("① フラット35 S ポイント入力（各グループから1つ選択）", expanded=True):
     total_points = 0
     cols_g = st.columns(5)
     group_names = list(FLAT35S_GROUPS.keys())
@@ -333,20 +333,61 @@ with st.expander("① フラット35 S ポイント入力（チェックで合�
         with cols_g[gi]:
             st.markdown(f"**{gname}**")
             items = FLAT35S_GROUPS[gname]
-            for label, pt in items.items():
-                if pt is None:
-                    # 子どもN人：手入力
+
+            if gname == "1. 家族":
+                # 家族グループのみ：子どもN人手入力あり
+                options_family = ["選択なし（0P）"] + [
+                    f"{label}（+{pt}P）" if pt is not None else label
+                    for label, pt in items.items()
+                ]
+                # ラジオ（子どもN人以外）
+                labels_fixed = {
+                    label: pt for label, pt in items.items() if pt is not None
+                }
+                labels_none  = {
+                    label: pt for label, pt in items.items() if pt is None
+                }
+
+                # 固定ポイント選択肢をラジオで
+                radio_options = ["選択なし（0P）"] + [
+                    f"{label}（+{pt}P）" for label, pt in labels_fixed.items()
+                ]
+                selected_family = st.radio(
+                    "選択",
+                    radio_options,
+                    index=0,
+                    key=f"radio_{gname}",
+                    label_visibility="collapsed"
+                )
+                for label, pt in labels_fixed.items():
+                    if selected_family == f"{label}（+{pt}P）":
+                        total_points += pt
+
+                # 子どもN人は手入力（別途加算）
+                st.markdown("**または**")
+                for label, pt in labels_none.items():
                     n = st.number_input(
-                        label, min_value=0, max_value=10, value=0, step=1,
+                        f"{label}（N×1P）",
+                        min_value=0, max_value=10, value=0, step=1,
                         key=f"flat35s_{gname}_{label}"
                     )
                     total_points += n
-                else:
-                    checked = st.checkbox(
-                        f"{label}（+{pt}P）",
-                        key=f"flat35s_{gname}_{label}"
-                    )
-                    if checked:
+
+            else:
+                # その他グループ：ラジオで1つのみ選択
+                option_labels = {label: pt for label, pt in items.items()}
+                radio_options = ["選択なし（0P）"] + [
+                    f"{label}（+{pt}P）" for label, pt in option_labels.items()
+                ]
+                selected = st.radio(
+                    "選択",
+                    radio_options,
+                    index=0,
+                    key=f"radio_{gname}",
+                    label_visibility="collapsed"
+                )
+                for label, pt in option_labels.items():
+                    if selected == f"{label}（+{pt}P）":
                         total_points += pt
 
     disc = get_discount(total_points)
