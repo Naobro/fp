@@ -12,6 +12,59 @@ st.markdown(
     "<style>section[data-testid='stSidebar']{display:none;}</style>",
     unsafe_allow_html=True
 )
+# ===== 共通ヘッダー（会社情報＋相談ボタン）=====
+st.markdown("""
+<style>
+.header-box {
+    background: linear-gradient(135deg, #1a4f8a 0%, #2563eb 100%);
+    color: #fff;
+    padding: 18px 22px;
+    border-radius: 12px;
+    margin-bottom: 18px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+    text-align: center;
+}
+.header-box .company { font-size: 14px; font-weight: 600; opacity: 0.95; margin-bottom: 4px; }
+.header-box .agent { font-size: 18px; font-weight: 800; margin-bottom: 10px; letter-spacing: 0.5px; }
+.header-box .catch { font-size: 15px; font-weight: 600; line-height: 1.6; margin-bottom: 14px; }
+.header-box .catch .strong { font-size: 17px; font-weight: 800; color: #fff200; }
+.header-cta {
+    display: inline-block;
+    background: #ff5722;
+    color: #fff !important;
+    font-size: 18px;
+    font-weight: 900;
+    padding: 12px 38px;
+    border-radius: 50px;
+    text-decoration: none !important;
+    box-shadow: 0 4px 12px rgba(255,87,34,0.4);
+    transition: all 0.2s;
+    letter-spacing: 1px;
+}
+.header-cta:hover { background: #e64a19; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(255,87,34,0.5); }
+@media screen and (max-width: 768px) {
+    .header-box { padding: 14px 16px; }
+    .header-box .company { font-size: 12px; }
+    .header-box .agent { font-size: 16px; }
+    .header-box .catch { font-size: 13px; }
+    .header-box .catch .strong { font-size: 15px; }
+    .header-cta { font-size: 16px; padding: 10px 28px; }
+}
+</style>
+
+<div class="header-box">
+    <div class="company">株式会社 TERASS</div>
+    <div class="agent">不動産エージェント　西山　作成</div>
+    <div class="catch">
+        <span class="strong">不動産売買</span><br>
+        購入前相談・セカンドオピニオン<br>
+        お気軽にご相談ください
+    </div>
+    <a class="header-cta" href="https://share-me.design/Naokiwm" target="_blank" rel="noopener">
+        💬 相談する
+    </a>
+</div>
+""", unsafe_allow_html=True)
 
 import pandas as pd
 import io
