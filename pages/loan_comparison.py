@@ -1,11 +1,13 @@
 # pages/loan_comparison.py
 import streamlit as st
+
 st.set_page_config(
     page_title="変動・固定金利比較",
     page_icon="🏦",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
 st.markdown(
     "<style>section[data-testid='stSidebar']{display:none;}</style>",
     unsafe_allow_html=True
@@ -179,20 +181,20 @@ def build_pdf(
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1a4f8a")))
     story.append(Spacer(1, 3*mm))
 
-    # ── 借入条件 ──
+    # 借入条件
     story.append(Paragraph("■ 借入条件", jp_h2))
     cond_data = [
         ["項目", "内容"],
-        ["借入金額",                  f"{loan_amount_man:,} 万円"],
-        ["自己資金",                  f"{own_funds_man:,} 万円"],
-        ["頭金率",                    f"{chokkin_rate:.1f} ％"],
-        ["返済期間",                  f"{years} 年"],
-        ["①変動金利（現状維持）",     f"{var_rate:.3f} ％"],
+        ["借入金額",                    f"{loan_amount_man:,} 万円"],
+        ["自己資金",                    f"{own_funds_man:,} 万円"],
+        ["頭金率",                      f"{chokkin_rate:.1f} ％"],
+        ["返済期間",                    f"{years} 年"],
+        ["①変動金利（現状維持）",       f"{var_rate:.3f} ％"],
         ["②変動金利BAD（年+0.2%上昇）", f"{var_rate:.3f}％ スタート → 年0.2%上昇"],
-        ["③フラット35 基準金利",      f"{flat_base:.3f} ％"],
-        ["③フラット35 S 合計ポイント", f"{flat_total_p} P"],
+        ["③フラット35 基準金利",        f"{flat_base:.3f} ％"],
+        ["③フラット35 S 合計ポイント",  f"{flat_total_p} P"],
         ["③引下げ（当初1〜5年）",
-         f"▲{disc['5年']:.2f}％ → 適用金利 {max(flat_base - disc['5年'],  0):.3f}％"],
+         f"▲{disc['5年']:.2f}％ → 適用金利 {max(flat_base - disc['5年'], 0):.3f}％"],
         ["③引下げ（6〜10年目）",
          f"▲{disc['10年']:.2f}％ → 適用金利 {max(flat_base - disc['10年'], 0):.3f}％"],
         ["③引下げ（11〜15年目）",
@@ -212,7 +214,7 @@ def build_pdf(
     story.append(t)
     story.append(Spacer(1, 3*mm))
 
-    # ── シミュレーション結果 ──
+    # シミュレーション結果
     story.append(Paragraph("■ 返済シミュレーション結果", jp_h2))
     chk_filtered = [y for y in checkpoints if y <= years]
     header = ["シナリオ"] + [f"{y}年末" for y in chk_filtered]
@@ -243,15 +245,15 @@ def build_pdf(
     story.append(t2)
     story.append(Spacer(1, 3*mm))
 
-    # ── 差額投資シミュレーション ──
+    # 差額投資
     story.append(Paragraph("■ 差額投資シミュレーション（①変動現状維持 vs ③固定）", jp_h2))
     mv = monthly_payment(loan_amount_man * 10_000, var_rate, years * 12)
     mf = monthly_payment(loan_amount_man * 10_000, flat_base, years * 12)
     inv_data = [
         ["項目", "金額"],
-        ["①変動 月額返済",        f"{mv:,.0f} 円"],
-        ["③フラット35 月額返済",  f"{mf:,.0f} 円"],
-        ["差額（月）",            f"{diff_monthly:,.0f} 円"],
+        ["①変動 月額返済",           f"{mv:,.0f} 円"],
+        ["③フラット35 月額返済",     f"{mf:,.0f} 円"],
+        ["差額（月）",               f"{diff_monthly:,.0f} 円"],
         [f"差額を年利{invest_rate:.1f}%で{invest_years}年運用",
          f"{future_value / 10_000:,.1f} 万円"],
     ]
@@ -269,7 +271,7 @@ def build_pdf(
     story.append(t3)
     story.append(Spacer(1, 3*mm))
 
-    # ── メリット・デメリット ──
+    # メリット・デメリット
     story.append(Paragraph("■ 変動金利 vs フラット35 メリット・デメリット", jp_h2))
     merit_data = [
         ["", "変動金利", "フラット35（固定）"],
@@ -315,7 +317,7 @@ st.markdown(
 )
 
 # ──────────────────────────────────────────────────────────────────────
-# ① フラット35 S ポイント入力（各グループ1つのみ選択）
+# ① フラット35 S ポイント入力
 # ──────────────────────────────────────────────────────────────────────
 with st.expander("① フラット35 S ポイント入力（各グループから1つ選択）", expanded=True):
     total_points = 0
@@ -328,42 +330,42 @@ with st.expander("① フラット35 S ポイント入力（各グループか�
             items = FLAT35S_GROUPS[gname]
 
             if gname == "1. 家族":
-                labels_fixed = {l: p for l, p in items.items() if p is not None}
-                labels_none  = {l: p for l, p in items.items() if p is None}
+                labels_fixed = {lb: pt for lb, pt in items.items() if pt is not None}
+                labels_none  = {lb: pt for lb, pt in items.items() if pt is None}
 
                 radio_options = ["選択なし（0P）"] + [
-                    f"{l}（+{p}P）" for l, p in labels_fixed.items()
+                    f"{lb}（+{pt}P）" for lb, pt in labels_fixed.items()
                 ]
                 selected_family = st.radio(
                     "選択", radio_options, index=0,
                     key=f"radio_{gname}",
                     label_visibility="collapsed"
                 )
-                for l, p in labels_fixed.items():
-                    if selected_family == f"{l}（+{p}P）":
-                        total_points += p
+                for lb, pt in labels_fixed.items():
+                    if selected_family == f"{lb}（+{pt}P）":
+                        total_points += pt
 
                 st.markdown("**または**")
-                for l, p in labels_none.items():
+                for lb, pt in labels_none.items():
                     n = st.number_input(
-                        f"{l}（N×1P）",
+                        f"{lb}（N×1P）",
                         min_value=0, max_value=10, value=0, step=1,
-                        key=f"flat35s_{gname}_{l}"
+                        key=f"flat35s_{gname}_{lb}"
                     )
                     total_points += n
             else:
-                option_labels = {l: p for l, p in items.items()}
+                option_labels = {lb: pt for lb, pt in items.items()}
                 radio_options = ["選択なし（0P）"] + [
-                    f"{l}（+{p}P）" for l, p in option_labels.items()
+                    f"{lb}（+{pt}P）" for lb, pt in option_labels.items()
                 ]
                 selected = st.radio(
                     "選択", radio_options, index=0,
                     key=f"radio_{gname}",
                     label_visibility="collapsed"
                 )
-                for l, p in option_labels.items():
-                    if selected == f"{l}（+{p}P）":
-                        total_points += p
+                for lb, pt in option_labels.items():
+                    if selected == f"{lb}（+{pt}P）":
+                        total_points += pt
 
     disc = get_discount(total_points)
     st.markdown("---")
@@ -442,12 +444,12 @@ checkpoints = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
 scenarios = {}
 
-# ① 変動：現状維持（var_rateで固定）
+# ① 変動：現状維持
 scenarios["①変動 現状維持"] = {
     y: var_rate for y in range(1, years + 1)
 }
 
-# ② 変動：BAD（var_rateを起点に年+0.2%上昇、上限なし）
+# ② 変動：BAD（var_rateを起点に年+0.2%上昇）
 scenarios["②変動 BAD（年+0.2%上昇）"] = {
     y: round(var_rate + 0.2 * (y - 1), 3) for y in range(1, years + 1)
 }
@@ -456,9 +458,7 @@ scenarios["②変動 BAD（年+0.2%上昇）"] = {
 flat_s_schedule = flat35s_schedule(flat_base, total_points, years)
 scenarios[f"③固定 フラット35 S（{total_points}P）"] = flat_s_schedule
 
-# ──────────────────────────────────────────────────────────────────────
 # シミュレーション実行
-# ──────────────────────────────────────────────────────────────────────
 sim_results = {}
 for name, sched in scenarios.items():
     sim_results[name] = simulate(loan_amount, years, sched, checkpoints)
@@ -472,7 +472,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# BADシナリオの金利推移を補足表示
 st.caption(
     f"②BAD金利推移：{var_rate:.3f}%（1年目）→ "
     f"{var_rate + 0.2*4:.3f}%（5年目）→ "
@@ -499,4 +498,137 @@ st.dataframe(pd.DataFrame(rows), use_container_width=True)
 # フラット35 S 引下げ対応表（参考）
 # ──────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st
+st.markdown("**フラット35 S 金利引下げ対応表（参考）**")
+disc_rows = []
+for p in range(1, 13):
+    d = get_discount(p)
+    disc_rows.append({
+        "合計ポイント": f"{p}P",
+        "当初1〜5年":  f"▲{d['5年']:.2f}%"  if d['5年']  > 0 else "±0%",
+        "6〜10年目":   f"▲{d['10年']:.2f}%" if d['10年'] > 0 else "±0%",
+        "11〜15年目":  f"▲{d['15年']:.2f}%" if d['15年'] > 0 else "±0%",
+    })
+st.dataframe(pd.DataFrame(disc_rows), use_container_width=True, hide_index=True)
+
+# ──────────────────────────────────────────────────────────────────────
+# 差額投資シミュレーション
+# ──────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    "<h3 style='font-size:20px;'>📈 差額投資シミュレーション（①変動現状維持 vs ③固定）</h3>",
+    unsafe_allow_html=True
+)
+
+monthly_var  = monthly_payment(loan_amount * 10_000, var_rate,  years * 12)
+monthly_flat = monthly_payment(loan_amount * 10_000, flat_base, years * 12)
+diff_monthly = monthly_flat - monthly_var
+
+c9, c10 = st.columns(2)
+with c9:
+    st.metric("①変動 月額返済",       f"{monthly_var:,.0f} 円")
+    st.metric("③フラット35 月額返済", f"{monthly_flat:,.0f} 円")
+with c10:
+    st.metric("差額（月）",   f"{diff_monthly:,.0f} 円")
+    st.metric("差額（総額）", f"{diff_monthly * years * 12:,.0f} 円")
+
+c11, c12 = st.columns(2)
+with c11:
+    invest_rate = st.number_input(
+        "想定利回り（年率 ％）", value=4.0, step=0.1, format="%.1f"
+    )
+with c12:
+    invest_years = st.number_input(
+        "運用期間（年）", value=int(years), step=1, min_value=1, max_value=50
+    )
+
+future_value = compound_investment(diff_monthly, invest_rate, invest_years)
+st.success(
+    f"差額（月 {diff_monthly:,.0f}円）を年利 {invest_rate:.1f}% で "
+    f"{invest_years} 年間複利運用 → **{future_value / 10_000:,.1f} 万円**"
+)
+
+# ──────────────────────────────────────────────────────────────────────
+# メリット・デメリット
+# ──────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    "<h3 style='font-size:20px;'>📋 変動・固定 メリット・デメリット</h3>",
+    unsafe_allow_html=True
+)
+st.markdown("""
+<div style="font-size:14px; line-height:1.8;">
+<table style="width:100%; border-collapse:collapse;">
+<tr style="background:#1a4f8a; color:white;">
+  <th style="padding:6px 10px; width:12%;">　</th>
+  <th style="padding:6px 10px; width:44%;">変動金利</th>
+  <th style="padding:6px 10px; width:44%;">フラット35（固定）</th>
+</tr>
+<tr style="background:#eef3fb;">
+  <td style="padding:6px 10px; font-weight:bold;">メリット</td>
+  <td style="padding:6px 10px;">
+    ・借入時の金利が低く月々返済を抑えやすい<br>
+    ・金利低下時に返済負担が軽減<br>
+    ・団信の選択肢が多い
+  </td>
+  <td style="padding:6px 10px;">
+    ・返済額固定で家計設計が安定<br>
+    ・金利上昇リスクなし<br>
+    ・団信加入が任意（健康不安でも利用可）
+  </td>
+</tr>
+<tr>
+  <td style="padding:6px 10px; font-weight:bold;">デメリット</td>
+  <td style="padding:6px 10px;">
+    ・金利上昇で返済額増のリスク<br>
+    ・125%ルールによる未払利息リスク<br>
+    ・家計設計が不安定
+  </td>
+  <td style="padding:6px 10px;">
+    ・初期金利が変動より高い<br>
+    ・市場金利低下の恩恵なし<br>
+    ・借入上限8,000万円<br>
+    ・適合証明（フラット35適合）が必要
+  </td>
+</tr>
+</table>
+</div>
+""", unsafe_allow_html=True)
+
+# ──────────────────────────────────────────────────────────────────────
+# ⑤ PDF ダウンロード
+# ──────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    "<h3 style='font-size:20px;'>⬇️ PDF レポートダウンロード（A4 1枚）</h3>",
+    unsafe_allow_html=True
+)
+
+if st.button("📄 PDF を生成してダウンロード"):
+    with st.spinner("PDF を生成中..."):
+        pdf_bytes = build_pdf(
+            loan_amount_man=loan_amount,
+            years=years,
+            own_funds_man=own_funds,
+            chokkin_rate=chokkin_rate,
+            var_rate=var_rate,
+            flat_base=flat_base,
+            flat_total_p=total_points,
+            disc=disc,
+            checkpoints=checkpoints,
+            scenarios_data=sim_results,
+            diff_monthly=diff_monthly,
+            invest_rate=invest_rate,
+            invest_years=invest_years,
+            future_value=future_value,
+        )
+    st.download_button(
+        label="⬇️ PDF をダウンロード",
+        data=pdf_bytes,
+        file_name="住宅ローン比較レポート.pdf",
+        mime="application/pdf",
+    )
+
+st.caption(
+    "※本シミュレーションは概算です。実際の返済額・金利は金融機関にご確認ください。"
+    "　フラット35Sポイント引下げは住宅金融支援機構の審査・認定が必要です。"
+)
