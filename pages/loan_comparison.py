@@ -114,9 +114,6 @@ FLAT35S_GROUPS = {
 
 # ══════════════════════════════════════════════════════════════════════
 # フラット35 S 金利引下げロジック
-#  当初1〜5年  : 1P→▲0.25 / 2P→▲0.50 / 3P→▲0.75 / 4P以上→▲1.00
-#  6〜10年目   : 5P→▲0.25 / 6P→▲0.50 / 7P→▲0.75 / 8P以上→▲1.00
-#  11〜15年目  : 9P→▲0.25 / 10P→▲0.50 / 11P→▲0.75 / 12P以上→▲1.00
 # ══════════════════════════════════════════════════════════════════════
 def get_discount(total_p: int) -> dict:
     def tier(p: int, base: int) -> float:
@@ -154,34 +151,38 @@ def build_pdf(
     var_rate, flat_base, flat_total_p, disc,
     checkpoints, scenarios_data,
     diff_monthly, invest_rate, invest_years, future_value,
+    total_var, total_bad, total_flat,
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=12*mm, rightMargin=12*mm,
-        topMargin=10*mm, bottomMargin=10*mm,
+        leftMargin=10*mm, rightMargin=10*mm,
+        topMargin=8*mm, bottomMargin=8*mm,
     )
     styles = getSampleStyleSheet()
     jp_h1 = ParagraphStyle(
-        "jp_h1", fontName=JP, fontSize=13, leading=18, spaceAfter=2*mm,
+        "jp_h1", fontName=JP, fontSize=12, leading=16, spaceAfter=2*mm,
         textColor=colors.HexColor("#1a4f8a"), parent=styles["Heading1"]
     )
     jp_h2 = ParagraphStyle(
-        "jp_h2", fontName=JP, fontSize=9, leading=13, spaceBefore=3*mm,
+        "jp_h2", fontName=JP, fontSize=8, leading=11, spaceBefore=2*mm,
         textColor=colors.HexColor("#1a4f8a"), parent=styles["Heading2"]
     )
     jp_small = ParagraphStyle(
-        "jp_small", fontName=JP, fontSize=7, leading=10, parent=styles["Normal"]
+        "jp_small", fontName=JP, fontSize=6, leading=9, parent=styles["Normal"]
+    )
+    jp_body = ParagraphStyle(
+        "jp_body", fontName=JP, fontSize=7.5, leading=12, parent=styles["Normal"]
     )
 
     story = []
 
-    # タイトル
+    # ── タイトル ──
     story.append(Paragraph("住宅ローン比較レポート（変動金利 vs フラット35）", jp_h1))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1a4f8a")))
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 2*mm))
 
-    # 借入条件
+    # ── 借入条件 ──
     story.append(Paragraph("■ 借入条件", jp_h2))
     cond_data = [
         ["項目", "内容"],
@@ -200,21 +201,21 @@ def build_pdf(
         ["③引下げ（11〜15年目）",
          f"▲{disc['15年']:.2f}％ → 適用金利 {max(flat_base - disc['15年'], 0):.3f}％"],
     ]
-    t = Table(cond_data, colWidths=[70*mm, 100*mm])
-    t.setStyle(TableStyle([
+    t_cond = Table(cond_data, colWidths=[65*mm, 120*mm])
+    t_cond.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a4f8a")),
         ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
         ("FONTNAME",      (0, 0), (-1, -1), JP),
-        ("FONTSIZE",      (0, 0), (-1, -1), 8),
+        ("FONTSIZE",      (0, 0), (-1, -1), 7),
         ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#eef3fb")]),
         ("GRID",          (0, 0), (-1, -1), 0.4, colors.grey),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING",    (0, 0), (-1, -1), 1.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
     ]))
-    story.append(t)
-    story.append(Spacer(1, 3*mm))
+    story.append(t_cond)
+    story.append(Spacer(1, 2*mm))
 
-    # シミュレーション結果
+    # ── シミュレーション結果（フォント2回り小さく） ──
     story.append(Paragraph("■ 返済シミュレーション結果", jp_h2))
     chk_filtered = [y for y in checkpoints if y <= years]
     header = ["シナリオ"] + [f"{y}年末" for y in chk_filtered]
@@ -224,54 +225,112 @@ def build_pdf(
         for y in chk_filtered:
             if y in data:
                 d = data[y]
+                # 改行区切りで3行
                 row.append(f"金利{d['金利']}%\n月{d['月額']}万\n累計{d['累計']}万")
             else:
                 row.append("-")
         rows_pdf.append(row)
+
     ncols = len(header)
-    col_w = [44*mm] + [(186 - 44) / max(ncols - 1, 1) * mm] * (ncols - 1)
-    t2 = Table(rows_pdf, colWidths=col_w, repeatRows=1)
-    t2.setStyle(TableStyle([
+    total_w = 185  # mm
+    name_w  = 32   # シナリオ列
+    rest_w  = (total_w - name_w) / max(ncols - 1, 1)
+    col_w   = [name_w * mm] + [rest_w * mm] * (ncols - 1)
+
+    t_sim = Table(rows_pdf, colWidths=col_w, repeatRows=1)
+    t_sim.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a4f8a")),
+        ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",      (0, 0), (-1, -1), JP),
+        ("FONTSIZE",      (0, 0), (-1, -1), 5),   # ← 2回り小さく（7→5）
+        ("LEADING",       (0, 0), (-1, -1), 7),   # ← 行間も縮小
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#eef3fb")]),
+        ("GRID",          (0, 0), (-1, -1), 0.3, colors.grey),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",         (1, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+    ]))
+    story.append(t_sim)
+    story.append(Spacer(1, 2*mm))
+
+    # ── 返済総額サマリー ──
+    story.append(Paragraph("■ 返済総額まとめ", jp_h2))
+    summary_data = [
+        ["シナリオ", "返済総額", "①との差額"],
+        ["①変動 現状維持",           f"{total_var:,.0f} 万円",  "―"],
+        ["②変動 BAD（年+0.2%上昇）", f"{total_bad:,.0f} 万円",  f"+{total_bad - total_var:,.0f} 万円"],
+        ["③固定 フラット35 S",        f"{total_flat:,.0f} 万円", f"+{total_flat - total_var:,.0f} 万円"],
+    ]
+    t_sum = Table(summary_data, colWidths=[70*mm, 55*mm, 60*mm])
+    t_sum.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a4f8a")),
         ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
         ("FONTNAME",      (0, 0), (-1, -1), JP),
         ("FONTSIZE",      (0, 0), (-1, -1), 7),
         ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#eef3fb")]),
-        ("GRID",          (0, 0), (-1, -1), 0.3, colors.grey),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID",          (0, 0), (-1, -1), 0.4, colors.grey),
         ("TOPPADDING",    (0, 0), (-1, -1), 1.5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
     ]))
-    story.append(t2)
-    story.append(Spacer(1, 3*mm))
+    story.append(t_sum)
+    story.append(Spacer(1, 2*mm))
 
-    # 差額投資
+    # ── 差額投資シミュレーション ──
     story.append(Paragraph("■ 差額投資シミュレーション（①変動現状維持 vs ③固定）", jp_h2))
     mv = monthly_payment(loan_amount_man * 10_000, var_rate, years * 12)
     mf = monthly_payment(loan_amount_man * 10_000, flat_base, years * 12)
     inv_data = [
         ["項目", "金額"],
-        ["①変動 月額返済",           f"{mv:,.0f} 円"],
-        ["③フラット35 月額返済",     f"{mf:,.0f} 円"],
-        ["差額（月）",               f"{diff_monthly:,.0f} 円"],
+        ["①変動 月額返済",         f"{mv:,.0f} 円"],
+        ["③フラット35 月額返済",   f"{mf:,.0f} 円"],
+        ["差額（月）",             f"{diff_monthly:,.0f} 円"],
         [f"差額を年利{invest_rate:.1f}%で{invest_years}年運用",
          f"{future_value / 10_000:,.1f} 万円"],
     ]
-    t3 = Table(inv_data, colWidths=[105*mm, 65*mm])
-    t3.setStyle(TableStyle([
+    t_inv = Table(inv_data, colWidths=[105*mm, 80*mm])
+    t_inv.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a4f8a")),
         ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
         ("FONTNAME",      (0, 0), (-1, -1), JP),
-        ("FONTSIZE",      (0, 0), (-1, -1), 8),
+        ("FONTSIZE",      (0, 0), (-1, -1), 7),
         ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#eef3fb")]),
         ("GRID",          (0, 0), (-1, -1), 0.4, colors.grey),
+        ("TOPPADDING",    (0, 0), (-1, -1), 1.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+    ]))
+    story.append(t_inv)
+    story.append(Spacer(1, 2*mm))
+
+    # ── どちらを選ぶ？ ──
+    story.append(Paragraph("■ どちらを選ぶ？", jp_h2))
+    choice_data = [
+        ["", "選択理由"],
+        ["変動金利を選ぶ方",
+         "固定金利を支払っているつもりで差額を毎月運用する。\n"
+         f"差額（月 {diff_monthly:,.0f}円）を年利{invest_rate:.1f}%で{invest_years}年運用 → "
+         f"{future_value/10_000:,.1f}万円の資産形成が期待できる。"],
+        ["固定金利を選ぶ方",
+         "金利上昇リスク・運用失敗リスク・精神的ストレスを避けたい方。\n"
+         "返済額が全期間固定で、家計設計が安定する安心感を重視。"],
+    ]
+    t_choice = Table(choice_data, colWidths=[35*mm, 150*mm])
+    t_choice.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a4f8a")),
+        ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",      (0, 0), (-1, -1), JP),
+        ("FONTSIZE",      (0, 0), (-1, -1), 7),
+        ("BACKGROUND",    (0, 1), (0, 1), colors.HexColor("#dbeafe")),
+        ("BACKGROUND",    (0, 2), (0, 2), colors.HexColor("#dcfce7")),
+        ("GRID",          (0, 0), (-1, -1), 0.4, colors.grey),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
-    story.append(t3)
-    story.append(Spacer(1, 3*mm))
+    story.append(t_choice)
+    story.append(Spacer(1, 2*mm))
 
-    # メリット・デメリット
+    # ── メリット・デメリット ──
     story.append(Paragraph("■ 変動金利 vs フラット35 メリット・デメリット", jp_h2))
     merit_data = [
         ["", "変動金利", "フラット35（固定）"],
@@ -282,20 +341,21 @@ def build_pdf(
          "・金利上昇で返済額が増えるリスク\n・125%ルールによる未払利息リスク\n・家計設計が不安定",
          "・初期金利が変動より高い\n・市場金利低下の恩恵なし\n・借入上限8,000万円\n・適合証明が必要"],
     ]
-    t4 = Table(merit_data, colWidths=[18*mm, 84*mm, 84*mm])
-    t4.setStyle(TableStyle([
+    t_merit = Table(merit_data, colWidths=[16*mm, 84*mm, 85*mm])
+    t_merit.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a4f8a")),
         ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
         ("FONTNAME",      (0, 0), (-1, -1), JP),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
+        ("FONTSIZE",      (0, 0), (-1, -1), 7),
         ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#eef3fb")]),
         ("GRID",          (0, 0), (-1, -1), 0.4, colors.grey),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
-    story.append(t4)
+    story.append(t_merit)
 
+    # ── フッター ──
     story.append(Spacer(1, 2*mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.grey))
     story.append(Paragraph(
@@ -332,7 +392,6 @@ with st.expander("① フラット35 S ポイント入力（各グループか�
             if gname == "1. 家族":
                 labels_fixed = {lb: pt for lb, pt in items.items() if pt is not None}
                 labels_none  = {lb: pt for lb, pt in items.items() if pt is None}
-
                 radio_options = ["選択なし（0P）"] + [
                     f"{lb}（+{pt}P）" for lb, pt in labels_fixed.items()
                 ]
@@ -344,7 +403,6 @@ with st.expander("① フラット35 S ポイント入力（各グループか�
                 for lb, pt in labels_fixed.items():
                     if selected_family == f"{lb}（+{pt}P）":
                         total_points += pt
-
                 st.markdown("**または**")
                 for lb, pt in labels_none.items():
                     n = st.number_input(
@@ -443,25 +501,41 @@ years = st.number_input("返済期間（年）", value=35, min_value=1, max_valu
 checkpoints = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
 scenarios = {}
-
-# ① 変動：現状維持
 scenarios["①変動 現状維持"] = {
     y: var_rate for y in range(1, years + 1)
 }
-
-# ② 変動：BAD（var_rateを起点に年+0.2%上昇）
 scenarios["②変動 BAD（年+0.2%上昇）"] = {
     y: round(var_rate + 0.2 * (y - 1), 3) for y in range(1, years + 1)
 }
-
-# ③ フラット35 S（ポイント反映・割引金利で計算）
 flat_s_schedule = flat35s_schedule(flat_base, total_points, years)
 scenarios[f"③固定 フラット35 S（{total_points}P）"] = flat_s_schedule
 
-# シミュレーション実行
 sim_results = {}
 for name, sched in scenarios.items():
     sim_results[name] = simulate(loan_amount, years, sched, checkpoints)
+
+# ──────────────────────────────────────────────────────────────────────
+# 返済総額計算
+# ──────────────────────────────────────────────────────────────────────
+def calc_total(principal_man, years, rate_schedule):
+    balance = principal_man * 10_000
+    total = 0.0
+    total_months = years * 12
+    monthly = 0.0
+    current_rate = None
+    for m in range(1, total_months + 1):
+        year = (m - 1) // 12 + 1
+        if year in rate_schedule and (m - 1) % 12 == 0:
+            current_rate = rate_schedule[year]
+            monthly = monthly_payment(balance, current_rate, total_months - m + 1)
+        interest = balance * (current_rate / 100 / 12)
+        balance -= (monthly - interest)
+        total += monthly
+    return round(total / 10_000, 0)
+
+total_var  = calc_total(loan_amount, years, scenarios["①変動 現状維持"])
+total_bad  = calc_total(loan_amount, years, scenarios["②変動 BAD（年+0.2%上昇）"])
+total_flat = calc_total(loan_amount, years, flat_s_schedule)
 
 # ──────────────────────────────────────────────────────────────────────
 # 結果テーブル
@@ -471,7 +545,6 @@ st.markdown(
     "<h3 style='font-size:20px;'>📊 返済シミュレーション結果</h3>",
     unsafe_allow_html=True
 )
-
 st.caption(
     f"②BAD金利推移：{var_rate:.3f}%（1年目）→ "
     f"{var_rate + 0.2*4:.3f}%（5年目）→ "
@@ -491,11 +564,25 @@ for name, data in sim_results.items():
         else:
             row[f"{y}年末"] = "-"
     rows.append(row)
-
 st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
+# 返済総額サマリー
+st.markdown("**返済総額まとめ**")
+summary_df = pd.DataFrame([
+    {"シナリオ": "①変動 現状維持",
+     "返済総額（万円）": f"{total_var:,.0f}",
+     "①との差額（万円）": "―"},
+    {"シナリオ": "②変動 BAD（年+0.2%上昇）",
+     "返済総額（万円）": f"{total_bad:,.0f}",
+     "①との差額（万円）": f"+{total_bad - total_var:,.0f}"},
+    {"シナリオ": f"③固定 フラット35 S（{total_points}P）",
+     "返済総額（万円）": f"{total_flat:,.0f}",
+     "①との差額（万円）": f"+{total_flat - total_var:,.0f}"},
+])
+st.dataframe(summary_df, use_container_width=True, hide_index=True)
+
 # ──────────────────────────────────────────────────────────────────────
-# フラット35 S 引下げ対応表（参考）
+# フラット35 S 引下げ対応表
 # ──────────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("**フラット35 S 金利引下げ対応表（参考）**")
@@ -546,6 +633,46 @@ st.success(
     f"差額（月 {diff_monthly:,.0f}円）を年利 {invest_rate:.1f}% で "
     f"{invest_years} 年間複利運用 → **{future_value / 10_000:,.1f} 万円**"
 )
+
+# ──────────────────────────────────────────────────────────────────────
+# どちらを選ぶ？（差額投資の下に追加）
+# ──────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    "<h3 style='font-size:20px;'>🤔 変動 vs 固定　どちらを選ぶ？</h3>",
+    unsafe_allow_html=True
+)
+
+col_a, col_b = st.columns(2)
+with col_a:
+    st.markdown("""
+<div style="background:#dbeafe; border-radius:10px; padding:16px; height:100%;">
+<h4 style="color:#1d4ed8; margin-top:0;">📈 変動金利を選ぶ方</h4>
+<p>
+固定金利を支払っているつもりで<br>
+<b>差額を毎月運用する</b><br><br>
+変動金利で借りて、固定との差額を積立投資に回すことで、
+長期的に大きな資産形成が期待できます。<br><br>
+ただし、<b>金利上昇リスク・運用リスク</b>を
+自己管理できる方向けです。
+</p>
+</div>
+""", unsafe_allow_html=True)
+
+with col_b:
+    st.markdown("""
+<div style="background:#dcfce7; border-radius:10px; padding:16px; height:100%;">
+<h4 style="color:#15803d; margin-top:0;">🛡️ 固定金利を選ぶ方</h4>
+<p>
+金利上昇リスク・運用失敗リスク・<br>
+<b>精神的ストレスを避けたい方</b><br><br>
+返済額が全期間固定で、家計設計が安定します。
+金利がどう動いても毎月の支払いは変わらず、
+安心して生活できます。<br><br>
+<b>安定・安心を最優先する方</b>向けです。
+</p>
+</div>
+""", unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────────────────────────────
 # メリット・デメリット
@@ -620,6 +747,9 @@ if st.button("📄 PDF を生成してダウンロード"):
             invest_rate=invest_rate,
             invest_years=invest_years,
             future_value=future_value,
+            total_var=total_var,
+            total_bad=total_bad,
+            total_flat=total_flat,
         )
     st.download_button(
         label="⬇️ PDF をダウンロード",
