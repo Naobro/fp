@@ -762,3 +762,80 @@ st.caption(
     "※本シミュレーションは概算です。実際の返済額・金利は金融機関にご確認ください。"
     "　フラット35Sポイント引下げは住宅金融支援機構の審査・認定が必要です。"
 )
+# ===== 公式LINEバナー（×で閉じられる） =====
+import urllib.parse as _url
+
+def render_line_banner():
+    if "line_banner_closed" not in st.session_state:
+        st.session_state.line_banner_closed = False
+
+    try:
+        qp = st.query_params
+        close_flag = str(qp.get("close_banner", "0")) == "1"
+        qp_dict = dict(qp)
+    except Exception:
+        qp = st.experimental_get_query_params()
+        close_flag = (qp.get("close_banner", ["0"])[0] == "1")
+        qp_dict = {k: (v[0] if isinstance(v, list) else v) for k, v in qp.items()}
+
+    if close_flag:
+        st.session_state.line_banner_closed = True
+
+    if st.session_state.line_banner_closed:
+        return
+
+    qp_dict = {k: (v if not isinstance(v, list) else v[0]) for k, v in qp_dict.items()}
+    qp_dict["close_banner"] = "1"
+    qs = _url.urlencode(qp_dict)
+    close_url = "?" + qs if qs else "?close_banner=1"
+
+    st.markdown(f"""
+    <style>
+    .line-banner-wrap {{
+      position: fixed;
+      bottom: 100px; right: 18px; z-index: 9999;
+    }}
+    .line-banner {{
+      background: #06C755; color: #fff;
+      padding: 14px 18px 20px; border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+      font-size: 15px; text-align: center; position: relative;
+    }}
+    .line-banner:hover {{ transform: scale(1.02); background:#05b34d; }}
+    .line-banner .ttl {{ font-size: 17px; font-weight: 800; line-height: 1.4; }}
+    .line-banner .id  {{ font-size: 20px; font-weight: 900; margin: 6px 0 6px; }}
+    .line-banner img  {{
+      width: 130px; display:block; margin: 8px auto 10px;
+      border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      background:#fff;
+    }}
+    .line-banner .cta {{ display:inline-block; font-weight: 800; text-decoration: underline; color:#fff; }}
+    .line-banner .close-btn {{
+      position:absolute; top:6px; right:10px; width:24px; height:24px;
+      border-radius:50%; background: rgba(0,0,0,0.25);
+      color:#fff; text-align:center; line-height:24px;
+      font-size:16px; font-weight:700; text-decoration:none;
+    }}
+    .line-banner .close-btn:hover {{ background: rgba(0,0,0,0.4); }}
+    @media (max-width: 768px){{
+      .line-banner-wrap {{ bottom: 100px; right: 14px; }}
+      .line-banner {{ padding: 12px 14px 18px; }}
+      .line-banner img {{ width: 110px; }}
+      .line-banner .id {{ font-size: 18px; }}
+    }}
+    </style>
+
+    <div class="line-banner-wrap" id="line-banner">
+      <div class="line-banner" role="region" aria-label="LINE公式バナー">
+        <a class="close-btn" href="{close_url}" aria-label="バナーを閉じる">×</a>
+        <a href="https://lin.ee/m40HEqN" target="_blank" rel="noopener" style="text-decoration:none; color:#fff;">
+          <div class="ttl">📲 シミュレーション利用は<br>LINEで簡単・不動産相談</div>
+          <div class="id">LINE ID：@fudo3</div>
+          <img src="https://qr-official.line.me/gs/M_277qthwd_GW.png?oat_content=qr" alt="LINE公式QRコード">
+          <span class="cta">▶ 公式LINEで相談する</span>
+        </a>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+render_line_banner()
