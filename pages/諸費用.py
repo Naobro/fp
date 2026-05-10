@@ -59,21 +59,33 @@ def round_deposit(price_yen):
     return int(round(price_yen * 0.05 / 500_000) * 500_000)
 
 def calc_stamp_tax(p):
+    """
+    不動産売買契約書の印紙税（軽減措置適用後）
+    ※令和9年3月31日まで適用の軽減税率
+    p: 契約金額（円）
+    """
+    if p <= 10_000:
+        return 0           # 非課税
+    if p <= 500_000:
+        return 200
+    if p <= 1_000_000:
+        return 500
     if p <= 5_000_000:
-        return 5_000
+        return 1_000
     if p <= 10_000_000:
-        return 10_000
+        return 5_000
     if p <= 50_000_000:
         return 10_000
     if p <= 100_000_000:
         return 30_000
     if p <= 500_000_000:
-        return 60_000
+        return 60_000      # ← 1億円超〜5億円以下
     if p <= 1_000_000_000:
         return 160_000
     if p <= 5_000_000_000:
         return 320_000
     return 480_000
+
 
 def monthly_payment(loan, years, rate):
     n = years * 12
