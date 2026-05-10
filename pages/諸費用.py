@@ -258,16 +258,28 @@ save_to_state("elec_contract", elec_contract)
 
 stamp_fee_auto = 0 if elec_contract else calc_stamp_tax(property_price)
 
-if "stamp_fee" not in st.session_state:
+prev_stamp_price = int(st.session_state.get("_prev_stamp_price", price_man))
+prev_elec = bool(st.session_state.get("_prev_elec_contract", elec_contract))
+
+# 物件価格 or 電子契約フラグが変わった、または初回 → 自動値で上書き
+if (prev_stamp_price != price_man) or (prev_elec != elec_contract) or ("stamp_fee" not in st.session_state):
+    st.session_state["_stamp_manual"] = False
     st.session_state["stamp_fee"] = stamp_fee_auto
     st.session_state["input_stamp_fee"] = f"{stamp_fee_auto:,}"
+    stamp_fee_initial = stamp_fee_auto
+else:
+    stamp_fee_initial = int(st.session_state.get("stamp_fee", stamp_fee_auto))
 
 stamp_fee = number_input_commas(
     "契約書 印紙代（円：自動計算）",
-    st.session_state.get("stamp_fee", stamp_fee_auto),
+    stamp_fee_initial,
     "input_stamp_fee",
 )
+st.session_state["_stamp_manual"] = bool(stamp_fee != stamp_fee_auto)
+st.session_state["_prev_stamp_price"] = price_man
+st.session_state["_prev_elec_contract"] = elec_contract
 save_to_state("stamp_fee", stamp_fee)
+
 
 # --- 借入金額 ---
 loan_amount_man_raw = st.session_state.get("loan_amount_man", price_man)
