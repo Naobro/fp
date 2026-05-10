@@ -362,7 +362,8 @@ new_broker_contract = number_input_commas(
 
 if new_broker_contract > new_broker_total:
     new_broker_contract = new_broker_total
-    st.session_state["input_broker_contract"] = f"{new_broker_contract:,}"
+    st.warning("契約時の仲介手数料が総額を超えていたため、総額に合わせました。次回更新時に反映されます。")
+
 
 broker_settlement = int(new_broker_total) - int(new_broker_contract)
 st.session_state["_manual_broker"] = bool(
