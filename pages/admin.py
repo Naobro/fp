@@ -164,15 +164,13 @@ def delete_client(client_id: str) -> bool:
 # ------------------------------------
 st.header("🆕 お客様ページの新規発行（PINなし）")
 
-# session_stateの初期化
 if "customer_type" not in st.session_state:
     st.session_state.customer_type = "購入"
 
-# STEP 1: 顧客区分選択（フォーム外で即座に反映）
 st.markdown("#### STEP 1｜顧客区分")
 customer_type = st.radio(
-    "ご相談内容", 
-    ["購入", "売却", "その他"], 
+    "ご相談内容",
+    ["購入", "売却", "その他"],
     horizontal=True,
     key="customer_type"
 )
@@ -194,11 +192,13 @@ with st.form("new_client"):
     with c3:
         current_station = st.text_input("現在の最寄駅")
         current_layout = st.text_input("現在の間取り")
-        workplace = st.text_input("勤務先（会社名）")
-    with c4:
         current_rent = st.text_input("現在の家賃")
         family_structure = st.text_input("家族構成")
+    with c4:
+        workplace = st.text_input("勤務先（会社名）")
         workplace_station = st.text_input("勤務先最寄駅")
+        annual_income = st.text_input("年収")
+        own_funds = st.text_input("自己資金")
 
     st.divider()
 
@@ -207,15 +207,11 @@ with st.form("new_client"):
         st.markdown("#### STEP 4｜購入希望条件")
         c5, c6 = st.columns(2)
         with c5:
-            annual_income = st.text_input("年収")
-            own_funds = st.text_input("自己資金")
-        with c6:
             budget = st.text_input("予算")
+        with c6:
             desired_area = st.text_input("希望エリア")
-        
         desired_spec = st.text_area("希望スペック（広さ・築年数・駅距離など自由記入）", height=100)
-        
-        # 売却用変数を空で初期化
+
         property_address = property_type = property_area = property_age = ""
         remaining_debt = sell_reason = sell_timing = ""
         other_details = ""
@@ -231,19 +227,17 @@ with st.form("new_client"):
             property_age = st.text_input("築年数")
             remaining_debt = st.text_input("住宅ローン残債")
             sell_timing = st.text_input("売却希望時期")
-        
+
         sell_reason = st.text_area("売却理由・その他ご事情", height=100)
-        
-        # 購入用変数を空で初期化
-        annual_income = budget = own_funds = desired_area = desired_spec = ""
+
+        budget = desired_area = desired_spec = ""
         other_details = ""
 
-    else:  # その他
+    else:
         st.markdown("#### STEP 4｜ご相談内容詳細")
         other_details = st.text_area("相談内容（自由記入）", height=120)
-        
-        # 購入・売却用変数を空で初期化
-        annual_income = budget = own_funds = desired_area = desired_spec = ""
+
+        budget = desired_area = desired_spec = ""
         property_address = property_type = property_area = property_age = ""
         remaining_debt = sell_reason = sell_timing = ""
 
@@ -257,8 +251,7 @@ if submitted:
         st.error("お客様名を入力してください。")
     else:
         client_id = gen_id()
-        
-        # 区分別のデータ構造を整理
+
         base_meta = {
             "client_id": client_id,
             "created_at": datetime.now().isoformat(),
@@ -273,22 +266,19 @@ if submitted:
             "family_structure": family_structure,
             "workplace": workplace,
             "workplace_station": workplace_station,
+            "annual_income": annual_income,
+            "own_funds": own_funds,
             "memo": memo,
         }
 
-        # 区分別項目を追加
         if customer_type == "購入":
-            purchase_info = {
-                "annual_income": annual_income,
+            base_meta.update({
                 "budget": budget,
-                "own_funds": own_funds,
                 "desired_area": desired_area,
                 "desired_spec": desired_spec,
-            }
-            base_meta.update(purchase_info)
-            
+            })
         elif customer_type == "売却":
-            sell_info = {
+            base_meta.update({
                 "property_address": property_address,
                 "property_type": property_type,
                 "property_area": property_area,
@@ -296,10 +286,8 @@ if submitted:
                 "remaining_debt": remaining_debt,
                 "sell_reason": sell_reason,
                 "sell_timing": sell_timing,
-            }
-            base_meta.update(sell_info)
-            
-        else:  # その他
+            })
+        else:
             base_meta["other_details"] = other_details
 
         payload = {
@@ -308,7 +296,7 @@ if submitted:
             "prefs": {},
             "listings": []
         }
-        
+
         save_client(client_id, payload)
         url = share_url_for(client_id)
         st.success("お客様用URLを発行しました。下のリンクを共有してください。")
