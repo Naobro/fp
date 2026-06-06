@@ -194,9 +194,11 @@ with st.form("new_client"):
     with c3:
         current_station = st.text_input("現在の最寄駅")
         current_layout = st.text_input("現在の間取り")
+        workplace = st.text_input("勤務先（会社名）")
     with c4:
         current_rent = st.text_input("現在の家賃")
         family_structure = st.text_input("家族構成")
+        workplace_station = st.text_input("勤務先最寄駅")
 
     st.divider()
 
@@ -205,12 +207,10 @@ with st.form("new_client"):
         st.markdown("#### STEP 4｜購入希望条件")
         c5, c6 = st.columns(2)
         with c5:
-            workplace = st.text_input("勤務先（会社名）")
-            workplace_station = st.text_input("勤務先最寄駅")
             annual_income = st.text_input("年収")
+            own_funds = st.text_input("自己資金")
         with c6:
             budget = st.text_input("予算")
-            own_funds = st.text_input("自己資金")
             desired_area = st.text_input("希望エリア")
         
         desired_spec = st.text_area("希望スペック（広さ・築年数・駅距離など自由記入）", height=100)
@@ -235,8 +235,7 @@ with st.form("new_client"):
         sell_reason = st.text_area("売却理由・その他ご事情", height=100)
         
         # 購入用変数を空で初期化
-        workplace = workplace_station = annual_income = ""
-        budget = own_funds = desired_area = desired_spec = ""
+        annual_income = budget = own_funds = desired_area = desired_spec = ""
         other_details = ""
 
     else:  # その他
@@ -244,8 +243,7 @@ with st.form("new_client"):
         other_details = st.text_area("相談内容（自由記入）", height=120)
         
         # 購入・売却用変数を空で初期化
-        workplace = workplace_station = annual_income = ""
-        budget = own_funds = desired_area = desired_spec = ""
+        annual_income = budget = own_funds = desired_area = desired_spec = ""
         property_address = property_type = property_area = property_age = ""
         remaining_debt = sell_reason = sell_timing = ""
 
@@ -273,14 +271,14 @@ if submitted:
             "current_layout": current_layout,
             "current_rent": current_rent,
             "family_structure": family_structure,
+            "workplace": workplace,
+            "workplace_station": workplace_station,
             "memo": memo,
         }
 
         # 区分別項目を追加
         if customer_type == "購入":
             purchase_info = {
-                "workplace": workplace,
-                "workplace_station": workplace_station,
                 "annual_income": annual_income,
                 "budget": budget,
                 "own_funds": own_funds,
