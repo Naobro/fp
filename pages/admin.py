@@ -3,13 +3,14 @@
 import streamlit as st
 import json, secrets, string, io
 from datetime import datetime
-from auth import check_admin
-check_admin()
 
 # ------------------------------------
-# ページ設定
+# ページ設定（必ず最初に呼ぶ）
 # ------------------------------------
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
+
+from auth import check_admin
+check_admin()
 
 BASE_URL = st.secrets.get("BASE_URL", "https://naokifp.streamlit.app/")
 
@@ -25,7 +26,6 @@ def share_url_for(cid: str) -> str:
 from client_portal import get_sb
 SB = get_sb()
 TABLE_NAME = "client_profiles"
-
 
 class KVStore:
     """Supabase に安全保存する Key-Value ストア"""
@@ -104,16 +104,15 @@ class KVStore:
 
     def count(self) -> int:
         return len(self.all())
+
     def snapshot_bytes(self) -> bytes:
         buf = io.StringIO()
         json.dump({"clients": self.all()}, buf, ensure_ascii=False, indent=2)
         return buf.getvalue().encode("utf-8")
 
-
 @st.cache_resource(show_spinner=False)
 def get_kv() -> KVStore:
     return KVStore()
-
 
 KV = get_kv()
 
@@ -148,6 +147,8 @@ def load_all_clients() -> list[dict]:
             "id": cid,
             "name": meta.get("name") or "(無名)",
             "created": created,
+            "customer_type": meta.get("customer_type"),
+            "furigana": meta.get("furigana"),
             "phone": meta.get("phone"),
             "email": meta.get("email"),
             "memo": meta.get("memo"),
@@ -163,14 +164,94 @@ def delete_client(client_id: str) -> bool:
 # ------------------------------------
 st.header("🆕 お客様ページの新規発行（PINなし）")
 
+# session_stateの初期化
+if "customer_type" not in st.session_state:
+    st.session_state.customer_type = "購入"
+
+# STEP 1: 顧客区分選択（フォーム外で即座に反映）
+st.markdown("#### STEP 1｜顧客区分")
+customer_type = st.radio(
+    "ご相談内容", 
+    ["購入", "売却", "その他"], 
+    horizontal=True,
+    key="customer_type"
+)
+
 with st.form("new_client"):
+    st.markdown("#### STEP 2｜基本情報（全員共通）")
     c1, c2 = st.columns(2)
     with c1:
-        name = st.text_input("お客様名")  # ← required=True は削除済み
-        phone = st.text_input("電話番号（任意）")
+        name = st.text_input("名前")
+        furigana = st.text_input("フリガナ")
     with c2:
-        email = st.text_input("メール（任意）")
-        memo  = st.text_area("管理メモ（任意）", height=80)
+        phone = st.text_input("電話番号")
+        email = st.text_input("メールアドレス")
+
+    st.divider()
+
+    st.markdown("#### STEP 3｜現在の状況（全員共通）")
+    c3, c4 = st.columns(2)
+    with c3:
+        current_station = st.text_input("現在の最寄駅")
+        current_layout = st.text_input("現在の間取り")
+    with c4:
+        current_rent = st.text_input("現在の家賃")
+        family_structure = st.text_input("家族構成")
+
+    st.divider()
+
+    # 区分別の詳細項目
+    if customer_type == "購入":
+        st.markdown("#### STEP 4｜購入希望条件")
+        c5, c6 = st.columns(2)
+        with c5:
+            workplace = st.text_input("勤務先（会社名）")
+            workplace_station = st.text_input("勤務先最寄駅")
+            annual_income = st.text_input("年収")
+        with c6:
+            budget = st.text_input("予算")
+            own_funds = st.text_input("自己資金")
+            desired_area = st.text_input("希望エリア")
+        
+        desired_spec = st.text_area("希望スペック（広さ・築年数・駅距離など自由記入）", height=100)
+        
+        # 売却用変数を空で初期化
+        property_address = property_type = property_area = property_age = ""
+        remaining_debt = sell_reason = sell_timing = ""
+        other_details = ""
+
+    elif customer_type == "売却":
+        st.markdown("#### STEP 4｜売却物件詳細")
+        c7, c8 = st.columns(2)
+        with c7:
+            property_address = st.text_input("売却物件の住所")
+            property_type = st.selectbox("物件種別", ["", "マンション", "戸建て", "土地", "その他"])
+            property_area = st.text_input("広さ・面積")
+        with c8:
+            property_age = st.text_input("築年数")
+            remaining_debt = st.text_input("住宅ローン残債")
+            sell_timing = st.text_input("売却希望時期")
+        
+        sell_reason = st.text_area("売却理由・その他ご事情", height=100)
+        
+        # 購入用変数を空で初期化
+        workplace = workplace_station = annual_income = ""
+        budget = own_funds = desired_area = desired_spec = ""
+        other_details = ""
+
+    else:  # その他
+        st.markdown("#### STEP 4｜ご相談内容詳細")
+        other_details = st.text_area("相談内容（自由記入）", height=120)
+        
+        # 購入・売却用変数を空で初期化
+        workplace = workplace_station = annual_income = ""
+        budget = own_funds = desired_area = desired_spec = ""
+        property_address = property_type = property_area = property_age = ""
+        remaining_debt = sell_reason = sell_timing = ""
+
+    st.divider()
+    memo = st.text_area("管理メモ（任意）", height=80)
+
     submitted = st.form_submit_button("新規作成", type="primary")
 
 if submitted:
@@ -178,19 +259,58 @@ if submitted:
         st.error("お客様名を入力してください。")
     else:
         client_id = gen_id()
+        
+        # 区分別のデータ構造を整理
+        base_meta = {
+            "client_id": client_id,
+            "created_at": datetime.now().isoformat(),
+            "customer_type": customer_type,
+            "name": name,
+            "furigana": furigana,
+            "phone": phone,
+            "email": email,
+            "current_station": current_station,
+            "current_layout": current_layout,
+            "current_rent": current_rent,
+            "family_structure": family_structure,
+            "memo": memo,
+        }
+
+        # 区分別項目を追加
+        if customer_type == "購入":
+            purchase_info = {
+                "workplace": workplace,
+                "workplace_station": workplace_station,
+                "annual_income": annual_income,
+                "budget": budget,
+                "own_funds": own_funds,
+                "desired_area": desired_area,
+                "desired_spec": desired_spec,
+            }
+            base_meta.update(purchase_info)
+            
+        elif customer_type == "売却":
+            sell_info = {
+                "property_address": property_address,
+                "property_type": property_type,
+                "property_area": property_area,
+                "property_age": property_age,
+                "remaining_debt": remaining_debt,
+                "sell_reason": sell_reason,
+                "sell_timing": sell_timing,
+            }
+            base_meta.update(sell_info)
+            
+        else:  # その他
+            base_meta["other_details"] = other_details
+
         payload = {
-            "meta": {
-                "client_id": client_id,
-                "created_at": datetime.now().isoformat(),
-                "name": name,
-                "phone": phone,
-                "email": email,
-                "memo": memo,
-            },
+            "meta": base_meta,
             "baseline": {},
             "prefs": {},
             "listings": []
         }
+        
         save_client(client_id, payload)
         url = share_url_for(client_id)
         st.success("お客様用URLを発行しました。下のリンクを共有してください。")
@@ -235,7 +355,9 @@ else:
         cols = st.columns([3, 3, 4, 1])
         with cols[0]:
             st.write(f"**{c['name']}**")
-            st.caption(f"ID: {c['id']}")
+            customer_type_badge = c.get('customer_type', '')
+            furigana_info = f"（{c.get('furigana')}）" if c.get('furigana') else ""
+            st.caption(f"ID: {c['id']}　{customer_type_badge}　{furigana_info}")
         with cols[1]:
             st.caption("作成日時")
             st.write(c["created"].strftime("%Y-%m-%d %H:%M") if c["created"] else "-")
@@ -276,5 +398,6 @@ with st.expander("🔧 データベース管理（デバッグ用）"):
                 file_name=f"clients_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json"
             )
+
 from auth import admin_send_ui
 admin_send_ui()
