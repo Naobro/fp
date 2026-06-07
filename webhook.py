@@ -1,147 +1,111 @@
 import os
-import requests
 from flask import Flask, request, jsonify
 from supabase import create_client
 from datetime import datetime
 import random, string
-from threading import Thread
 
 # --------------------------
 # Supabase 接続
 # --------------------------
-supabase = create_client(
-    "https://pyopdfzwpwpoeqgvaaew.supabase.co",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5b3BkZnp3cHdwb2VxZ3ZhYWV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjM1Njg4MCwiZXhwIjoyMDcxOTMyODgwfQ.8_0HTmF62eBNP4fc9UKAtTWvWVz9KO-bvlS6xed0xPc"
-)
+SUPABASE_URL = "https://pyopdfzwpwpoeqgvaaew.supabase.co"
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", 
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5b3BkZnp3cHdwb2VxZ3ZhYWV3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjM1Njg4MCwiZXhwIjoyMDcxOTMyODgwfQ.8_0HTmF62eBNP4fc9UKAtTWvWVz9KO-bvlS6xed0xPc")
 
-# --------------------------
-# LINE 設定
-# --------------------------
-LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
-
-def notify_line(user_id: str, message: str):
-    """LINEプッシュ送信（必要に応じて使用）"""
-    if not LINE_CHANNEL_ACCESS_TOKEN:
-        print("⚠️ LINE_CHANNEL_ACCESS_TOKEN が設定されていません")
-        return
-    
-    url = "https://api.line.me/v2/bot/message/push"
-    headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
-    payload = {"to": user_id, "messages": [{"type": "text", "text": message}]}
-    
-    try:
-        res = requests.post(url, headers=headers, json=payload)
-        print("LINE notify response:", res.status_code, res.text)
-        return res
-    except Exception as e:
-        print("LINE送信エラー:", e)
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def gen_client_id(n: int = 6) -> str:
     """Streamlit管理画面と同じ形式のお客様IDを生成"""
     return "c-" + "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
 
-# --------------------------
-# Flask アプリ
-# --------------------------
 app = Flask(__name__)
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    body = request.json
-    print("🔔 Webhook受信:", body)
+    """
+    Lumoから送られてきた完成されたお客様データを受け取り、
+    Streamlit管理画面と同じ形式でSupabaseに保存する
+    """
+    data = request.json
+    print("🔔 Lumoからお客様データを受信:", data)
 
-    # ==========================================
-    # ① Lumoへの完全転送（最優先・即座に実行）
-    # ==========================================
-    def forward_to_lumo(payload):
-        try:
-            lumo_webhook = "https://webhook.lumo.cx/workspaces/823254/line/01KRFRC22YPKQ5A61SQWJFDVHB"
-            res = requests.post(lumo_webhook, json=payload, timeout=10)
-            print("✅ Lumo転送成功:", res.status_code)
-        except Exception as e:
-            print("❌ Lumo転送エラー:", e)
+    if not data:
+        return jsonify({"error": "データがありません"}), 400
 
-    # Lumoに即座に転送（非同期）
-    Thread(target=forward_to_lumo, args=(body,)).start()
+    try:
+        # LumoのJSONからデータを抽出
+        line_user_id = data.get("line_user_id", "")
+        line_name = data.get("line_name", "")
+        
+        # お客様が入力した名前（最優先）
+        name = data.get("name", "").strip()
+        if not name:
+            # 名前が未入力の場合はLINEの表示名を使用
+            name = line_name if line_name else f"LINEユーザー({line_user_id[:8]})"
 
-    # ==========================================
-    # ② 独自処理（Streamlit管理画面への登録のみ）
-    # ==========================================
-    def handle_event(events):
-        for event in events:
-            event_type = event.get("type")
+        client_id = gen_client_id()
+        now = datetime.now().isoformat()
+
+        # admin.pyと完全に同じデータ構造を作成
+        meta = {
+            "client_id": client_id,
+            "created_at": now,
+            "customer_type": "LINEアンケート経由",
             
-            # メッセージ受信時のみ処理（友だち追加は何もしない）
-            if event_type == "message":
-                message_data = event.get("message", {})
-                if message_data.get("type") == "text":
-                    user_id = event["source"]["userId"]
-                    text = message_data.get("text", "")
-                    
-                    # Streamlit管理画面用のデータ構造で保存
-                    client_id = gen_client_id()
-                    now = datetime.now().isoformat()
-                    
-                    meta = {
-                        "client_id": client_id,
-                        "created_at": now,
-                        "customer_type": "LINE経由",
-                        "name": f"LINEユーザー（{user_id[:8]}）",
-                        "furigana": "",
-                        "phone": "",
-                        "email": "",
-                        "current_station": "",
-                        "current_layout": "",
-                        "current_rent": "",
-                        "family_structure": "",
-                        "workplace": "",
-                        "workplace_station": "",
-                        "annual_income": "",
-                        "own_funds": "",
-                        "memo": f"LINEメッセージ: {text}",
-                        "other_details": text,
-                        "line_user_id": user_id,
-                    }
+            # ✅ Lumoから受け取った完璧なデータをそのまま使用
+            "name": name,
+            "furigana": data.get("furigana", ""),
+            "phone": data.get("phone", ""),
+            "email": data.get("email", ""),
+            
+            # 現在の状況
+            "current_station": data.get("nearest_station", ""),
+            "current_layout": "",
+            "current_rent": "",
+            "family_structure": data.get("family_structure", ""),
+            
+            # 勤務先情報
+            "workplace": data.get("company_name", ""),
+            "workplace_station": data.get("company_station", ""),
+            "annual_income": data.get("annual_income", ""),
+            "own_funds": "",
+            
+            # メモ欄に追加情報を記録
+            "memo": f"LINE表示名: {line_name}\n勤続年数: {data.get('years_of_service', '')}\nLumo経由で自動登録",
+            
+            # LINE関連情報も保存
+            "line_user_id": line_user_id,
+        }
 
-                    record = {
-                        "client_id": client_id,
-                        "name": meta["name"],
-                        "meta": meta,
-                        "profile": {},
-                        "updated_at": now,
-                    }
+        # Supabaseに保存するレコード（admin.pyと同じ構造）
+        record = {
+            "client_id": client_id,
+            "name": name,
+            "meta": meta,
+            "profile": {},
+            "updated_at": now,
+        }
 
-                    # Supabaseに保存（Streamlit管理画面と同じテーブル）
-                    try:
-                        supabase.table("client_profiles").upsert(
-                            record, on_conflict="client_id"
-                        ).execute()
-                        print(f"✅ Streamlit管理画面に登録完了: {client_id}")
-                        
-                        # 注：自動返信はLumoと重複を避けるため無効化
-                        # 必要に応じて以下のコメントを外してください
-                        # notify_line(user_id, "お問い合わせありがとうございます。")
-                        
-                    except Exception as e:
-                        print("❌ Supabase登録エラー:", e)
+        # Supabaseのclient_profilesテーブルに保存
+        supabase.table("client_profiles").upsert(
+            record, on_conflict="client_id"
+        ).execute()
+        
+        print(f"✅ Streamlit管理画面に登録完了: {name} 様 ({client_id})")
+        return jsonify({"status": "success", "client_id": client_id, "name": name})
 
-    # イベント処理を非同期で実行
-    events = body.get("events", [])
-    if events:
-        Thread(target=handle_event, args=(events,)).start()
-
-    return jsonify({"status": "ok"})
+    except Exception as e:
+        print("❌ 登録エラー:", e)
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/health", methods=["GET"])
 def health_check():
-    """ヘルスチェック用エンドポイント"""
+    """サーバーの動作確認用"""
     return jsonify({
-        "status": "healthy",
-        "service": "line-webhook-simple",
+        "status": "healthy", 
+        "service": "lumo-to-streamlit",
         "timestamp": datetime.now().isoformat()
     })
 
 if __name__ == "__main__":
-    # Render対応（PORTを環境変数から取得）
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
