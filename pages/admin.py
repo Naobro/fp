@@ -1,12 +1,8 @@
-# pages/1_admin.py  — 管理画面（新規発行・一覧・検索・即アクセス・削除）
-# ✅ Supabase 連携／Key-Value 保存／削除・バックアップ機能付き（最新版）
+# pages/1_admin.py - 家族構成による動的表示対応版
 import streamlit as st
 import json, secrets, string, io
 from datetime import datetime
 
-# ------------------------------------
-# ページ設定（必ず最初に呼ぶ）
-# ------------------------------------
 st.set_page_config(page_title="管理：お客様ページ 管理", layout="wide")
 
 from auth import check_admin
@@ -20,16 +16,11 @@ def share_url_for(cid: str) -> str:
         return f"{base}/?client={cid}"
     return f"{base}?client={cid}"
 
-# ------------------------------------
-# Supabase Key-Value ストア
-# ------------------------------------
 from client_portal import get_sb
 SB = get_sb()
 TABLE_NAME = "client_profiles"
 
 class KVStore:
-    """Supabase に安全保存する Key-Value ストア"""
-
     def __init__(self):
         self.sb = SB
 
@@ -116,16 +107,12 @@ def get_kv() -> KVStore:
 
 KV = get_kv()
 
-# ------------------------------------
-# ユーティリティ
-# ------------------------------------
 def gen_id(n: int = 6) -> str:
     return "c-" + "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(n))
 
 def save_client(client_id: str, payload: dict):
     meta = payload.get("meta", {})
     name = meta.get("name") or payload.get("name")
-
     meta["name"] = name
     meta["client_id"] = client_id
     meta["created_at"] = meta.get("created_at") or datetime.now().isoformat()
@@ -143,15 +130,34 @@ def load_all_clients() -> list[dict]:
             created = datetime.fromisoformat(meta.get("created_at")) if meta.get("created_at") else None
         except Exception:
             created = None
+
         out.append({
             "id": cid,
             "name": meta.get("name") or "(無名)",
             "created": created,
-            "customer_type": meta.get("customer_type"),
-            "furigana": meta.get("furigana"),
-            "phone": meta.get("phone"),
-            "email": meta.get("email"),
-            "memo": meta.get("memo"),
+            "customer_type": meta.get("customer_type", ""),
+            "furigana": meta.get("furigana", ""),
+            "phone": meta.get("phone", ""),
+            "email": meta.get("email", ""),
+            "current_station": meta.get("current_station", ""),
+            "current_layout": meta.get("current_layout", ""),
+            "current_rent": meta.get("current_rent", ""),
+            "family_structure": meta.get("family_structure", ""),
+            "wife_working": meta.get("wife_working", ""),
+            "workplace": meta.get("workplace", ""),
+            "workplace_station": meta.get("workplace_station", ""),
+            "annual_income": meta.get("annual_income", ""),
+            "own_funds": meta.get("own_funds", ""),
+            "spouse_workplace": meta.get("spouse_workplace", ""),
+            "spouse_workplace_station": meta.get("spouse_workplace_station", ""),
+            "spouse_annual_income": meta.get("spouse_annual_income", ""),
+            "household_annual_income": meta.get("household_annual_income", ""),
+            "budget": meta.get("budget", ""),
+            "desired_area": meta.get("desired_area", ""),
+            "desired_spec": meta.get("desired_spec", ""),
+            "memo": meta.get("memo", ""),
+            "line_user_id": meta.get("line_user_id", ""),
+            "line_name": meta.get("line_name", ""),
         })
     out.sort(key=lambda x: x["created"] or datetime.fromtimestamp(0), reverse=True)
     return out
@@ -160,93 +166,107 @@ def delete_client(client_id: str) -> bool:
     return KV.delete(client_id)
 
 # ------------------------------------
-# 新規発行（必須入力+バリデーション対応）
+# 新規発行フォーム（動的表示対応）
 # ------------------------------------
-st.header("🆕 お客様ページの新規発行（PINなし）")
-
-if "customer_type" not in st.session_state:
-    st.session_state.customer_type = "購入"
+st.header("🆕 お客様ページの新規発行")
 
 st.markdown("#### STEP 1｜顧客区分")
 customer_type = st.radio(
     "ご相談内容",
     ["購入", "売却", "その他"],
-    horizontal=True,
-    key="customer_type"
+    horizontal=True
 )
 
-with st.form("new_client"):
-    st.markdown("#### STEP 2｜基本情報（全員共通）")
-    c1, c2 = st.columns(2)
-    with c1:
-        name = st.text_input("名前")
-        furigana = st.text_input("フリガナ")
-    with c2:
-        phone = st.text_input("電話番号")
-        email = st.text_input("メールアドレス")
+st.markdown("#### STEP 2｜基本情報（全員共通）")
+c1, c2 = st.columns(2)
+with c1:
+    name = st.text_input("名前")
+    furigana = st.text_input("フリガナ")
+with c2:
+    phone = st.text_input("電話番号")
+    email = st.text_input("メールアドレス")
 
-    st.divider()
+st.divider()
 
-    st.markdown("#### STEP 3｜現在の状況（全員共通）")
-    c3, c4 = st.columns(2)
-    with c3:
-        current_station = st.text_input("現在の最寄駅")
-        current_layout = st.text_input("現在の間取り")
-        current_rent = st.text_input("現在の家賃")
-        family_structure = st.text_input("家族構成")
-    with c4:
-        workplace = st.text_input("勤務先（会社名）")
-        workplace_station = st.text_input("勤務先最寄駅")
-        annual_income = st.text_input("年収")
-        own_funds = st.text_input("自己資金")
+st.markdown("#### STEP 3｜現在の状況（全員共通）")
+c3, c4 = st.columns(2)
+with c3:
+    current_station = st.text_input("現在の最寄駅")
+    current_layout = st.text_input("現在の間取り")
+    current_rent = st.text_input("現在の家賃")
+    
+    # ✅ 家族構成を選択肢に変更
+    family_structure = st.selectbox(
+        "家族構成",
+        ["単身", "DINKS", "ご夫婦＋お子さん1人", "ご夫婦＋お子さん2人", "それ以外"]
+    )
 
-    st.divider()
+with c4:
+    workplace = st.text_input("ご主人様 勤務先（会社名）")
+    workplace_station = st.text_input("ご主人様 勤務先最寄駅")
+    annual_income = st.text_input("ご主人様 年収")
+    own_funds = st.text_input("自己資金")
 
-    # 区分別の詳細項目
-    if customer_type == "購入":
-        st.markdown("#### STEP 4｜購入希望条件")
-        c5, c6 = st.columns(2)
-        with c5:
-            budget = st.text_input("予算")
-        with c6:
-            desired_area = st.text_input("希望エリア")
-        desired_spec = st.text_area("希望スペック（広さ・築年数・駅距離など自由記入）", height=100)
+# ✅ 家族構成が「単身」以外の場合の動的表示
+wife_working = "いいえ"
+spouse_workplace = ""
+spouse_workplace_station = ""
+spouse_annual_income = ""
+household_annual_income = ""
 
-        property_address = property_type = property_area = property_age = ""
-        remaining_debt = sell_reason = sell_timing = ""
-        other_details = ""
+if family_structure != "単身":
+    st.markdown("#### STEP 3.5｜奥様の情報")
+    wife_working = st.radio("奥様は働いていますか？", ["いいえ", "はい"], horizontal=True)
+    
+    # ✅ 奥様が働いている場合のみ詳細入力欄を表示
+    if wife_working == "はい":
+        st.info("💑 奥様の勤務先情報をご入力ください")
+        cw1, cw2 = st.columns(2)
+        with cw1:
+            spouse_workplace = st.text_input("奥様 勤務先（会社名）")
+            spouse_workplace_station = st.text_input("奥様 勤務先最寄駅")
+        with cw2:
+            spouse_annual_income = st.text_input("奥様 年収")
+            household_annual_income = st.text_input("世帯年収（合計）")
 
-    elif customer_type == "売却":
-        st.markdown("#### STEP 4｜売却物件詳細")
-        c7, c8 = st.columns(2)
-        with c7:
-            property_address = st.text_input("売却物件の住所")
-            property_type = st.selectbox("物件種別", ["", "マンション", "戸建て", "土地", "その他"])
-            property_area = st.text_input("広さ・面積")
-        with c8:
-            property_age = st.text_input("築年数")
-            remaining_debt = st.text_input("住宅ローン残債")
-            sell_timing = st.text_input("売却希望時期")
+st.divider()
 
-        sell_reason = st.text_area("売却理由・その他ご事情", height=100)
+# 区分別の詳細項目
+budget = desired_area = desired_spec = ""
+property_address = property_type = property_area = property_age = ""
+remaining_debt = sell_reason = sell_timing = other_details = ""
 
-        budget = desired_area = desired_spec = ""
-        other_details = ""
+if customer_type == "購入":
+    st.markdown("#### STEP 4｜購入希望条件")
+    c5, c6 = st.columns(2)
+    with c5:
+        budget = st.text_input("予算")
+    with c6:
+        desired_area = st.text_input("希望エリア")
+    desired_spec = st.text_area("希望スペック（広さ・築年数・駅距離など自由記入）", height=100)
 
-    else:
-        st.markdown("#### STEP 4｜ご相談内容詳細")
-        other_details = st.text_area("相談内容（自由記入）", height=120)
+elif customer_type == "売却":
+    st.markdown("#### STEP 4｜売却物件詳細")
+    c7, c8 = st.columns(2)
+    with c7:
+        property_address = st.text_input("売却物件の住所")
+        property_type = st.selectbox("物件種別", ["", "マンション", "戸建て", "土地", "その他"])
+        property_area = st.text_input("広さ・面積")
+    with c8:
+        property_age = st.text_input("築年数")
+        remaining_debt = st.text_input("住宅ローン残債")
+        sell_timing = st.text_input("売却希望時期")
+    sell_reason = st.text_area("売却理由・その他ご事情", height=100)
 
-        budget = desired_area = desired_spec = ""
-        property_address = property_type = property_area = property_age = ""
-        remaining_debt = sell_reason = sell_timing = ""
+else:
+    st.markdown("#### STEP 4｜ご相談内容詳細")
+    other_details = st.text_area("相談内容（自由記入）", height=120)
 
-    st.divider()
-    memo = st.text_area("管理メモ（任意）", height=80)
+st.divider()
+memo = st.text_area("管理メモ（任意）", height=80)
 
-    submitted = st.form_submit_button("新規作成", type="primary")
-
-if submitted:
+# 保存ボタン
+if st.button("新規作成", type="primary"):
     if not name.strip():
         st.error("お客様名を入力してください。")
     else:
@@ -264,39 +284,28 @@ if submitted:
             "current_layout": current_layout,
             "current_rent": current_rent,
             "family_structure": family_structure,
+            "wife_working": wife_working,
             "workplace": workplace,
             "workplace_station": workplace_station,
             "annual_income": annual_income,
             "own_funds": own_funds,
+            "spouse_workplace": spouse_workplace,
+            "spouse_workplace_station": spouse_workplace_station,
+            "spouse_annual_income": spouse_annual_income,
+            "household_annual_income": household_annual_income,
             "memo": memo,
+            "line_user_id": "",
+            "line_name": "",
         }
 
         if customer_type == "購入":
-            base_meta.update({
-                "budget": budget,
-                "desired_area": desired_area,
-                "desired_spec": desired_spec,
-            })
+            base_meta.update({"budget": budget, "desired_area": desired_area, "desired_spec": desired_spec})
         elif customer_type == "売却":
-            base_meta.update({
-                "property_address": property_address,
-                "property_type": property_type,
-                "property_area": property_area,
-                "property_age": property_age,
-                "remaining_debt": remaining_debt,
-                "sell_reason": sell_reason,
-                "sell_timing": sell_timing,
-            })
+            base_meta.update({"property_address": property_address, "property_type": property_type, "property_area": property_area, "property_age": property_age, "remaining_debt": remaining_debt, "sell_reason": sell_reason, "sell_timing": sell_timing})
         else:
             base_meta["other_details"] = other_details
 
-        payload = {
-            "meta": base_meta,
-            "baseline": {},
-            "prefs": {},
-            "listings": []
-        }
-
+        payload = {"meta": base_meta, "baseline": {}, "prefs": {}, "listings": []}
         save_client(client_id, payload)
         url = share_url_for(client_id)
         st.success("お客様用URLを発行しました。下のリンクを共有してください。")
@@ -306,7 +315,7 @@ if submitted:
 st.divider()
 
 # ------------------------------------
-# 一覧・検索・削除
+# 一覧・検索・削除（家族構成対応表示）
 # ------------------------------------
 st.header("📋 お客様ページ 一覧")
 
@@ -338,52 +347,109 @@ if not clients:
 else:
     for c in clients:
         url = share_url_for(c["id"])
-        cols = st.columns([3, 3, 4, 1])
-        with cols[0]:
-            st.write(f"**{c['name']}**")
-            customer_type_badge = c.get('customer_type', '')
-            furigana_info = f"（{c.get('furigana')}）" if c.get('furigana') else ""
-            st.caption(f"ID: {c['id']}　{customer_type_badge}　{furigana_info}")
-        with cols[1]:
-            st.caption("作成日時")
-            st.write(c["created"].strftime("%Y-%m-%d %H:%M") if c["created"] else "-")
-        with cols[2]:
-            st.caption("共有URL")
-            st.code(url, language="text")
-            st.link_button("開く", url, type="primary")
-        with cols[3]:
-            if st.button("🗑️", key=f"del-{c['id']}"):
-                if delete_client(c["id"]):
-                    st.success("削除しました")
-                    st.rerun()
+
+        with st.container(border=True):
+            cols = st.columns([4, 4, 1])
+            with cols[0]:
+                source_badge = "📱 LINE" if c.get("line_user_id") else "✏️ 手動"
+                
+                # 家族構成バッジの追加
+                family = c.get("family_structure", "")
+                family_badge = f"　👨‍👩‍👧‍👦 {family}" if family else ""
+                
+                st.markdown(f"### {c['name']}　`{source_badge}`{family_badge}")
+                
+                furigana_info = f"（{c['furigana']}）" if c.get('furigana') else ""
+                customer_type_badge = c.get('customer_type', '')
+                created_str = c['created'].strftime('%Y-%m-%d %H:%M') if c['created'] else '-'
+                
+                st.caption(f"ID: {c['id']} • {customer_type_badge} • {furigana_info}")
+                st.caption(f"作成: {created_str}")
+
+            with cols[1]:
+                st.caption("共有URL")
+                st.code(url, language="text")
+                st.link_button("🔗 お客様ページを開く", url, type="primary")
+
+            with cols[2]:
+                if st.button("🗑️", key=f"del-{c['id']}", help="削除"):
+                    if delete_client(c["id"]):
+                        st.success("削除しました")
+                        st.rerun()
+
+            # ✅ 詳細情報表示（家族構成に応じた表示）
+            with st.expander("📋 詳細情報を表示"):
+                d1, d2, d3 = st.columns(3)
+
+                with d1:
+                    st.markdown("**📞 連絡先情報**")
+                    st.write(f"• 電話番号: {c.get('phone') or '未入力'}")
+                    st.write(f"• メールアドレス: {c.get('email') or '未入力'}")
+                    
+                    st.markdown("**🏠 現在の状況**")
+                    st.write(f"• 家族構成: {c.get('family_structure') or '未入力'}")
+                    st.write(f"• 現在の最寄駅: {c.get('current_station') or '未入力'}")
+                    st.write(f"• 現在の間取り: {c.get('current_layout') or '未入力'}")
+                    st.write(f"• 現在の家賃: {c.get('current_rent') or '未入力'}")
+
+                with d2:
+                    st.markdown("**💼 ご主人様の勤務先情報**")
+                    st.write(f"• 勤務先: {c.get('workplace') or '未入力'}")
+                    st.write(f"• 勤務先最寄駅: {c.get('workplace_station') or '未入力'}")
+                    st.write(f"• 年収: {c.get('annual_income') or '未入力'}")
+                    st.write(f"• 自己資金: {c.get('own_funds') or '未入力'}")
+
+                    # ✅ 家族構成による奥様情報の表示判定
+                    family = c.get("family_structure", "").strip()
+                    is_single = family == "単身"
+                    spouse_info_exists = any([
+                        c.get("spouse_workplace"),
+                        c.get("spouse_workplace_station"),
+                        c.get("spouse_annual_income"),
+                        c.get("household_annual_income")
+                    ])
+
+                    if not is_single and spouse_info_exists:
+                        st.divider()
+                        st.markdown("**💑 奥様の勤務先情報**")
+                        st.write(f"• 勤務先: {c.get('spouse_workplace') or '未入力'}")
+                        st.write(f"• 勤務先最寄駅: {c.get('spouse_workplace_station') or '未入力'}")
+                        st.write(f"• 年収: {c.get('spouse_annual_income') or '未入力'}")
+                        st.write(f"• 世帯年収（合計）: {c.get('household_annual_income') or '未入力'}")
+
+                with d3:
+                    st.markdown("**🏡 購入希望条件**")
+                    st.write(f"• 予算: {c.get('budget') or '未入力'}")
+                    st.write(f"• 希望エリア: {c.get('desired_area') or '未入力'}")
+
+                if c.get('desired_spec'):
+                    st.markdown("**📝 希望スペック詳細**")
+                    st.info(c['desired_spec'])
+
+                if c.get('memo'):
+                    st.markdown("**📋 管理メモ**")
+                    st.warning(c['memo'])
+
+                if c.get('line_user_id'):
+                    st.markdown("**📱 LINE連携情報**")
+                    st.caption(f"LINE表示名: {c.get('line_name', '未取得')}")
 
 st.divider()
 
 # ------------------------------------
-# データベース管理（バックアップ・統計）
+# データベース管理
 # ------------------------------------
 with st.expander("🔧 データベース管理（デバッグ用）"):
     st.caption("データベース状態確認・バックアップ")
-
     col1, col2 = st.columns(2)
-
     with col1:
         if st.button("📊 DB統計表示"):
             st.write(f"総レコード数: {KV.count()}")
-            all_items = load_all_clients()
-            oldest = min([c["created"] for c in all_items if c["created"]], default=None)
-            newest = max([c["created"] for c in all_items if c["created"]], default=None)
-            st.write(f"最古: {oldest.isoformat() if oldest else '-'}")
-            st.write(f"最新: {newest.isoformat() if newest else '-'}")
-
     with col2:
         if st.button("📥 DBバックアップ作成"):
-            st.download_button(
-                "バックアップをダウンロード",
-                KV.snapshot_bytes(),
-                file_name=f"clients_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json"
-            )
+            st.download_button("バックアップをダウンロード", KV.snapshot_bytes(), 
+                             file_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json", 
+                             mime="application/json")
 
 from auth import admin_send_ui
 admin_send_ui()
