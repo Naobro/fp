@@ -1,4 +1,4 @@
-# pages/1_admin.py - 家族構成による動的表示対応版
+# pages/1_admin.py - 家族構成・奥様就業状況セグメント対応版
 import streamlit as st
 import json, secrets, string, io
 from datetime import datetime
@@ -166,16 +166,12 @@ def delete_client(client_id: str) -> bool:
     return KV.delete(client_id)
 
 # ------------------------------------
-# 新規発行フォーム（動的表示対応）
+# 新規発行フォーム（セグメント対応）
 # ------------------------------------
 st.header("🆕 お客様ページの新規発行")
 
 st.markdown("#### STEP 1｜顧客区分")
-customer_type = st.radio(
-    "ご相談内容",
-    ["購入", "売却", "その他"],
-    horizontal=True
-)
+customer_type = st.radio("ご相談内容", ["購入", "売却", "その他"], horizontal=True)
 
 st.markdown("#### STEP 2｜基本情報（全員共通）")
 c1, c2 = st.columns(2)
@@ -195,10 +191,10 @@ with c3:
     current_layout = st.text_input("現在の間取り")
     current_rent = st.text_input("現在の家賃")
     
-    # ✅ 家族構成を選択肢に変更
+    # ✅ 家族構成セグメント（5つの選択肢）
     family_structure = st.selectbox(
         "家族構成",
-        ["単身", "DINKS", "ご夫婦＋お子さん1人", "ご夫婦＋お子さん2人", "それ以外"]
+        ["単身", "DINKS", "ご夫婦お子様1人", "ご夫婦お子様2人", "それ以外（家族構成）"]
     )
 
 with c4:
@@ -207,8 +203,8 @@ with c4:
     annual_income = st.text_input("ご主人様 年収")
     own_funds = st.text_input("自己資金")
 
-# ✅ 家族構成が「単身」以外の場合の動的表示
-wife_working = "いいえ"
+# ✅ 家族構成による動的表示
+wife_working = "主婦"
 spouse_workplace = ""
 spouse_workplace_station = ""
 spouse_annual_income = ""
@@ -216,10 +212,15 @@ household_annual_income = ""
 
 if family_structure != "単身":
     st.markdown("#### STEP 3.5｜奥様の情報")
-    wife_working = st.radio("奥様は働いていますか？", ["いいえ", "はい"], horizontal=True)
+    # ✅ 奥様就業状況セグメント（2つの選択肢）
+    wife_working = st.radio(
+        "奥様のご状況", 
+        ["主婦", "奥様　収入あり"], 
+        horizontal=True
+    )
     
-    # ✅ 奥様が働いている場合のみ詳細入力欄を表示
-    if wife_working == "はい":
+    # ✅ 「奥様　収入あり」の場合のみ詳細質問
+    if wife_working == "奥様　収入あり":
         st.info("💑 奥様の勤務先情報をご入力ください")
         cw1, cw2 = st.columns(2)
         with cw1:
@@ -231,7 +232,7 @@ if family_structure != "単身":
 
 st.divider()
 
-# 区分別の詳細項目
+# 区分別項目（既存ロジック維持）
 budget = desired_area = desired_spec = ""
 property_address = property_type = property_area = property_age = ""
 remaining_debt = sell_reason = sell_timing = other_details = ""
@@ -265,7 +266,6 @@ else:
 st.divider()
 memo = st.text_area("管理メモ（任意）", height=80)
 
-# 保存ボタン
 if st.button("新規作成", type="primary"):
     if not name.strip():
         st.error("お客様名を入力してください。")
@@ -299,13 +299,31 @@ if st.button("新規作成", type="primary"):
         }
 
         if customer_type == "購入":
-            base_meta.update({"budget": budget, "desired_area": desired_area, "desired_spec": desired_spec})
+            base_meta.update({
+                "budget": budget,
+                "desired_area": desired_area,
+                "desired_spec": desired_spec,
+            })
         elif customer_type == "売却":
-            base_meta.update({"property_address": property_address, "property_type": property_type, "property_area": property_area, "property_age": property_age, "remaining_debt": remaining_debt, "sell_reason": sell_reason, "sell_timing": sell_timing})
+            base_meta.update({
+                "property_address": property_address,
+                "property_type": property_type,
+                "property_area": property_area,
+                "property_age": property_age,
+                "remaining_debt": remaining_debt,
+                "sell_reason": sell_reason,
+                "sell_timing": sell_timing,
+            })
         else:
             base_meta["other_details"] = other_details
 
-        payload = {"meta": base_meta, "baseline": {}, "prefs": {}, "listings": []}
+        payload = {
+            "meta": base_meta,
+            "baseline": {},
+            "prefs": {},
+            "listings": []
+        }
+
         save_client(client_id, payload)
         url = share_url_for(client_id)
         st.success("お客様用URLを発行しました。下のリンクを共有してください。")
@@ -315,7 +333,7 @@ if st.button("新規作成", type="primary"):
 st.divider()
 
 # ------------------------------------
-# 一覧・検索・削除（家族構成対応表示）
+# 一覧・検索・削除（セグメント表示対応）
 # ------------------------------------
 st.header("📋 お客様ページ 一覧")
 
@@ -353,11 +371,20 @@ else:
             with cols[0]:
                 source_badge = "📱 LINE" if c.get("line_user_id") else "✏️ 手動"
                 
-                # 家族構成バッジの追加
+                # ✅ 家族構成バッジの表示
                 family = c.get("family_structure", "")
                 family_badge = f"　👨‍👩‍👧‍👦 {family}" if family else ""
                 
-                st.markdown(f"### {c['name']}　`{source_badge}`{family_badge}")
+                # ✅ 奥様就業状況バッジの表示
+                wife_status = c.get("wife_working", "")
+                if wife_status == "奥様　収入あり":
+                    wife_badge = "　💼 奥様収入あり"
+                elif wife_status == "主婦":
+                    wife_badge = "　🏠 主婦"
+                else:
+                    wife_badge = ""
+                
+                st.markdown(f"### {c['name']}　`{source_badge}`{family_badge}{wife_badge}")
                 
                 furigana_info = f"（{c['furigana']}）" if c.get('furigana') else ""
                 customer_type_badge = c.get('customer_type', '')
@@ -377,7 +404,7 @@ else:
                         st.success("削除しました")
                         st.rerun()
 
-            # ✅ 詳細情報表示（家族構成に応じた表示）
+            # ✅ セグメント対応詳細表示
             with st.expander("📋 詳細情報を表示"):
                 d1, d2, d3 = st.columns(3)
 
@@ -399,29 +426,32 @@ else:
                     st.write(f"• 年収: {c.get('annual_income') or '未入力'}")
                     st.write(f"• 自己資金: {c.get('own_funds') or '未入力'}")
 
-                    # ✅ 家族構成による奥様情報の表示判定
+                    # ✅ セグメント条件による奥様情報表示
                     family = c.get("family_structure", "").strip()
-                    is_single = family == "単身"
-                    spouse_info_exists = any([
-                        c.get("spouse_workplace"),
-                        c.get("spouse_workplace_station"),
-                        c.get("spouse_annual_income"),
-                        c.get("household_annual_income")
-                    ])
-
-                    if not is_single and spouse_info_exists:
+                    wife_working = c.get("wife_working", "")
+                    
+                    # 単身以外 かつ 奥様収入ありの場合のみ詳細表示
+                    if family != "単身" and wife_working == "奥様　収入あり":
                         st.divider()
                         st.markdown("**💑 奥様の勤務先情報**")
                         st.write(f"• 勤務先: {c.get('spouse_workplace') or '未入力'}")
                         st.write(f"• 勤務先最寄駅: {c.get('spouse_workplace_station') or '未入力'}")
                         st.write(f"• 年収: {c.get('spouse_annual_income') or '未入力'}")
+                        
+                        st.markdown("**👨‍👩‍👧‍👦 世帯情報**")
                         st.write(f"• 世帯年収（合計）: {c.get('household_annual_income') or '未入力'}")
+                    
+                    elif family != "単身" and wife_working == "主婦":
+                        st.divider()
+                        st.markdown("**💑 奥様のご状況**")
+                        st.write("• 主婦")
 
                 with d3:
                     st.markdown("**🏡 購入希望条件**")
                     st.write(f"• 予算: {c.get('budget') or '未入力'}")
                     st.write(f"• 希望エリア: {c.get('desired_area') or '未入力'}")
 
+                # その他の情報表示（既存ロジック維持）
                 if c.get('desired_spec'):
                     st.markdown("**📝 希望スペック詳細**")
                     st.info(c['desired_spec'])
@@ -445,11 +475,19 @@ with st.expander("🔧 データベース管理（デバッグ用）"):
     with col1:
         if st.button("📊 DB統計表示"):
             st.write(f"総レコード数: {KV.count()}")
+            all_items = load_all_clients()
+            oldest = min([c["created"] for c in all_items if c["created"]], default=None)
+            newest = max([c["created"] for c in all_items if c["created"]], default=None)
+            st.write(f"最古: {oldest.isoformat() if oldest else '-'}")
+            st.write(f"最新: {newest.isoformat() if newest else '-'}")
     with col2:
         if st.button("📥 DBバックアップ作成"):
-            st.download_button("バックアップをダウンロード", KV.snapshot_bytes(), 
-                             file_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json", 
-                             mime="application/json")
+            st.download_button(
+                "バックアップをダウンロード",
+                KV.snapshot_bytes(),
+                file_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
 
 from auth import admin_send_ui
 admin_send_ui()
