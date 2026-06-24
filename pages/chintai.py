@@ -2,17 +2,14 @@ import streamlit as st
 from pathlib import Path
 
 # ---- 画像フォルダのパスを自動で組み立てる ----
-# このファイル(chintai.py)は pages/ の中にあるので、1つ上がリポジトリのルート
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 
 def img(name: str) -> str:
     return str(ASSETS / name)
 
-# ---- ページ設定 ----
 st.set_page_config(page_title="賃貸の末路", page_icon="🏠", layout="wide")
 
-# ---- 簡単なスタイル（POPな色味） ----
 st.markdown("""
 <style>
 .big-title{font-size:54px;font-weight:900;color:#1556c0;line-height:1.25;}
@@ -38,7 +35,6 @@ st.markdown("""
 高齢者は<span class="accent">部屋を借りられない</span>時代へ。
 </p>
 """, unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -54,7 +50,6 @@ with c2:
     st.subheader("先送りしていませんか？")
     st.write("家を買うか借りるかは「好み」の問題ではありません。数千万円単位の意思決定を、先送りしているだけかもしれません。")
 st.info("なぜ多くの人が「先送り」してしまうのか？ その正体は、4つの「心理のワナ」にあります。")
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -85,7 +80,6 @@ st.markdown('<div class="bias-title">④ 確証バイアス 〜見たいもの�
 st.write("**【定義】** 自分の考えに合う情報だけを集め、反する情報を無視する傾向。「いいな」と思った瞬間、欠点が見えなくなる。")
 st.write("**あるある：** 良い口コミだけ信じる／不利な条件を軽く見積もる／営業の「お得です」を鵜呑みに。")
 st.success("💡 あえて「この物件のデメリットは？」と、信頼できる第三者（エージェント）に聞く。")
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -101,7 +95,6 @@ with c2:
     st.metric("東京23区 シングル向け 平均家賃", "11万円超", "+12.0%（前年同月比）")
     st.write("21ヶ月連続 最高値更新。賃貸は「変動費」。一生、値上げのリスクを抱え続けることになります。")
 st.markdown('<p class="note">出典：at home / 日本経済新聞 2026年</p>', unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -112,7 +105,6 @@ st.header("20年前・現在・20年後、あなたの住居費はどうなる�
 st.write("日銀の物価安定目標は年2%。20年後、都内ワンルームは16万円に。年金生活で家賃を払い続けられますか？")
 st.image(img("20.png"), use_container_width=True)
 st.markdown('<p class="note">※日本銀行 物価安定目標 年2%で試算</p>', unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -123,7 +115,6 @@ st.header("その「1年待とう」が、約312万円を捨てている。")
 st.write("1年待つと、家賃は掛け捨て（戻ってこない）。さらに、住宅ローンなら積み上がっていたはずの「元金（資産）」も得られません。この2つは別物なので、合算した損失になります。")
 st.image(img("saki.png"), use_container_width=True)
 st.markdown('<p class="note">※金利0.9%・35年（元利均等）での概算。不動産価格・金利は2026年時点で上昇局面（今後の継続を保証するものではありません）</p>', unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -143,7 +134,6 @@ with c2:
     st.image(img("rougo.jpg"), use_container_width=True)
     st.image(img("jiage.jpg"), use_container_width=True)
 st.markdown('<p class="note">出典：テレ朝news / R65不動産調査 2025</p>', unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -160,53 +150,157 @@ with c2:
     st.image(img("taikyo.jpg"), use_container_width=True)
     st.caption("戸建て6年半：精算額 ¥307,900")
 st.warning("賃貸は「住み終わり」にも、まとまったお金が出ていく。")
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
-# 11 必要資金 ＋ シミュレーション
+# 11 必要資金（読み物）
 # ============================================================
 st.markdown('<div class="section-label">末路③ 数字で見る「老後の家賃」</div>', unsafe_allow_html=True)
 st.header("老後2000万円問題は、「持ち家前提」で計算されている。")
 st.write("総務省の家計調査では、高齢者の住居費はわずか月1.8万円。持ち家率94%を前提とした数字です。賃貸なら、ここに家賃がまるごと上乗せされます。")
 st.image(img("rougosoumu.png"), use_container_width=True)
+st.markdown("<hr>", unsafe_allow_html=True)
 
-st.subheader("🧮 老後の必要資金シミュレーション")
-st.write("あなたの想定家賃と、老後に賃貸で暮らす年数を入れてみてください。")
-sc1, sc2 = st.columns(2)
-with sc1:
-    rent = st.slider("老後の想定家賃（万円/月）", 5, 25, 16)
-with sc2:
-    years = st.slider("老後に賃貸で暮らす年数", 10, 35, 20)
+# ============================================================
+# ★ 簡易ライフプランニング・シミュレーション
+# ============================================================
+st.markdown('<div class="section-label">あなたの数字で試算</div>', unsafe_allow_html=True)
+st.header("🧮 簡易ライフプランニング")
 
-assumed_housing = 1.8  # 持ち家前提の住居費（万円/月）
-monthly_gap = rent - assumed_housing
-yearly_gap = monthly_gap * 12
-total_gap = yearly_gap * years
-total_need = 2000 + total_gap  # 老後2000万円 + 家賃分
+# ---- ① 現状把握 ----
+st.subheader("① いまの暮らしを入力")
+cc1, cc2 = st.columns(2)
+with cc1:
+    age = st.number_input("現在の年齢", min_value=20, max_value=70, value=35)
+    family = st.text_input("家族構成（例：夫婦＋子1人）", value="夫婦")
+    spend_self = st.number_input("毎月の生活費（自己申告・万円）", min_value=0.0, max_value=200.0, value=25.0, step=1.0)
+with cc2:
+    income_husband = st.number_input("手取り収入：ご主人（万円/月）", min_value=0.0, value=30.0, step=1.0)
+    income_wife = st.number_input("手取り収入：奥様（万円/月）", min_value=0.0, value=15.0, step=1.0)
+    income_other = st.number_input("手取り収入：その他（万円/月）", min_value=0.0, value=0.0, step=1.0)
 
-m1, m2, m3 = st.columns(3)
-m1.metric("毎月の差額", f"▲{monthly_gap:.1f}万円")
-m2.metric(f"{years}年間の家賃分の不足", f"▲{total_gap:,.0f}万円")
-m3.metric("老後に必要な総額の目安", f"約{total_need:,.0f}万円")
-st.caption("※持ち家前提の住居費 月1.8万円との差額で試算。老後2,000万円問題に上乗せした概算です。")
+st.markdown("**毎月の金融商品・貯蓄（万円/月）**")
+fc1, fc2, fc3, fc4 = st.columns(4)
+with fc1: f_nisa = st.number_input("NISA積立", min_value=0.0, value=3.0, step=0.5)
+with fc2: f_hoken = st.number_input("保険", min_value=0.0, value=2.0, step=0.5)
+with fc3: f_chokin = st.number_input("貯金", min_value=0.0, value=3.0, step=0.5)
+with fc4: f_other = st.number_input("その他", min_value=0.0, value=0.0, step=0.5)
+
+st.markdown("**借入・大型出費**")
+bc1, bc2, bc3 = st.columns(3)
+with bc1: loan_month = st.number_input("借入の月返済額（奨学金・車など・万円）", min_value=0.0, value=0.0, step=0.5)
+with bc2: bonus_year = st.number_input("ボーナス：年間（万円）", min_value=0.0, value=100.0, step=10.0)
+with bc3: big_spend = st.selectbox("3年以内に200万円以上の出費予定", ["なし", "あり"])
+
+# ---- 生活費のズレを気づかせる ----
+income_total = income_husband + income_wife + income_other
+finance_total = f_nisa + f_hoken + f_chokin + f_other
+real_spend = income_total - finance_total - loan_month  # 収入 − 金融商品 − 借入返済 ＝ 本当の生活費
+gap = real_spend - spend_self
+
+st.subheader("② 自己申告 vs 本当の生活費")
+zc1, zc2, zc3 = st.columns(3)
+zc1.metric("自己申告の生活費", f"{spend_self:.1f}万円/月")
+zc2.metric("収入−金融商品−借入＝本当の生活費", f"{real_spend:.1f}万円/月")
+zc3.metric("ズレ（見えていない支出）", f"{gap:+.1f}万円/月")
+if gap > 0:
+    st.warning(f"自己申告より、実際は毎月 約{gap:.1f}万円 多く使っています。"
+               f"年間にすると約{gap*12:.0f}万円。この「見えていない支出」を把握することが第一歩です。")
+elif gap < 0:
+    st.info("自己申告のほうが多めです。把握はできていますが、金融商品への配分を見直す余地があるかもしれません。")
+else:
+    st.info("自己申告と計算値が一致しています。")
+
+st.markdown("---")
+
+# ---- ③ 老後の必要資金 ----
+st.subheader("③ 老後の必要資金")
+st.caption("※ゆとりある老後：月36万円／最低限の生活：月25万円（生命保険文化センター）。賃貸の場合はさらに＋10万円。"
+           "最低でも25万円かかる理由は、退職後に自分で払う社会保険料と、リフォーム・車買い替えなど突発的出費の年割り分です。")
+
+oc1, oc2, oc3 = st.columns(3)
+with oc1:
+    start_age = st.number_input("老後生活の開始年齢", min_value=55, max_value=75, value=65)
+    end_age = st.number_input("何歳まで生きると想定するか", min_value=75, max_value=110, value=90)
+with oc2:
+    life_cost = st.number_input("老後の月の生活費（万円）", min_value=10.0, max_value=60.0, value=36.0, step=1.0)
+    is_rent = st.checkbox("老後も賃貸（＋10万円）", value=False)
+with oc3:
+    pension = st.number_input("年金は月いくらもらえると思いますか（万円）", min_value=0.0, max_value=40.0, value=10.0, step=1.0)
+    retire_money = st.number_input("退職金（夫婦合計・万円）", min_value=0.0, value=500.0, step=100.0)
+
+inherit = st.number_input("相続で見込める額（不確実なら0・万円）", min_value=0.0, value=0.0, step=100.0)
+
+# 老後計算
+if is_rent:
+    life_cost_final = life_cost + 10
+else:
+    life_cost_final = life_cost
+retire_years = max(end_age - start_age, 0)
+need_total = life_cost_final * 12 * retire_years          # 必要総額
+pension_total = pension * 12 * retire_years               # 年金合計
+self_need = need_total - pension_total - retire_money - inherit  # 自力で準備が必要な額
+self_need = max(self_need, 0)
+
+st.markdown("#### 老後の総額シミュレーション")
+st.table({
+    "項目": [
+        f"必要総額（月{life_cost_final:.0f}万円 × 12 × {retire_years}年）",
+        f"－ 年金（月{pension:.0f}万円 × 12 × {retire_years}年）",
+        "－ 退職金（夫婦合計）",
+        "－ 相続",
+        "＝ 自力で準備が必要な額",
+    ],
+    "金額": [
+        f"{need_total:,.0f}万円",
+        f"▲{pension_total:,.0f}万円",
+        f"▲{retire_money:,.0f}万円",
+        f"▲{inherit:,.0f}万円",
+        f"{self_need:,.0f}万円",
+    ],
+})
+
+st.markdown("---")
+
+# ---- ④ 毎月いくら必要か（利回り別） ----
+st.subheader("④ 65歳までに、毎月いくら積み立てれば届く？")
+years_to_65 = max(65 - age, 1)
+st.write(f"現在 {age}歳 → 65歳まで **残り{years_to_65}年**。目標額は **{self_need:,.0f}万円** です。")
+
+# 利回りスライダー（デフォルト5%）
+rate = st.slider("利回り（%）を動かすと、毎月必要額が変わります", 0.0, 12.0, 5.0, step=0.5)
+
+def monthly_needed(goal_manen, years, rate_percent):
+    """年複利・積立終価の式で、毎月必要な積立額（万円）を返す"""
+    r = rate_percent / 100
+    if r == 0:
+        annual = goal_manen / years
+    else:
+        factor = ((1 + r) ** years - 1) / r   # 年金終価係数
+        annual = goal_manen / factor
+    return annual / 12
+
+mneed = monthly_needed(self_need, years_to_65, rate)
+st.metric(f"利回り {rate:.1f}% の場合・毎月必要な積立額", f"約 {mneed:.1f}万円/月")
+
+# 利回り別 比較テーブル
+st.markdown("#### 利回り別の比較")
+rates = [0, 3, 5, 7, 10]
+st.table({
+    "利回り": [f"{x}%（貯金のみ）" if x == 0 else f"{x}%" for x in rates],
+    "毎月必要な積立額": [f"約 {monthly_needed(self_need, years_to_65, x):.1f}万円/月" for x in rates],
+})
+st.caption("※年1回複利の積立終価で試算。利回りは保証されるものではありません。"
+           "一般に3〜5%は現実的に狙える範囲、7%超はリスクが高く確実ではなく、10%超を継続するのは非常に困難な水準です。")
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
-# 12 5000万円試算
+# 12 5000万円試算（読み物）
 # ============================================================
 st.markdown('<div class="section-label">突きつけられる現実</div>', unsafe_allow_html=True)
-st.header("30歳の人が、65歳までに5,000万円を貯めるには？")
-st.write("「一生賃貸でいい」を選ぶなら、これだけの準備を“今から”始める必要があります。")
-st.table({
-    "方法": ["💰 貯金だけで貯める", "📈 積立投資（利回り5%想定）", "35年間 続けると"],
-    "毎月の額／結果": ["月 12万円ずつ", "月 4.5万円ずつ", "≒ 5,000万円"],
-})
-st.write("一生賃貸派が取れる道は、結局この2つだけ——① 老後、生活費の安い地方へ移住する／② それまでに資産を作りきる。"
-         "**どちらにせよ、「今からの準備」が運命を分けます。**")
-st.markdown('<p class="note">※利回り5%は複利運用の試算。元本保証ではありません</p>', unsafe_allow_html=True)
-
+st.header("一生賃貸派が取れる道は、結局2つだけ。")
+st.write("① 老後、生活費の安い地方へ移住する／② それまでに資産を作りきる。**どちらにせよ、「今からの準備」が運命を分けます。**")
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -217,7 +311,6 @@ st.header("家賃を抑えたいなら、住む「場所」を変える手もあ
 st.write("東京23区のワンルームが11万円超に対し、地方なら同等の部屋が大幅に安く借りられます。ただし、仕事・医療・人間関係まで含めた生活設計が前提です。")
 st.image(img("chin.png"), use_container_width=True)
 st.markdown('<p class="note">出典：at home 全国家賃相場</p>', unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -238,7 +331,6 @@ with c2:
     st.markdown("**手元の5,800万円を運用すると**")
     st.write("利回り5%で年約290万円（≒月24万円）の収入。住居費をまかなえる計算に。元本5,800万円は残り、ローン返済後は物件も手元に残る。")
 st.markdown('<p class="note">※特定事例の概算。価格・税・利回りは物件と市況により異なります</p>', unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -255,7 +347,6 @@ with c2:
     st.write("・対象は子育て・新婚世帯のみ\n\n・減額は最大12年で終了\n\n・老後は対象外、使えない")
     st.write("**だから——制度に頼れない老後に備え、現役のうちに「終の住処」を確保しておく必要があるのです。**")
 st.markdown('<p class="note">出典：東京都 / JKK東京 2026年</p>', unsafe_allow_html=True)
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
@@ -274,4 +365,3 @@ with c2:
     st.markdown("**3. 今、何をすべきかを整理**／必要なら次の一手をディレクション")
     st.success("「この物件のデメリットは？」その問いに、正直に答えるのが私の仕事です。先送りを、今日で終わらせましょう。")
     st.caption("※ライフプランニングはお金のプロ（FP）と連携。私は不動産の視点から最適な進め方をご案内します。")
-
