@@ -1,7 +1,6 @@
 import streamlit as st
 from pathlib import Path
 
-# ---- 画像フォルダのパスを自動で組み立てる ----
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 
@@ -19,6 +18,7 @@ st.markdown("""
   font-size:16px;padding:5px 16px;border-radius:20px;margin-bottom:10px;}
 .bias-title{font-size:30px;font-weight:900;color:#1556c0;}
 .note{font-size:14px;color:#a99684;}
+.story{font-size:18px;line-height:1.9;color:#26324a;}
 hr{border:none;border-top:2px dotted #ffe0cf;margin:34px 0;}
 </style>
 """, unsafe_allow_html=True)
@@ -167,41 +167,68 @@ st.markdown("<hr>", unsafe_allow_html=True)
 st.markdown('<div class="section-label">あなたの数字で試算</div>', unsafe_allow_html=True)
 st.header("🧮 簡易ライフプランニング")
 
-# ---- ① 現状把握 ----
-st.subheader("① いまの暮らしを入力")
-cc1, cc2 = st.columns(2)
-with cc1:
-    age = st.number_input("現在の年齢", min_value=20, max_value=70, value=35)
-    family = st.text_input("家族構成（例：夫婦＋子1人）", value="夫婦")
-    spend_self = st.number_input("毎月の生活費（自己申告・万円）", min_value=0.0, max_value=200.0, value=25.0, step=1.0)
-with cc2:
+# ---- ① 現状把握：家族構成 ----
+st.subheader("① ご家族の構成")
+fc1, fc2 = st.columns(2)
+with fc1:
+    age_husband = st.number_input("ご主人の年齢", min_value=18, max_value=90, value=35)
+with fc2:
+    age_wife = st.number_input("奥様の年齢", min_value=18, max_value=90, value=33)
+
+num_children = st.number_input("お子様の人数", min_value=0, max_value=5, value=1)
+children = []
+for i in range(int(num_children)):
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        c_age = st.number_input(f"お子様{i+1} 年齢", min_value=0, max_value=40, value=0, key=f"child_age_{i}")
+    with cc2:
+        c_sex = st.selectbox(f"お子様{i+1} 性別", ["男の子", "女の子"], key=f"child_sex_{i}")
+    children.append((c_age, c_sex))
+
+# ご本人の年齢（積立計算の基準）はご主人の年齢を使用
+age = age_husband
+
+# ---- 収入・支出・金融商品・借入・家賃 ----
+st.subheader("② いまの収入と支出")
+ic1, ic2, ic3 = st.columns(3)
+with ic1:
     income_husband = st.number_input("手取り収入：ご主人（万円/月）", min_value=0.0, value=30.0, step=1.0)
+with ic2:
     income_wife = st.number_input("手取り収入：奥様（万円/月）", min_value=0.0, value=15.0, step=1.0)
+with ic3:
     income_other = st.number_input("手取り収入：その他（万円/月）", min_value=0.0, value=0.0, step=1.0)
 
+sc1, sc2 = st.columns(2)
+with sc1:
+    rent_now = st.number_input("現在の家賃（万円/月）", min_value=0.0, value=15.0, step=1.0)
+with sc2:
+    spend_self = st.number_input("毎月の生活費・自己申告（家賃を除く・万円）", min_value=0.0, value=20.0, step=1.0)
+
 st.markdown("**毎月の金融商品・貯蓄（万円/月）**")
-fc1, fc2, fc3, fc4 = st.columns(4)
-with fc1: f_nisa = st.number_input("NISA積立", min_value=0.0, value=3.0, step=0.5)
-with fc2: f_hoken = st.number_input("保険", min_value=0.0, value=2.0, step=0.5)
-with fc3: f_chokin = st.number_input("貯金", min_value=0.0, value=3.0, step=0.5)
-with fc4: f_other = st.number_input("その他", min_value=0.0, value=0.0, step=0.5)
+mc1, mc2, mc3, mc4 = st.columns(4)
+with mc1: f_nisa = st.number_input("NISA積立", min_value=0.0, value=3.0, step=0.5)
+with mc2: f_hoken = st.number_input("保険", min_value=0.0, value=2.0, step=0.5)
+with mc3: f_chokin = st.number_input("貯金", min_value=0.0, value=3.0, step=0.5)
+with mc4: f_other = st.number_input("その他", min_value=0.0, value=0.0, step=0.5)
 
-st.markdown("**借入・大型出費**")
 bc1, bc2, bc3 = st.columns(3)
-with bc1: loan_month = st.number_input("借入の月返済額（奨学金・車など・万円）", min_value=0.0, value=0.0, step=0.5)
-with bc2: bonus_year = st.number_input("ボーナス：年間（万円）", min_value=0.0, value=100.0, step=10.0)
-with bc3: big_spend = st.selectbox("3年以内に200万円以上の出費予定", ["なし", "あり"])
+with bc1:
+    loan_month = st.number_input("借入の月返済額（クレカ・奨学金・車など・万円）", min_value=0.0, value=0.0, step=0.5)
+with bc2:
+    bonus_year = st.number_input("ボーナス：年間（万円）", min_value=0.0, value=100.0, step=10.0)
+with bc3:
+    big_spend = st.selectbox("3年以内に200万円以上の出費予定", ["なし", "あり"])
 
-# ---- 生活費のズレを気づかせる ----
+# ---- 本当の生活費（家賃も差し引く）----
 income_total = income_husband + income_wife + income_other
 finance_total = f_nisa + f_hoken + f_chokin + f_other
-real_spend = income_total - finance_total - loan_month  # 収入 − 金融商品 − 借入返済 ＝ 本当の生活費
+real_spend = income_total - finance_total - loan_month - rent_now  # 収入−金融−借入−家賃
 gap = real_spend - spend_self
 
-st.subheader("② 自己申告 vs 本当の生活費")
+st.subheader("③ 自己申告 vs 本当の生活費")
 zc1, zc2, zc3 = st.columns(3)
-zc1.metric("自己申告の生活費", f"{spend_self:.1f}万円/月")
-zc2.metric("収入−金融商品−借入＝本当の生活費", f"{real_spend:.1f}万円/月")
+zc1.metric("自己申告の生活費（家賃除く）", f"{spend_self:.1f}万円/月")
+zc2.metric("収入−金融−借入−家賃＝本当の生活費", f"{real_spend:.1f}万円/月")
 zc3.metric("ズレ（見えていない支出）", f"{gap:+.1f}万円/月")
 if gap > 0:
     st.warning(f"自己申告より、実際は毎月 約{gap:.1f}万円 多く使っています。"
@@ -213,9 +240,9 @@ else:
 
 st.markdown("---")
 
-# ---- ③ 老後の必要資金 ----
-st.subheader("③ 老後の必要資金")
-st.caption("※ゆとりある老後：月36万円／最低限の生活：月25万円（生命保険文化センター）。賃貸の場合はさらに＋10万円。"
+# ---- ④ 老後の必要資金 ----
+st.subheader("④ 老後の必要資金")
+st.caption("※ゆとりある老後：月36万円／最低限の生活：月25万円（生命保険文化センター）。"
            "最低でも25万円かかる理由は、退職後に自分で払う社会保険料と、リフォーム・車買い替えなど突発的出費の年割り分です。")
 
 oc1, oc2, oc3 = st.columns(3)
@@ -223,24 +250,25 @@ with oc1:
     start_age = st.number_input("老後生活の開始年齢", min_value=55, max_value=75, value=65)
     end_age = st.number_input("何歳まで生きると想定するか", min_value=75, max_value=110, value=90)
 with oc2:
-    life_cost = st.number_input("老後の月の生活費（万円）", min_value=10.0, max_value=60.0, value=36.0, step=1.0)
-    is_rent = st.checkbox("老後も賃貸（＋10万円）", value=False)
+    life_cost = st.number_input("老後の月の生活費（家賃除く・万円）", min_value=10.0, max_value=60.0, value=36.0, step=1.0)
+    is_rent_old = st.checkbox("老後も賃貸で暮らす", value=False)
 with oc3:
     pension = st.number_input("年金は月いくらもらえると思いますか（万円）", min_value=0.0, max_value=40.0, value=10.0, step=1.0)
     retire_money = st.number_input("退職金（夫婦合計・万円）", min_value=0.0, value=500.0, step=100.0)
 
+old_rent = 0.0
+if is_rent_old:
+    st.caption("👉 今の都内ワンルームは平均11万円、20年前は平均6万円でした。老後、いくらの家賃に住みますか？")
+    old_rent = st.number_input("老後の家賃（万円/月）", min_value=0.0, max_value=40.0, value=11.0, step=1.0)
+
 inherit = st.number_input("相続で見込める額（不確実なら0・万円）", min_value=0.0, value=0.0, step=100.0)
 
 # 老後計算
-if is_rent:
-    life_cost_final = life_cost + 10
-else:
-    life_cost_final = life_cost
+life_cost_final = life_cost + old_rent
 retire_years = max(end_age - start_age, 0)
-need_total = life_cost_final * 12 * retire_years          # 必要総額
-pension_total = pension * 12 * retire_years               # 年金合計
-self_need = need_total - pension_total - retire_money - inherit  # 自力で準備が必要な額
-self_need = max(self_need, 0)
+need_total = life_cost_final * 12 * retire_years
+pension_total = pension * 12 * retire_years
+self_need = max(need_total - pension_total - retire_money - inherit, 0)
 
 st.markdown("#### 老後の総額シミュレーション")
 st.table({
@@ -262,28 +290,25 @@ st.table({
 
 st.markdown("---")
 
-# ---- ④ 毎月いくら必要か（利回り別） ----
-st.subheader("④ 65歳までに、毎月いくら積み立てれば届く？")
+# ---- ⑤ 毎月いくら必要か（利回り別）----
+st.subheader("⑤ 65歳までに、毎月いくら積み立てれば届く？")
 years_to_65 = max(65 - age, 1)
-st.write(f"現在 {age}歳 → 65歳まで **残り{years_to_65}年**。目標額は **{self_need:,.0f}万円** です。")
+st.write(f"ご主人 現在 {age}歳 → 65歳まで **残り{years_to_65}年**。目標額は **{self_need:,.0f}万円** です。")
 
-# 利回りスライダー（デフォルト5%）
 rate = st.slider("利回り（%）を動かすと、毎月必要額が変わります", 0.0, 12.0, 5.0, step=0.5)
 
 def monthly_needed(goal_manen, years, rate_percent):
-    """年複利・積立終価の式で、毎月必要な積立額（万円）を返す"""
     r = rate_percent / 100
     if r == 0:
         annual = goal_manen / years
     else:
-        factor = ((1 + r) ** years - 1) / r   # 年金終価係数
+        factor = ((1 + r) ** years - 1) / r
         annual = goal_manen / factor
     return annual / 12
 
 mneed = monthly_needed(self_need, years_to_65, rate)
 st.metric(f"利回り {rate:.1f}% の場合・毎月必要な積立額", f"約 {mneed:.1f}万円/月")
 
-# 利回り別 比較テーブル
 st.markdown("#### 利回り別の比較")
 rates = [0, 3, 5, 7, 10]
 st.table({
@@ -292,11 +317,61 @@ st.table({
 })
 st.caption("※年1回複利の積立終価で試算。利回りは保証されるものではありません。"
            "一般に3〜5%は現実的に狙える範囲、7%超はリスクが高く確実ではなく、10%超を継続するのは非常に困難な水準です。")
-
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
-# 12 5000万円試算（読み物）
+# ★ 万が一（病気・怪我・リストラ）
+# ============================================================
+st.markdown('<div class="section-label">万が一に備える</div>', unsafe_allow_html=True)
+st.header("もし、病気・怪我・リストラで働けなくなったら？")
+st.markdown("""
+<p class="story">
+問題は、病気や怪我で働けなくなった時です。<br>
+働けなくなると、傷病手当金で手取りの半分ほどは出ますが、<b>1年半で止まります</b>。<br>
+その後は収入が激減。一方で支出は下がらず、治療費でむしろ上がることも。<br>
+例えば、手元資産500万円を月30万円で取り崩すと、<b>約16ヶ月で枯渇</b>します。<br>
+足りない分を、貯金で備えるか、保険で備えるか——ここが分かれ道です。
+</p>
+""", unsafe_allow_html=True)
+
+st.success("💡 住宅ローンなら、もしもの備えが組み込める\n\n"
+           "・**がん団信**：がんと診断されたら、住宅ローンの残りが0円になる\n\n"
+           "・**失業保障・全疾病保障・自然災害保障**：働けない・住めない事態をカバー\n\n"
+           "足りない部分は、保険などで補う設計ができます。")
+
+st.image(img("danshi.png"), use_container_width=True, caption="団信の保障（失業保障・全疾病保障・自然災害保障など）")
+
+st.error("【賃貸の場合】がんになっても、リストラされても、家賃の支払い義務は残ります。"
+         "払えなければ、より安い家賃へ引っ越すしかありません。"
+         "しかし、その時にも退去費用＋引越し費用がかかります。"
+         "——これが、自由なはずの賃貸のデメリットです。")
+st.markdown("<hr>", unsafe_allow_html=True)
+
+# ============================================================
+# ★ 準備できなかった場合のストーリー
+# ============================================================
+st.markdown('<div class="section-label">準備できなかった、その先</div>', unsafe_allow_html=True)
+st.header("もし、老後の準備ができなかったら——")
+st.markdown("""
+<p class="story">
+<b>① 65歳で退職。</b>でも、多くの人がどうにか70歳まで働きます（シルバー人材、ガードマンなど）。<br><br>
+<b>② 70歳以降は雇われにくくなり、</b>退職金を取り崩す生活へ。月の不足が15万円なら、退職金500万円は約3年で底をつきます。賃貸なら、さらに多くが必要です。<br><br>
+<b>③ 73歳、資産ゼロ。</b>生活保護を申請しに、窓口へ向かいます。<br><br>
+<b>④ 窓口で必ず聞かれます。「ご家族はいますか？」</b>「子供がいて、元気に働いています」——そう答えた瞬間、扶養が優先され、生活保護は受けにくくなります。<br><br>
+<b>⑤ 結果、足りないお金を子供に頼る。あるいは同居させてもらう。</b>子供に、金銭的にも精神的にも負担をかけることになります。
+</p>
+""", unsafe_allow_html=True)
+
+st.info("一方、自分の資産（持ち家）があれば——万が一の時、売却やリバースモーゲージで現金化できます。"
+        "住まいが「最後の備え」になるのです。")
+
+st.warning("だから、賃貸のままでは足りません。"
+           "貯金するか、運用するか。そして何より、まずは「購入」を検討することが、"
+           "あなたとご家族の未来を守る備えになります。")
+st.markdown("<hr>", unsafe_allow_html=True)
+
+# ============================================================
+# 12 一生賃貸派の2つの道（読み物）
 # ============================================================
 st.markdown('<div class="section-label">突きつけられる現実</div>', unsafe_allow_html=True)
 st.header("一生賃貸派が取れる道は、結局2つだけ。")
