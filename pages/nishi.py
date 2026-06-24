@@ -153,15 +153,6 @@ st.warning("賃貸は「住み終わり」にも、まとまったお金が出�
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
-# 11 必要資金（読み物）
-# ============================================================
-st.markdown('<div class="section-label">末路③ 数字で見る「老後の家賃」</div>', unsafe_allow_html=True)
-st.header("老後2000万円問題は、「持ち家前提」で計算されている。")
-st.write("総務省の家計調査では、高齢者の住居費はわずか月1.8万円。持ち家率94%を前提とした数字です。賃貸なら、ここに家賃がまるごと上乗せされます。")
-st.image(img("rougosoumu.png"), use_container_width=True)
-st.markdown("<hr>", unsafe_allow_html=True)
-
-# ============================================================
 # ★ 簡易ライフプランニング・シミュレーション
 # ============================================================
 st.markdown('<div class="section-label">あなたの数字で試算</div>', unsafe_allow_html=True)
@@ -244,6 +235,16 @@ st.markdown("---")
 st.subheader("④ 老後の必要資金")
 st.caption("※ゆとりある老後：月36万円／最低限の生活：月25万円（生命保険文化センター）。"
            "最低でも25万円かかる理由は、退職後に自分で払う社会保険料と、リフォーム・車買い替えなど突発的出費の年割り分です。")
+
+# 老後2000万円問題のカラクリ（旧・末路③をここに統合）
+oc_top1, oc_top2 = st.columns([1.3, 1])
+with oc_top1:
+    st.error("**老後2000万円問題は、「持ち家前提」で計算されている。**\n\n"
+             "総務省の家計調査では、高齢者の住居費はわずか **月1.8万円**。"
+             "これは **持ち家率94%** を前提とした数字です。\n\n"
+             "**賃貸なら、ここに家賃がまるごと上乗せされます。**")
+with oc_top2:
+    st.image(img("rougosoumu.png"), use_container_width=True)
 
 oc1, oc2, oc3 = st.columns(3)
 with oc1:
@@ -341,10 +342,31 @@ st.success("💡 住宅ローンなら、もしもの備えが組み込める\n\
 
 st.image(img("danshi.png"), use_container_width=True, caption="団信の保障（失業保障・全疾病保障・自然災害保障など）")
 
-st.error("【賃貸の場合】がんになっても、リストラされても、家賃の支払い義務は残ります。"
-         "払えなければ、より安い家賃へ引っ越すしかありません。"
-         "しかし、その時にも退去費用＋引越し費用がかかります。"
-         "——これが、自由なはずの賃貸のデメリットです。")
+# 【賃貸の場合】を大々的に強調表示
+st.markdown("""
+<div style="
+    background:linear-gradient(135deg,#fff1ec 0%,#ffe3da 100%);
+    border:3px solid #ff5a3c;border-left:14px solid #ff5a3c;
+    border-radius:20px;padding:36px 40px;margin:26px 0;
+    box-shadow:0 10px 30px rgba(255,90,60,.18);">
+    <div style="display:inline-block;background:#ff5a3c;color:#fff;font-weight:800;
+        font-size:18px;padding:8px 22px;border-radius:30px;margin-bottom:18px;">
+        ⚠️ 賃貸の場合
+    </div>
+    <p style="font-size:30px;font-weight:900;line-height:1.55;color:#1a2a45;margin:0 0 16px;">
+        がんになっても、リストラされても、<br>
+        <span style="color:#ff5a3c;">家賃の支払い義務は残ります。</span>
+    </p>
+    <p style="font-size:21px;font-weight:700;line-height:1.7;color:#2b3653;margin:0 0 14px;">
+        払えなければ、より安い家賃へ<u>引っ越すしかありません。</u><br>
+        しかし、その時にも <span style="color:#ff5a3c;font-weight:900;">退去費用 ＋ 引越し費用</span> がかかります。
+    </p>
+    <p style="font-size:23px;font-weight:900;color:#1a2a45;margin:20px 0 0;
+        border-top:2px dashed #ffb6a3;padding-top:16px;">
+        —— これが、「自由」なはずの賃貸のデメリットです。
+    </p>
+</div>
+""", unsafe_allow_html=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ============================================================
