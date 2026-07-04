@@ -26,7 +26,7 @@ hr{border:none;border-top:2px dotted #ffe0cf;margin:34px 0;}
 # ============================================================
 # 表紙
 # ============================================================
-st.markdown('<div class="big-title">賃貸の<span class="accent">末路</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="big-title">不動産　賃貸派の<span class="accent">末路</span></div>', unsafe_allow_html=True)
 st.markdown("""
 <p class="lead">
 今はとりあえず賃貸でいい——<br>
