@@ -72,7 +72,7 @@ def webhook():
             "client_id": client_id,
             "name": name,
             "meta": base_meta,
-            "profile": {},
+            "profile": base_meta,
             "updated_at": now,
         }
 
